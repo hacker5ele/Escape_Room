@@ -51,4 +51,13 @@ export const config = {
    * environment; listed here only so a missing value is visible at start-up.
    */
   clerkSecretKey: process.env.CLERK_SECRET_KEY ?? '',
+
+  /**
+   * `clerk` (the default) or `local`.
+   *
+   * `local` replaces Clerk with a "type a username and you are that person"
+   * identity, so the team can build rooms without keys or a network. It is
+   * refused outright when NODE_ENV is production — see `createApp()`.
+   */
+  authMode: process.env.AUTH_MODE === 'local' ? ('local' as const) : ('clerk' as const),
 } as const

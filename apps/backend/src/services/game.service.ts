@@ -8,14 +8,15 @@ import {
   type RoomId,
 } from '@escape-room/shared'
 import type { GameRepository } from '../repositories/game.repository.js'
-import type { Authenticator } from '../http/authenticator.js'
+import type { PlayerProfile } from '../http/authenticator.js'
 import { ApiError } from '../http/api-error.js'
 
+/**
+ * Owns games. Knows nothing about how a player was identified — the profile is
+ * handed in, so Clerk and the local development mode look identical from here.
+ */
 export class GameService {
-  constructor(
-    private readonly repository: GameRepository,
-    private readonly authenticator: Authenticator,
-  ) {}
+  constructor(private readonly repository: GameRepository) {}
 
   /**
    * Starts the caller's game, or hands back the one they already have.
@@ -23,11 +24,9 @@ export class GameService {
    * Idempotent on purpose: "start" and "resume" being the same operation
    * removes the race where two tabs each create a game and one silently wins.
    */
-  async startOrResume(userId: string): Promise<GameSession> {
+  async startOrResume(userId: string, profile: PlayerProfile): Promise<GameSession> {
     const existing = await this.repository.findByUserId(userId)
     if (existing) return existing
-
-    const profile = await this.authenticator.profile(userId)
 
     // Enforced here rather than in the UI, so skipping the form achieves
     // nothing.

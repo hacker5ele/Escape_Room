@@ -9,7 +9,7 @@ import { clerkClient, getAuth } from '@clerk/express'
  * the profile form needs to ask for exactly that and nothing else.
  */
 export interface PlayerProfile {
-  /** Unique across the Clerk instance. Null when the account has not set one. */
+  /** Unique across the instance. Null when the account has not set one. */
   username: string | null
   firstName: string | null
   lastName: string | null
@@ -18,19 +18,26 @@ export interface PlayerProfile {
 /**
  * How the API learns who is calling.
  *
- * An interface rather than a direct Clerk call so the test suite can run
- * without contacting Clerk or holding an API key — the same reason
- * `createApp()` already injects the rate limit and the origin secret.
+ * An interface rather than a direct Clerk call for three reasons: the test
+ * suite runs without a Clerk key or a network, local development runs without
+ * Clerk at all (see `local-authenticator.ts`), and it keeps the game services
+ * from knowing which identity provider is in use.
  *
- * Only `identify` runs per request, and it is a local signature check with no
- * network call. `profile` reaches Clerk's API, so it is used once when a game
- * is created and never on the hot path.
+ * Only `identify` runs per request, and for Clerk it is a local signature check
+ * with no round trip. `profile` may reach the network, so it is called once
+ * when a game is created and never on the path for playing.
  */
 export interface Authenticator {
-  /** The verified Clerk user id, or null if the request carries no valid session. */
+  /** The verified user id, or null if the request carries no valid session. */
   identify(req: Request): Promise<string | null>
-  /** The player's profile, for stamping onto a new game. */
-  profile(userId: string): Promise<PlayerProfile>
+  /**
+   * The player's profile, for stamping onto a new game.
+   *
+   * Takes the request as well as the id because not every provider stores
+   * profiles server-side — the local development one reads them off the
+   * request itself.
+   */
+  profile(req: Request, userId: string): Promise<PlayerProfile>
 }
 
 export function createClerkAuthenticator(): Authenticator {
@@ -42,7 +49,7 @@ export function createClerkAuthenticator(): Authenticator {
       return isAuthenticated && userId ? userId : null
     },
 
-    async profile(userId) {
+    async profile(_req, userId) {
       try {
         const user = await clerkClient.users.getUser(userId)
         return {
@@ -53,9 +60,8 @@ export function createClerkAuthenticator(): Authenticator {
           lastName: user.lastName ?? null,
         }
       } catch {
-        // A profile lookup failing must not read as "no username" — that would
-        // send a player who has one back to the form. Treat it as unknown and
-        // let the caller fail loudly instead.
+        // A lookup failing must not read as "no username" — that would send a
+        // player who has one back to the form. Fail loudly instead.
         throw new Error(`Could not read the Clerk profile for ${userId}`)
       }
     },

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Der digitale Escape Room — Projektwoche KW 32",
+  "description": "Der digitale Escape Room \u2014 Projektwoche KW 32",
   "engines": {
     "node": ">=22"
   },
@@ -15,7 +15,7 @@
     "predev": "npm run build --workspace @escape-room/shared",
     "dev": "concurrently --names shared,backend,frontend --prefix-colors magenta,cyan,green \"npm:dev:shared\" \"npm:dev:backend\" \"npm:dev:frontend\"",
     "dev:shared": "npm run dev --workspace @escape-room/shared",
-    "dev:backend": "npm run dev --workspace @escape-room/backend",
+    "dev:backend": "AUTH_MODE=local npm run dev --workspace @escape-room/backend",
     "dev:frontend": "npm run dev --workspace @escape-room/frontend",
     "build": "npm run build --workspace @escape-room/shared && npm run build --workspace @escape-room/backend && npm run build --workspace @escape-room/frontend",
     "pretypecheck": "npm run build --workspace @escape-room/shared",

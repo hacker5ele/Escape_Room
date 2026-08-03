@@ -11,6 +11,7 @@ import {
 import { GameService } from './services/game.service.js'
 import { RoomService } from './services/room.service.js'
 import { createClerkAuthenticator, type Authenticator } from './http/authenticator.js'
+import { createLocalAuthenticator } from './http/local-authenticator.js'
 import { createHealthRoutes } from './routes/health.routes.js'
 import { createSessionRoutes } from './routes/sessions.routes.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
@@ -44,10 +45,27 @@ export function createApp(options: AppOptions = {}): Express {
       ? new DynamoGameRepository(config.gamesTableName, config.awsRegion)
       : new InMemoryGameRepository())
 
-  const usingClerk = options.authenticator === undefined
-  const authenticator = options.authenticator ?? createClerkAuthenticator()
+  // The local authenticator lets anyone claim any identity by typing a name.
+  // That is the point on a laptop and a disaster anywhere else, so refuse to
+  // build at all rather than start and serve traffic. Throwing here means a
+  // misconfigured deployment fails its health check and never takes traffic,
+  // instead of quietly running wide open.
+  if (options.authenticator === undefined && config.authMode === 'local' && config.isProduction) {
+    throw new Error(
+      'AUTH_MODE=local is a development-only backdoor and cannot be used with NODE_ENV=production. ' +
+        'Unset AUTH_MODE to use Clerk.',
+    )
+  }
 
-  const gameService = new GameService(repository, authenticator)
+  const authenticator =
+    options.authenticator ??
+    (config.authMode === 'local' ? createLocalAuthenticator() : createClerkAuthenticator())
+
+  // Clerk's middleware is only mounted when Clerk is actually in use: it needs
+  // a secret key to construct, which local development does not have.
+  const usingClerk = options.authenticator === undefined && config.authMode === 'clerk'
+
+  const gameService = new GameService(repository)
   const roomService = new RoomService(gameService)
 
   const app = express()
