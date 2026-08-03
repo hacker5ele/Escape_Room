@@ -1,0 +1,35 @@
+{
+  "name": "@escape-room/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Escape room API — owns the session state and the puzzle solutions.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@escape-room/shared": "*",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.6.1",
+    "helmet": "^8.3.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.0.0",
+    "@types/supertest": "^6.0.0",
+    "supertest": "^7.2.2",
+    "tsx": "^4.23.5",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.10"
+  }
+}

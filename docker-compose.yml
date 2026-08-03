@@ -1,0 +1,32 @@
+# Whole stack: docker compose up --build
+# The app is then on http://localhost:8080 — frontend and API on one origin.
+
+services:
+  backend:
+    build:
+      # Root context, because npm workspaces need the lockfile and
+      # packages/shared, which live above apps/backend. See ADR-0009.
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # nginx is the single proxy hop in front of us, so trust exactly one.
+      TRUST_PROXY: 1
+      CORS_ORIGIN: http://localhost:8080
+      ATTEMPT_RATE_LIMIT: 30
+    # Not published to the host: the browser reaches the API through nginx.
+    expose:
+      - '3000'
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    ports:
+      - '8080:80'
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped

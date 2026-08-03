@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# npm / package manager caches
+npm-cache/
+.npm/
+.npmrc.local
+*.tgz
+.yarn/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+out/
+.vite/
+*.tsbuildinfo
+
+# Test & lint artifacts
+coverage/
+.nyc_output/
+.eslintcache
+test-results/
+playwright-report/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+logs/
+
+# Environment — never commit real secrets
+.env
+.env.*
+!.env.example
+
+# Local data (SQLite files, uploads, volumes)
+data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Editors & IDEs
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS noise
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+
+# Tooling state
+.omc/
+.claude/settings.local.json
+.cache/
+.temp/
+.tmp/

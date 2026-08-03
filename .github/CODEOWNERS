@@ -1,0 +1,15 @@
+# Code owners are requested for review automatically, and their review is
+# required when branch protection says so.
+#
+# This file is how the ADR rule stops being a convention and becomes something
+# GitHub enforces: no pull request touching an ADR can merge without Nepomuk.
+#
+# NOTE: verify the handle below is Nepomuk's GitHub account and correct it if
+# not — GitHub silently ignores an unknown username.
+
+/docs/adr/          @Nepomuk5665
+/CLAUDE.md          @Nepomuk5665
+
+# The interface contract. Changing it needs an ADR and team agreement first,
+# per ADR-0005, so it gets the same treatment.
+/packages/shared/   @Nepomuk5665
