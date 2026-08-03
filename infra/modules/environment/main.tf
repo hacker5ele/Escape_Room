@@ -117,6 +117,10 @@ resource "aws_s3_bucket_policy" "site" {
 # Sessions live in memory (ADR-0008). More than one instance means a request
 # can land on a container that has never heard of the session, so the game
 # breaks at random. min = max = 1 until there is a shared session store.
+#
+# The same constraint has a second edge: with exactly one instance, every
+# deployment — and any change to the settings below, which triggers one — drops
+# all games in progress. Do not deploy during the demo.
 resource "aws_apprunner_auto_scaling_configuration_version" "single" {
   auto_scaling_configuration_name = "${local.prefix}-single"
   min_size                        = 1
@@ -440,7 +444,25 @@ resource "aws_cloudfront_distribution" "main" {
 
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
-    compress                 = true
+
+    # No `compress` here. CloudFront only compresses when the *cache policy*
+    # enables gzip/brotli, and Managed-CachingDisabled has both off — setting
+    # compress = true on the behavior would look like it did something while
+    # changing nothing. API responses are a few hundred bytes anyway.
+  }
+
+  # `/api/*` does not match the path `/api` exactly, so without this behavior a
+  # request to /api falls through to the SPA and returns index.html with a 200.
+  # Sending it to the API instead means it gets the JSON 404 it deserves.
+  ordered_cache_behavior {
+    path_pattern           = "/api"
+    target_origin_id       = "apprunner-api"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
   }
 
   # Deliberately no custom_error_response blocks — see the comment on
