@@ -1,23 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
+import { SignInButton, SignUpButton, UserButton } from '@clerk/react'
 import type { GameSession } from '@escape-room/shared'
 import { ROOM_IDS } from '@escape-room/shared'
 import { ApiRequestError, startOrResumeGame } from './api/game'
 import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
+import { LocalSignIn } from './auth/LocalSignIn'
+import { useAppAuth } from './auth/useAppAuth'
 
 /**
  * The scaffold page, behind a sign-in gate.
  *
  * Signed out you get the door and nothing else. Signed in, the app asks the API
- * to open your game — which proves the whole chain: Clerk issues a token, the
- * browser sends it, the API verifies it and finds the game belonging to that
- * account.
+ * to open your game — which proves the whole chain: an identity provider issues
+ * a credential, the browser sends it, the API verifies it and finds the game
+ * belonging to that account.
  *
  * The rooms replace the panel below. See ADR-0007 for where each sub-team's
  * code goes.
  */
 export function App() {
+  const { isLoaded, isSignedIn, mode } = useAppAuth()
+
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-10 px-6 py-16">
       <header className="space-y-3">
@@ -29,14 +33,18 @@ export function App() {
         </h1>
       </header>
 
-      <Show when="signed-out">
-        <LockedDoor />
-      </Show>
-
-      <Show when="signed-in">
-        <GamePanel />
-      </Show>
+      {!isLoaded && <Panel>Loading…</Panel>}
+      {isLoaded && !isSignedIn && (mode === 'local' ? <LocalSignIn /> : <LockedDoor />)}
+      {isLoaded && isSignedIn && <GamePanel />}
     </main>
+  )
+}
+
+function Panel({ children }: { children: React.ReactNode }) {
+  return (
+    <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">
+      <p className="font-mono text-sm text-vault-100">{children}</p>
+    </section>
   )
 }
 
@@ -79,21 +87,21 @@ type GameState =
   | { kind: 'error'; message: string }
 
 function GamePanel() {
-  const { getToken } = useAuth()
+  const { authHeaders, mode, signOut } = useAppAuth()
   const [state, setState] = useState<GameState>({ kind: 'loading' })
 
   // Held in a ref, and the effect runs on mount only.
   //
-  // Depending on `getToken` directly would re-run this on every render that
+  // Depending on `authHeaders` directly would re-run this on every render that
   // hands back a fresh function identity — which is every render — so the app
   // would call the API in a loop for as long as the panel is mounted.
-  const getTokenRef = useRef(getToken)
-  getTokenRef.current = getToken
+  const authHeadersRef = useRef(authHeaders)
+  authHeadersRef.current = authHeaders
 
   const open = useCallback(async () => {
     setState({ kind: 'loading' })
     try {
-      const game = await startOrResumeGame(await getTokenRef.current())
+      const game = await startOrResumeGame(await authHeadersRef.current())
       setState({ kind: 'ready', game })
     } catch (error) {
       // Whether a profile is complete is the server's call, not the browser's.
@@ -130,7 +138,18 @@ function GamePanel() {
             {state.kind === 'error' && `Could not load your game: ${state.message}`}
           </p>
         </div>
-        <UserButton />
+
+        {mode === 'clerk' ? (
+          <UserButton />
+        ) : (
+          <button
+            type="button"
+            onClick={signOut}
+            className="rounded border border-vault-700 px-3 py-1.5 font-mono text-xs text-vault-300 transition hover:border-vault-500"
+          >
+            Sign out
+          </button>
+        )}
       </section>
 
       <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">

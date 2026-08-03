@@ -11,7 +11,10 @@ export function createSessionRoutes(games: GameService, authenticator: Authentic
   // Idempotent, so opening a second tab cannot create a second game.
   router.post('/', async (req, res) => {
     const userId = await requireUserId(req, authenticator)
-    const body: SessionResponse = { session: await games.startOrResume(userId) }
+    // The profile is resolved here rather than inside the service, so the
+    // service never has to know which identity provider is in use.
+    const profile = await authenticator.profile(req, userId)
+    const body: SessionResponse = { session: await games.startOrResume(userId, profile) }
     res.status(201).json(body)
   })
 

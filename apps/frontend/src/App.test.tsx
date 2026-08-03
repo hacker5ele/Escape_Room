@@ -18,23 +18,26 @@ let clerkFirstName: string | null = 'Alice'
 let clerkLastName: string | null = 'Example'
 const updateUser = vi.fn().mockResolvedValue(undefined)
 
+// Clerk is still mocked because App imports its button components directly,
+// but identity now comes through the shared auth interface — so these tests
+// exercise the same path whether the app is running on Clerk or the local mode.
 vi.mock('@clerk/react', () => ({
-  Show: ({ when, children }: { when: string; children: ReactNode }) => {
-    const visible = when === 'signed-in' ? signedIn : !signedIn
-    return visible ? <>{children}</> : null
-  },
   SignInButton: ({ children }: { children: ReactNode }) => <>{children}</>,
   SignUpButton: ({ children }: { children: ReactNode }) => <>{children}</>,
   UserButton: () => <div data-testid="user-button" />,
-  useAuth: () => ({ getToken: () => Promise.resolve('test-token') }),
-  useUser: () => ({
+}))
+
+vi.mock('./auth/useAppAuth', () => ({
+  useAppAuth: () => ({
+    mode: 'clerk' as const,
     isLoaded: true,
-    user: {
-      username: clerkUsername,
-      firstName: clerkFirstName,
-      lastName: clerkLastName,
-      update: updateUser,
-    },
+    isSignedIn: signedIn,
+    profile: signedIn
+      ? { username: clerkUsername, firstName: clerkFirstName, lastName: clerkLastName }
+      : null,
+    authHeaders: () => Promise.resolve({ Authorization: 'Bearer test-token' }),
+    updateProfile: updateUser,
+    signOut: () => {},
   }),
 }))
 

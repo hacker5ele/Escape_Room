@@ -23,8 +23,15 @@ npm run dev
 ```
 
 That starts three things at once: the shared package in watch mode, the API on
-<http://localhost:3000>, and the app on <http://localhost:5173>. Open the app —
-it tells you whether it can reach the backend.
+<http://localhost:3000>, and the app on <http://localhost:5173>.
+
+**You do not need a Clerk account, a key, or an internet connection.** Locally the app swaps Clerk for
+a development sign-in: type a username and a name and you are that person. Reuse a username to pick up
+that game again, or use two different ones to check that two players cannot see each other's progress.
+See [ADR-0022](docs/adr/0022-local-development-auth.md).
+
+Deployed environments use Clerk, and the server refuses to start if the local mode is ever combined
+with `NODE_ENV=production`.
 
 ## Commands
 

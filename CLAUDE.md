@@ -202,6 +202,7 @@ Every action is recorded on the account as an activity log — attempts, hints, 
 
 ```bash
 npm install            # install all workspaces
+                       # no Clerk keys needed — `npm run dev` signs you in locally
 
 npm run dev            # shared (watch) + backend :3000 + frontend :5173
 npm run build          # build shared → backend → frontend
@@ -284,6 +285,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-03 | [0022](docs/adr/0022-local-development-auth.md) | Local development runs without Clerk | Accepted |
 | 2026-08-03 | [0021](docs/adr/0021-unique-usernames.md) | Every player has a unique username, enforced by Clerk | Accepted |
 | 2026-08-03 | [0020](docs/adr/0020-activity-log.md) | Record an activity log against each account | Accepted |
 | 2026-08-03 | [0019](docs/adr/0019-games-belong-to-accounts.md) | A game belongs to an account; the session header goes away | Accepted |

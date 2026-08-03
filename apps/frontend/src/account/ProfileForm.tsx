@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useUser } from '@clerk/react'
+import { useAppAuth } from '../auth/useAppAuth'
 
 /**
  * Collects whatever the game needs and Clerk does not already have: a unique
@@ -16,14 +16,14 @@ import { useUser } from '@clerk/react'
  * mean a second index and a race between the check and the write.
  */
 export function ProfileForm({ onSaved }: { onSaved: () => void }) {
-  const { user } = useUser()
+  const { profile, updateProfile } = useAppAuth()
 
-  const needsUsername = !user?.username
-  const needsName = !user?.firstName || !user?.lastName
+  const needsUsername = !profile?.username
+  const needsName = !profile?.firstName || !profile?.lastName
 
   const [username, setUsername] = useState('')
-  const [firstName, setFirstName] = useState(user?.firstName ?? '')
-  const [lastName, setLastName] = useState(user?.lastName ?? '')
+  const [firstName, setFirstName] = useState(profile?.firstName ?? '')
+  const [lastName, setLastName] = useState(profile?.lastName ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,7 +31,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
   // deprecated in the React 19 types.
   async function handleSubmit(event: { preventDefault: () => void }) {
     event.preventDefault()
-    if (!user || saving) return
+    if (saving) return
 
     const handle = username.trim()
     const first = firstName.trim()
@@ -47,7 +47,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
     try {
       // Only send what we asked for — writing a field back unchanged would be
       // a pointless way to fail on an unrelated Clerk validation rule.
-      await user.update({
+      await updateProfile({
         ...(needsUsername ? { username: handle } : {}),
         ...(needsName ? { firstName: first, lastName: last } : {}),
       })

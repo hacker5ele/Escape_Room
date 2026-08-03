@@ -29,13 +29,19 @@ export class ApiRequestError extends Error {
   }
 }
 
-async function request(path: string, token: string | null, init: RequestInit = {}) {
+async function request(
+  path: string,
+  authHeaders: Record<string, string>,
+  init: RequestInit = {},
+) {
   const response = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // Whatever identifies the caller — a Clerk bearer token in a deployment,
+      // or the dev headers locally. This module does not care which.
+      ...authHeaders,
       ...init.headers,
     },
   })
@@ -56,8 +62,10 @@ async function request(path: string, token: string | null, init: RequestInit = {
 }
 
 /** Starts the player's game, or returns the one they already have. */
-export async function startOrResumeGame(token: string | null): Promise<GameSession> {
-  const response = await request('/sessions', token, { method: 'POST', body: '{}' })
+export async function startOrResumeGame(
+  authHeaders: Record<string, string>,
+): Promise<GameSession> {
+  const response = await request('/sessions', authHeaders, { method: 'POST', body: '{}' })
   const body = (await response.json()) as { session: GameSession }
   return body.session
 }
