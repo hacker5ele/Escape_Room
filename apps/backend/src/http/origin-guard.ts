@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express'
-import { timingSafeEqual } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { ApiError } from './api-error.js'
 
 export const ORIGIN_SECRET_HEADER = 'x-origin-secret'
@@ -38,10 +38,17 @@ export function createOriginGuard(secret: string): RequestHandler {
   }
 }
 
-/** Constant-time compare, so response timing cannot be used to guess the secret. */
+/**
+ * Constant-time compare, so response timing cannot be used to guess the secret.
+ *
+ * Hashing both sides first is what makes it genuinely constant time.
+ * `timingSafeEqual` throws on length mismatch, so comparing the raw strings
+ * needs a length check in front of it — and that check returns early, which
+ * leaks the secret's length through timing. Two SHA-256 digests are always 32
+ * bytes, so there is no early return and nothing to measure.
+ */
 function matches(provided: string, expected: string): boolean {
-  const providedBytes = Buffer.from(provided)
-  const expectedBytes = Buffer.from(expected)
-  if (providedBytes.length !== expectedBytes.length) return false
-  return timingSafeEqual(providedBytes, expectedBytes)
+  const providedDigest = createHash('sha256').update(provided).digest()
+  const expectedDigest = createHash('sha256').update(expected).digest()
+  return timingSafeEqual(providedDigest, expectedDigest)
 }

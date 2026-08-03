@@ -34,8 +34,14 @@ jobs:
 
       - name: Resolve target environment
         id: target
+        # Through env rather than direct interpolation. This workflow only runs
+        # on main and dev so a hostile ref name cannot reach here today, but the
+        # habit is what stops the next `run:` block being the exploitable one.
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
+          set -euo pipefail
+          if [ "$REF_NAME" = "main" ]; then
             echo "name=prod" >> "$GITHUB_OUTPUT"
           else
             echo "name=staging" >> "$GITHUB_OUTPUT"
@@ -69,16 +75,34 @@ jobs:
         env:
           TARGET: ${{ steps.target.outputs.name }}
         run: |
-          get() {
-            aws ssm get-parameter --name "/escape-room/$TARGET/$1" \
-              --query Parameter.Value --output text
+          # `set -o pipefail` and the explicit emptiness check are both load
+          # bearing. Writing `echo "k=$(aws ...)"` swallows a failed lookup:
+          # the command substitution yields an empty string, echo still exits 0,
+          # and the step reports success with blank outputs. The deploy then
+          # fails several steps later with an unhelpful message about an empty
+          # ARN — which is exactly what happened on the first run.
+          set -euo pipefail
+
+          lookup() {
+            local key="$1"
+            local value
+            value="$(aws ssm get-parameter --name "/escape-room/$TARGET/$key" \
+              --query Parameter.Value --output text 2>/dev/null || true)"
+
+            if [ -z "$value" ] || [ "$value" = "None" ]; then
+              echo "::error::Missing SSM parameter /escape-room/$TARGET/$key." \
+                   "Has infra/live/$TARGET been applied with Terraform?"
+              exit 1
+            fi
+            printf '%s' "$value"
           }
+
           {
-            echo "bucket=$(get site_bucket)"
-            echo "distribution=$(get distribution_id)"
-            echo "service=$(get apprunner_service_arn)"
-            echo "apprunner_url=$(get apprunner_url)"
-            echo "url=$(get url)"
+            echo "bucket=$(lookup site_bucket)"
+            echo "distribution=$(lookup distribution_id)"
+            echo "service=$(lookup apprunner_service_arn)"
+            echo "apprunner_url=$(lookup apprunner_url)"
+            echo "url=$(lookup url)"
           } >> "$GITHUB_OUTPUT"
 
       - uses: aws-actions/amazon-ecr-login@v2
@@ -126,16 +150,27 @@ jobs:
         env:
           BUCKET: ${{ steps.infra.outputs.bucket }}
         run: |
-          # Vite writes content-hashed filenames into /assets, so those can be
-          # cached forever. index.html must not be, or a deploy leaves browsers
-          # pointing at bundles that no longer exist.
+          set -euo pipefail
+
+          # Order matters. Upload the new hashed assets first, WITHOUT --delete:
+          # the currently-live index.html still points at the old bundles, and
+          # deleting them before the new index.html is in place would leave a
+          # window where the site is serving a page whose scripts 404.
+          aws s3 sync apps/frontend/dist "s3://$BUCKET" \
+            --exclude index.html \
+            --cache-control "public,max-age=31536000,immutable"
+
+          # Now switch the entry point over. Vite's filenames are content
+          # hashed, so these can be cached forever; index.html must never be,
+          # or browsers keep loading bundles that no longer exist.
+          aws s3 cp apps/frontend/dist/index.html "s3://$BUCKET/index.html" \
+            --cache-control "no-cache"
+
+          # Only now is it safe to remove assets from previous deploys.
           aws s3 sync apps/frontend/dist "s3://$BUCKET" \
             --delete \
             --exclude index.html \
             --cache-control "public,max-age=31536000,immutable"
-
-          aws s3 cp apps/frontend/dist/index.html "s3://$BUCKET/index.html" \
-            --cache-control "no-cache"
 
       - name: Invalidate the CDN
         env:

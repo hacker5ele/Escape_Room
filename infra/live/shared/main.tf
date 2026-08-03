@@ -67,6 +67,10 @@ resource "aws_ecr_repository" "backend" {
   name                 = "escape-room-backend"
   image_tag_mutability = "MUTABLE"
 
+  # Without this, `terraform destroy` fails on a repository that still contains
+  # images — which it always will. Images are rebuildable from a git sha.
+  force_delete = true
+
   image_scanning_configuration {
     scan_on_push = true
   }
@@ -116,13 +120,20 @@ data "aws_iam_policy_document" "deploy_assume" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Exact branch refs only. A pull_request run gets a different subject
-    # (`...:pull_request`), so a fork PR cannot assume this role even though
-    # the repository is public.
+    # Exact branch refs only — StringEquals, never StringLike with a wildcard.
+    # A pull_request run gets a different subject (`...:pull_request`), so a
+    # fork PR cannot assume this role even though the repository is public.
+    #
+    # Both subject prefix forms are accepted because GitHub issues the
+    # immutable one for this repository; see the variable's description.
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [for branch in var.deploy_branches : "repo:${var.github_repository}:ref:refs/heads/${branch}"]
+      values = flatten([
+        for prefix in var.oidc_subject_prefixes : [
+          for branch in var.deploy_branches : "${prefix}:ref:refs/heads/${branch}"
+        ]
+      ])
     }
   }
 }

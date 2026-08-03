@@ -120,7 +120,35 @@ Then delete the state bucket and lock table by hand, and remove the delegation a
 **The certificate hangs on apply.** Nameservers are not delegated yet. `dig +short NS cool.tf @8.8.8.8`.
 
 **App Runner will not start.** It needs an image at the tag it is configured to pull. Check the tag
-exists in ECR.
+exists in ECR, and check the image is **linux/amd64** — an arm64 image built on a Mac pulls fine and
+then fails to run.
+
+**App Runner ends in `CREATE_FAILED` and Terraform errors with `unexpected state 'CREATE_FAILED',
+wanted target 'RUNNING'`.** This happened once on first apply while the identical image succeeded in
+the other environment, so treat it as transient before hunting for a bug. Confirm the image is fine by
+running it yourself with the same environment variables:
+
+```bash
+aws apprunner describe-service --service-arn "$ARN" \
+  --query 'Service.SourceConfiguration.ImageRepository.ImageConfiguration.RuntimeEnvironmentVariables'
+docker run --rm --platform linux/amd64 -e PORT=3000 -e NODE_ENV=production …  <image>
+```
+
+If it runs locally, recover like this — a `CREATE_FAILED` service still occupies the name, so it has to
+go before Terraform can make a new one:
+
+```bash
+ARN=$(aws apprunner list-services --region us-east-1 \
+  --query "ServiceSummaryList[?ServiceName=='escape-room-prod'].ServiceArn" --output text)
+aws apprunner delete-service --service-arn "$ARN" --region us-east-1
+# wait until it disappears from list-services, then:
+terraform state rm module.environment.aws_apprunner_service.api
+terraform apply
+```
+
+If it fails twice with the same image, it is not transient — read
+`/aws/apprunner/<service>/<id>/service` in CloudWatch. No *application* log group at all means the
+container never got far enough to write to stdout.
 
 **A deploy works but the site does not change.** `index.html` is served with `no-cache` and everything
 else is content-hashed, so this is almost always a missing CloudFront invalidation.

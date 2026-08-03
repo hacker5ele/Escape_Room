@@ -19,6 +19,12 @@ data "aws_caller_identity" "current" {}
 resource "aws_s3_bucket" "site" {
   bucket = "${local.prefix}-site"
   tags   = var.tags
+
+  # `terraform destroy` refuses to remove a bucket that still has objects in it,
+  # and versioning below means even deleted objects leave versions behind. The
+  # project is meant to be removable in one command when the week is over, and
+  # the contents are a rebuildable static site — nothing here is worth keeping.
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_public_access_block" "site" {
@@ -181,6 +187,38 @@ resource "aws_apprunner_service" "api" {
 # CloudFront: one distribution, two origins, so the browser sees one origin
 # --------------------------------------------------------------------------
 
+# SPA fallback, done as a viewer-request function rather than with
+# custom_error_response.
+#
+# This matters more than it looks. CustomErrorResponses is a DISTRIBUTION-level
+# setting in the CloudFront API — it cannot be scoped to one cache behavior. A
+# 403/404 -> /index.html rule would therefore also rewrite the API's own error
+# responses, and `GET /api/rooms/room-02` on a locked room would come back as
+# HTML with status 200 instead of 403 ROOM_LOCKED. The room gate would look
+# open to every client.
+#
+# A CloudFront Function attaches to a single behavior, so the rewrite applies to
+# the site only and API errors pass through untouched.
+resource "aws_cloudfront_function" "spa_fallback" {
+  name    = "${local.prefix}-spa-fallback"
+  runtime = "cloudfront-js-2.0"
+  comment = "Rewrite extensionless paths to /index.html so deep links work"
+  publish = true
+
+  code = <<-JS
+    function handler(event) {
+      var request = event.request;
+      // Anything with a file extension is a real asset — leave it alone so a
+      // missing bundle still 404s instead of silently returning the app shell.
+      if (request.uri.indexOf('.') !== -1) {
+        return request;
+      }
+      request.uri = '/index.html';
+      return request;
+    }
+  JS
+}
+
 data "aws_cloudfront_cache_policy" "caching_optimized" {
   name = "Managed-CachingOptimized"
 }
@@ -235,6 +273,11 @@ resource "aws_cloudfront_distribution" "main" {
     cached_methods         = ["GET", "HEAD"]
     cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
     compress               = true
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_fallback.arn
+    }
   }
 
   ordered_cache_behavior {
@@ -253,25 +296,9 @@ resource "aws_cloudfront_distribution" "main" {
     compress                 = true
   }
 
-  # SPA fallback. A deep link like /room/room-02 is not an object in the
-  # bucket, and OAC + the S3 REST endpoint answer 403 for anything missing.
-  #
-  # These rules apply to the default behavior only — CloudFront does not run
-  # custom error responses for a 404 produced by the /api/* behavior, so a
-  # genuine API 404 still reaches the browser as JSON rather than as HTML.
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
+  # Deliberately no custom_error_response blocks — see the comment on
+  # aws_cloudfront_function.spa_fallback above. They are distribution-wide and
+  # would rewrite the API's error responses too.
 
   viewer_certificate {
     acm_certificate_arn      = var.certificate_arn
