@@ -11,6 +11,11 @@ import { ROOM_IDS } from '@escape-room/shared'
  * write, and is made to reject when a test needs the "username taken" path.
  */
 let signedIn = false
+// What Clerk already holds. The form asks only for what is missing, so these
+// drive which fields appear.
+let clerkUsername: string | null = 'alice42'
+let clerkFirstName: string | null = 'Alice'
+let clerkLastName: string | null = 'Example'
 const updateUser = vi.fn().mockResolvedValue(undefined)
 
 vi.mock('@clerk/react', () => ({
@@ -22,7 +27,15 @@ vi.mock('@clerk/react', () => ({
   SignUpButton: ({ children }: { children: ReactNode }) => <>{children}</>,
   UserButton: () => <div data-testid="user-button" />,
   useAuth: () => ({ getToken: () => Promise.resolve('test-token') }),
-  useUser: () => ({ isLoaded: true, user: { update: updateUser } }),
+  useUser: () => ({
+    isLoaded: true,
+    user: {
+      username: clerkUsername,
+      firstName: clerkFirstName,
+      lastName: clerkLastName,
+      update: updateUser,
+    },
+  }),
 }))
 
 const { App } = await import('./App')
@@ -74,6 +87,9 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   signedIn = false
+  clerkUsername = 'alice42'
+  clerkFirstName = 'Alice'
+  clerkLastName = 'Example'
   updateUser.mockClear()
   updateUser.mockResolvedValue(undefined)
 })
@@ -153,6 +169,9 @@ describe('App', () => {
   describe('signed in without a username', () => {
     beforeEach(() => {
       signedIn = true
+      clerkUsername = null
+      clerkFirstName = null
+      clerkLastName = null
       // The server decides this, not the browser — the UI reacts to the 409.
       vi.stubGlobal(
         'fetch',
@@ -196,6 +215,29 @@ describe('App', () => {
         })
       })
       expect(await screen.findByText(/1\/4 rooms solved/)).toBeInTheDocument()
+    })
+
+    it('asks only for the name when Clerk already has a username', async () => {
+      // The likely case now that usernames are required at sign-up but names
+      // are configured separately. Re-asking for a handle they already have
+      // would be confusing, and re-submitting it risks failing on Clerk's own
+      // "unchanged value" validation.
+      clerkUsername = 'already_taken_by_me'
+
+      render(<App />)
+      await screen.findByText(/before you go in/i)
+
+      expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument()
+      expect(screen.getByLabelText(/first name/i)).toBeInTheDocument()
+
+      await userEvent.type(screen.getByLabelText(/first name/i), 'Nepomuk')
+      await userEvent.type(screen.getByLabelText(/last name/i), 'Crhonek')
+      await userEvent.click(screen.getByRole('button', { name: /enter the first room/i }))
+
+      await waitFor(() => {
+        // No username in the payload — only what was actually asked for.
+        expect(updateUser).toHaveBeenCalledWith({ firstName: 'Nepomuk', lastName: 'Crhonek' })
+      })
     })
 
     it('explains that a username is taken rather than failing generically', async () => {

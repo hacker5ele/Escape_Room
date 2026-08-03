@@ -5,6 +5,7 @@ import { createApp } from './app.js'
 import {
   createTestAuthenticator,
   TEST_USER_HEADER,
+  TEST_USER_WITHOUT_NAME,
   TEST_USER_WITHOUT_USERNAME,
 } from './http/test-authenticator.js'
 import { SOLUTIONS } from './domain/rooms/solutions.fixture.js'
@@ -72,6 +73,20 @@ describe('usernames', () => {
     expect(response.body.error.code).toBe('PROFILE_INCOMPLETE')
   })
 
+  it('refuses to start a game for an account with no name', async () => {
+    // Checked as well as the username: falling back to the username silently
+    // would mean nobody notices if Clerk stops asking for a name.
+    const response = await as(buildApp(), TEST_USER_WITHOUT_NAME).post('/api/sessions').send({})
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('PROFILE_INCOMPLETE')
+  })
+
+  it('builds the display name from the Clerk profile', async () => {
+    const session = await startGame(buildApp(), ALICE)
+    expect(session.playerName).toBe('Test Player')
+  })
+
   it('stamps the username onto the game', async () => {
     const app = buildApp()
     const session = await startGame(app, ALICE)
@@ -94,9 +109,9 @@ describe('sessions', () => {
     const session = await startGame(app, ALICE)
 
     expect(session.userId).toBe(ALICE)
+    expect(session.username).toBe(`handle_${ALICE}`)
     expect(session.solvedRooms).toEqual([])
     expect(session.finishedAt).toBeNull()
-    expect(session.playerName).toContain(ALICE)
   })
 
   it('is idempotent — a second start resumes the same game', async () => {

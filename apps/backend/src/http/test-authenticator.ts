@@ -24,7 +24,8 @@ export function createTestAuthenticator(): Authenticator {
     async profile(userId) {
       return {
         username: userId === TEST_USER_WITHOUT_USERNAME ? null : `handle_${userId}`,
-        playerName: `Player ${userId}`,
+        firstName: userId === TEST_USER_WITHOUT_NAME ? null : 'Test',
+        lastName: userId === TEST_USER_WITHOUT_NAME ? null : 'Player',
       }
     },
   }
@@ -32,3 +33,6 @@ export function createTestAuthenticator(): Authenticator {
 
 /** Identify as this user to exercise the "no username yet" path. */
 export const TEST_USER_WITHOUT_USERNAME = 'user_without_username'
+
+/** Identify as this user to exercise the "username but no name" path. */
+export const TEST_USER_WITHOUT_NAME = 'user_without_name'

@@ -29,11 +29,14 @@ export class GameService {
 
     const profile = await this.authenticator.profile(userId)
 
-    // Enforced here rather than in the UI. A username is the player's public
-    // identity — it is what a leaderboard shows — so a game without one would
-    // be an anonymous entry we could never label. Checking server-side means
-    // skipping the form achieves nothing.
-    if (!profile.username) {
+    // Enforced here rather than in the UI, so skipping the form achieves
+    // nothing.
+    //
+    // The username is the player's public identity — what a leaderboard shows —
+    // so a game without one is an entry we could never label. The name is
+    // checked too rather than quietly falling back to the username: a silent
+    // fallback would mean nobody ever notices that Clerk stopped asking for it.
+    if (!profile.username || !profile.firstName || !profile.lastName) {
       throw ApiError.profileIncomplete()
     }
 
@@ -42,7 +45,7 @@ export class GameService {
       id: randomUUID(),
       userId,
       username: profile.username,
-      playerName: profile.playerName,
+      playerName: `${profile.firstName} ${profile.lastName}`,
       solvedRooms: [],
       startedAt: timestamp,
       finishedAt: null,

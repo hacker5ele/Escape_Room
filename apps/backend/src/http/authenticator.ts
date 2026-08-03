@@ -1,12 +1,18 @@
 import type { Request } from 'express'
 import { clerkClient, getAuth } from '@clerk/express'
 
-/** What the game needs to know about a signed-in player. */
+/**
+ * What the game needs to know about a signed-in player.
+ *
+ * Each field is nullable and reported separately rather than collapsed into a
+ * single display name. Collapsing them would hide which piece is missing, and
+ * the profile form needs to ask for exactly that and nothing else.
+ */
 export interface PlayerProfile {
   /** Unique across the Clerk instance. Null when the account has not set one. */
   username: string | null
-  /** Human-readable name, best effort. */
-  playerName: string
+  firstName: string | null
+  lastName: string | null
 }
 
 /**
@@ -39,12 +45,12 @@ export function createClerkAuthenticator(): Authenticator {
     async profile(userId) {
       try {
         const user = await clerkClient.users.getUser(userId)
-        const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
         return {
           // Clerk guarantees this is unique across the instance when set, so
           // the game never has to check for collisions itself.
           username: user.username ?? null,
-          playerName: fullName || user.username || 'Player',
+          firstName: user.firstName ?? null,
+          lastName: user.lastName ?? null,
         }
       } catch {
         // A profile lookup failing must not read as "no username" — that would
