@@ -7,6 +7,11 @@ output "zone_id" {
   value = aws_route53_zone.main.zone_id
 }
 
+output "clerk_dns_records" {
+  description = "The five CNAMEs Clerk's production instance needs. All must resolve before Clerk issues its certificates."
+  value       = { for name, target in local.clerk_dns_records : "${name}.${var.domain_name}" => target }
+}
+
 output "certificate_arn" {
   value = aws_acm_certificate.main.arn
 }
