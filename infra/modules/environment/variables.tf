@@ -42,6 +42,20 @@ variable "deploy_role_name" {
   type        = string
 }
 
+variable "clerk_publishable_key" {
+  description = <<-EOT
+    Clerk's publishable key for this environment.
+
+    Needed by the BACKEND as well as the browser: @clerk/express calls
+    assertValidPublishableKey() while verifying a token, and without it every
+    authenticated request fails with a 500 rather than a 401.
+
+    Not a secret — it identifies the Clerk instance and carries no authority,
+    and Vite inlines it into the frontend bundle regardless.
+  EOT
+  type        = string
+}
+
 variable "trust_proxy" {
   description = <<-EOT
     How many proxy hops Express should trust when reading the client IP.

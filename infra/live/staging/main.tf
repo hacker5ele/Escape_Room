@@ -55,6 +55,9 @@ module "environment" {
 
   image_tag = "staging"
 
+  # Public by design; the secret key lives in SSM.
+  clerk_publishable_key = "pk_test_Z2VudWluZS1zbG90aC02My5jbGVyay5hY2NvdW50cy5kZXYk"
+
   # Lower than production on purpose: the smoke test asserts a 429, and waiting
   # for 30 attempts on every deploy is slow.
   attempt_rate_limit = 10

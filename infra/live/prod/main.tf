@@ -54,6 +54,9 @@ module "environment" {
 
   image_tag = "prod"
 
+  # Public by design; the secret key lives in SSM.
+  clerk_publishable_key = "pk_live_Y2xlcmsuY29vbC50ZiQ"
+
   attempt_rate_limit = 30
 
   tags = local.tags
