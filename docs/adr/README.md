@@ -51,3 +51,8 @@ All of these were approved by Nepomuk Crhonek on 2026-08-03.
 | [0009](0009-containerization.md) | Containerization with multi-stage Docker and compose | Accepted |
 | [0010](0010-git-workflow.md) | Git workflow: branches, pull requests, ADR per change | Accepted |
 | [0011](0011-decision-authority.md) | The user decides, the agent does not | Accepted |
+| [0012](0012-aws-hosting.md) | Host on AWS: CloudFront + S3 + App Runner per environment | Accepted |
+| [0013](0013-terraform.md) | Terraform, with state in S3 and DynamoDB locking | Accepted |
+| [0014](0014-two-environments.md) | Two environments: cool.tf from main, dev.cool.tf from dev | Accepted |
+| [0015](0015-github-oidc-deploys.md) | GitHub Actions deploys via OIDC, no stored AWS credentials | Accepted |
+| [0016](0016-branch-policy.md) | PRs target dev; main accepts them only from dev | Accepted |

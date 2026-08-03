@@ -22,6 +22,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "pretest": "npm run build --workspace @escape-room/shared",
     "test": "npm run test --workspaces --if-present",
+    "smoke": "node scripts/smoke-test.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

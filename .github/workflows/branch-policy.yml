@@ -1,0 +1,28 @@
+name: Branch policy
+
+# Enforces the one rule GitHub rulesets cannot express: a ruleset can require
+# that `main` only takes pull requests, but it has no condition on where the
+# pull request comes FROM. So the rule lives here, and this job is configured as
+# a required status check on main.
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  source-branch:
+    # This name is what gets ticked in the ruleset's required-checks list.
+    # Renaming the job silently disables the rule — the check would simply
+    # never report, and the ruleset would wait forever or be edited away.
+    name: Only dev may open PRs into main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the source branch
+        run: |
+          if [ "${{ github.head_ref }}" != "dev" ]; then
+            echo "::error::Pull requests into main may only come from 'dev'. This one is from '${{ github.head_ref }}'."
+            echo ""
+            echo "Work goes: feature branch -> dev -> main."
+            echo "Retarget this pull request at 'dev', then open a separate dev -> main pull request to release."
+            exit 1
+          fi
+          echo "Source branch is 'dev'. Allowed."

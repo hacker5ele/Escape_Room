@@ -29,4 +29,11 @@ export const config = {
 
   /** Answer attempts allowed per IP per minute. This is the brute-force defence. */
   attemptRateLimit: readNumber('ATTEMPT_RATE_LIMIT', 30),
+
+  /**
+   * Shared secret CloudFront sends on every origin request, so the public
+   * App Runner URL cannot be used to bypass the CDN. Empty means the check is
+   * off, which is what we want locally, in tests and under docker compose.
+   */
+  originSecret: process.env.ORIGIN_SECRET ?? '',
 } as const
