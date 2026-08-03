@@ -354,6 +354,8 @@ resource "aws_apprunner_service" "api" {
           # one, so a local run without AWS credentials still works.
           GAMES_TABLE_NAME = aws_dynamodb_table.games.name
           AWS_REGION       = "us-east-1"
+          # The backend needs this too, not just the browser — see the variable.
+          CLERK_PUBLISHABLE_KEY = var.clerk_publishable_key
         }
         # Resolved by App Runner at start-up from SSM. DescribeService shows
         # only the ARN, never the value.
