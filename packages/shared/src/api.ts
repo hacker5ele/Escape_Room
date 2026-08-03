@@ -71,6 +71,13 @@ export type HintResponse = z.infer<typeof hintResponseSchema>
 
 export const API_ERROR_CODES = [
   'UNAUTHENTICATED',
+  /**
+   * Signed in, but the Clerk profile is missing something the game needs —
+   * today a username. The frontend responds by collecting it; the server
+   * refuses to create a game without it, so bypassing the form achieves
+   * nothing.
+   */
+  'PROFILE_INCOMPLETE',
   'VALIDATION_ERROR',
   'SESSION_NOT_FOUND',
   'ROOM_NOT_FOUND',

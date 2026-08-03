@@ -13,13 +13,22 @@ export const TEST_USER_HEADER = 'x-test-user'
  * Only ever injected explicitly through `createApp({ authenticator })`, so
  * there is no path by which it could be reached in a real deployment.
  */
+/** Header a test sets to simulate an account with no username yet. */
+export const TEST_NO_USERNAME_HEADER = 'x-test-no-username'
+
 export function createTestAuthenticator(): Authenticator {
   return {
     async identify(req) {
       return req.header(TEST_USER_HEADER) ?? null
     },
-    async displayName(userId) {
-      return `Player ${userId}`
+    async profile(userId) {
+      return {
+        username: userId === TEST_USER_WITHOUT_USERNAME ? null : `handle_${userId}`,
+        playerName: `Player ${userId}`,
+      }
     },
   }
 }
+
+/** Identify as this user to exercise the "no username yet" path. */
+export const TEST_USER_WITHOUT_USERNAME = 'user_without_username'

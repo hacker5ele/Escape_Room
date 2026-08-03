@@ -26,7 +26,7 @@ code changes. See [ADR-0005](adr/0005-shared-contract-package.md).
   { "error": { "code": "ROOM_LOCKED", "message": "Solve the previous room first." } }
   ```
 
-  Codes: `UNAUTHENTICATED`, `VALIDATION_ERROR`, `SESSION_NOT_FOUND`, `ROOM_NOT_FOUND`, `ROOM_LOCKED`,
+  Codes: `UNAUTHENTICATED`, `PROFILE_INCOMPLETE`, `VALIDATION_ERROR`, `SESSION_NOT_FOUND`, `ROOM_NOT_FOUND`, `ROOM_LOCKED`,
   `ROOM_ALREADY_SOLVED`, `NO_HINTS_LEFT`, `RATE_LIMITED`, `INTERNAL_ERROR`.
   Branch on `code`, never on the message text — messages change.
 
@@ -36,6 +36,7 @@ code changes. See [ADR-0005](adr/0005-shared-contract-package.md).
 {
   id: string            // uuid
   userId: string        // Clerk user id — the partition key in DynamoDB
+  username: string      // unique across the Clerk instance; the player's public identity
   playerName: string    // from the Clerk profile, not a form field
   solvedRooms: RoomId[]
   startedAt: string     // ISO 8601
@@ -77,6 +78,10 @@ Starts the caller's game, or returns the one they already have. **Idempotent** �
 cannot race each other into two different games. Takes no body.
 
 `201` → `{ session }`. `401 UNAUTHENTICATED` if not signed in.
+
+`409 PROFILE_INCOMPLETE` if the Clerk profile has no username. Uniqueness is Clerk's to enforce, and
+the check lives here rather than in the UI so that skipping the form achieves nothing. See
+[ADR-0021](adr/0021-unique-usernames.md).
 
 ### `GET /api/sessions/me`
 

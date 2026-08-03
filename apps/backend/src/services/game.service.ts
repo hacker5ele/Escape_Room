@@ -9,6 +9,7 @@ import {
 } from '@escape-room/shared'
 import type { GameRepository } from '../repositories/game.repository.js'
 import type { Authenticator } from '../http/authenticator.js'
+import { ApiError } from '../http/api-error.js'
 
 export class GameService {
   constructor(
@@ -26,16 +27,27 @@ export class GameService {
     const existing = await this.repository.findByUserId(userId)
     if (existing) return existing
 
-    const now = new Date().toISOString()
+    const profile = await this.authenticator.profile(userId)
+
+    // Enforced here rather than in the UI. A username is the player's public
+    // identity — it is what a leaderboard shows — so a game without one would
+    // be an anonymous entry we could never label. Checking server-side means
+    // skipping the form achieves nothing.
+    if (!profile.username) {
+      throw ApiError.profileIncomplete()
+    }
+
+    const timestamp = now()
     const game: GameSession = {
       id: randomUUID(),
       userId,
-      playerName: await this.authenticator.displayName(userId),
+      username: profile.username,
+      playerName: profile.playerName,
       solvedRooms: [],
-      startedAt: now,
+      startedAt: timestamp,
       finishedAt: null,
       hintsUsed: 0,
-      events: [{ at: now, type: 'game_started' }],
+      events: [{ at: timestamp, type: 'game_started' }],
     }
     return this.repository.save(game)
   }

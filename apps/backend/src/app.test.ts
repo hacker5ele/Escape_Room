@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import request from 'supertest'
 import type { Express } from 'express'
 import { createApp } from './app.js'
-import { createTestAuthenticator, TEST_USER_HEADER } from './http/test-authenticator.js'
+import {
+  createTestAuthenticator,
+  TEST_USER_HEADER,
+  TEST_USER_WITHOUT_USERNAME,
+} from './http/test-authenticator.js'
 import { SOLUTIONS } from './domain/rooms/solutions.fixture.js'
 
 const ALICE = 'user_alice'
@@ -54,6 +58,33 @@ describe('authentication', () => {
       .send({ answer: SOLUTIONS['room-01'] })
 
     expect(response.status).toBe(401)
+  })
+})
+
+describe('usernames', () => {
+  it('refuses to start a game for an account with no username', async () => {
+    const response = await as(buildApp(), TEST_USER_WITHOUT_USERNAME)
+      .post('/api/sessions')
+      .send({})
+
+    // Enforced by the server, not the form — skipping the UI achieves nothing.
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('PROFILE_INCOMPLETE')
+  })
+
+  it('stamps the username onto the game', async () => {
+    const app = buildApp()
+    const session = await startGame(app, ALICE)
+
+    expect(session.username).toBe(`handle_${ALICE}`)
+  })
+
+  it('gives different accounts different usernames', async () => {
+    const app = buildApp()
+    const alice = await startGame(app, ALICE)
+    const bob = await startGame(app, BOB)
+
+    expect(alice.username).not.toBe(bob.username)
   })
 })
 

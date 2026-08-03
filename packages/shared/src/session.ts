@@ -18,6 +18,12 @@ export const gameSessionSchema = z.object({
   id: z.uuid(),
   /** Clerk user id, e.g. `user_2abc…`. The partition key in DynamoDB. */
   userId: z.string().min(1),
+  /**
+   * Unique handle, taken from the Clerk profile. Clerk enforces uniqueness
+   * across the instance, so this is safe to show on a leaderboard and safe to
+   * treat as the player's public identity.
+   */
+  username: z.string().min(1),
   /** Display name, taken from the Clerk profile rather than a form field. */
   playerName: z.string(),
   /** Rooms the player has solved. Order of entries is not significant. */

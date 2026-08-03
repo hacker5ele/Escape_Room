@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Show, SignInButton, SignUpButton, UserButton, useAuth, useUser } from '@clerk/react'
+import { Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
 import type { GameSession } from '@escape-room/shared'
 import { ROOM_IDS } from '@escape-room/shared'
-import { startOrResumeGame } from './api/game'
-import { NameForm } from './account/NameForm'
+import { ApiRequestError, startOrResumeGame } from './api/game'
+import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
 
 /**
  * The scaffold page, behind a sign-in gate.
  *
- * Signed out you get the door and nothing else. Signed in, the app makes sure
- * we have a name, then starts or resumes your game — which proves the whole
- * chain: Clerk issues a token, the browser sends it, the API verifies it and
- * finds the game belonging to that account.
+ * Signed out you get the door and nothing else. Signed in, the app asks the API
+ * to open your game — which proves the whole chain: Clerk issues a token, the
+ * browser sends it, the API verifies it and finds the game belonging to that
+ * account.
  *
  * The rooms replace the panel below. See ADR-0007 for where each sub-team's
  * code goes.
@@ -34,7 +34,7 @@ export function App() {
       </Show>
 
       <Show when="signed-in">
-        <SignedIn />
+        <GamePanel />
       </Show>
     </main>
   )
@@ -72,36 +72,9 @@ function LockedDoor() {
   )
 }
 
-function SignedIn() {
-  const { isLoaded, user } = useUser()
-  // Tracked separately from `user.firstName` so the panel advances immediately
-  // after saving, without waiting for Clerk to refresh its user object.
-  const [nameProvided, setNameProvided] = useState(false)
-  const handleSaved = useCallback(() => setNameProvided(true), [])
-
-  if (!isLoaded) {
-    return <Panel>Loading your account…</Panel>
-  }
-
-  // The name is collected before the game exists, so the name recorded on the
-  // game is always the real one.
-  if (!nameProvided && !user?.firstName) {
-    return <NameForm onSaved={handleSaved} />
-  }
-
-  return <GamePanel />
-}
-
-function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">
-      <p className="font-mono text-sm text-vault-100">{children}</p>
-    </section>
-  )
-}
-
 type GameState =
   | { kind: 'loading' }
+  | { kind: 'needs-profile' }
   | { kind: 'ready'; game: GameSession }
   | { kind: 'error'; message: string }
 
@@ -117,25 +90,33 @@ function GamePanel() {
   const getTokenRef = useRef(getToken)
   getTokenRef.current = getToken
 
-  useEffect(() => {
-    let cancelled = false
-
-    getTokenRef
-      .current()
-      .then((token) => startOrResumeGame(token))
-      .then((game) => {
-        if (!cancelled) setState({ kind: 'ready', game })
+  const open = useCallback(async () => {
+    setState({ kind: 'loading' })
+    try {
+      const game = await startOrResumeGame(await getTokenRef.current())
+      setState({ kind: 'ready', game })
+    } catch (error) {
+      // Whether a profile is complete is the server's call, not the browser's.
+      // Reading it from the response means the UI cannot disagree with the API
+      // about who is allowed to start a game.
+      if (error instanceof ApiRequestError && error.needsProfile) {
+        setState({ kind: 'needs-profile' })
+        return
+      }
+      setState({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setState({ kind: 'error', message: error instanceof Error ? error.message : 'Unknown' })
-        }
-      })
-
-    return () => {
-      cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    void open()
+  }, [open])
+
+  if (state.kind === 'needs-profile') {
+    return <ProfileForm onSaved={() => void open()} />
+  }
 
   return (
     <>
@@ -145,7 +126,7 @@ function GamePanel() {
           <p className="mt-2 font-mono text-sm text-vault-100">
             {state.kind === 'loading' && 'Opening your game…'}
             {state.kind === 'ready' &&
-              `${state.game.playerName} — ${state.game.solvedRooms.length}/${ROOM_IDS.length} rooms solved`}
+              `${state.game.username} — ${state.game.solvedRooms.length}/${ROOM_IDS.length} rooms solved`}
             {state.kind === 'error' && `Could not load your game: ${state.message}`}
           </p>
         </div>
