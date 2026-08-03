@@ -6,6 +6,53 @@ import { ApiRequestError, fetchRoom, requestHint, startOrResumeGame, submitAttem
 import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
 import { ROOM_REGISTRY } from './rooms/registry'
+import { LOCKS } from './rooms/room-02/story'
+
+/**
+ * Temporary local preview: `?preview=room-02` renders a room directly, with a
+ * fake session and no network calls, so it can be looked at without a working
+ * Clerk/API setup. Remove once the room is wired up through the real flow.
+ */
+const PREVIEW_ROOM_ID = new URLSearchParams(window.location.search).get('preview') as RoomId | null
+
+const FAKE_SESSION: GameSession = {
+  id: '00000000-0000-0000-0000-000000000000',
+  userId: 'preview-user',
+  username: 'preview',
+  playerName: 'Preview',
+  solvedRooms: [],
+  startedAt: new Date().toISOString(),
+  finishedAt: null,
+  hintsUsed: 0,
+  events: [],
+}
+
+function PreviewRoom({ roomId }: { roomId: RoomId }) {
+  const RoomComponent = ROOM_REGISTRY[roomId]
+  if (!RoomComponent) {
+    return <p className="p-8 font-mono text-sm text-vault-300">No frontend registered for {roomId}.</p>
+  }
+  return (
+    <Suspense fallback={<p className="p-8 font-mono text-sm text-vault-300">Loading room…</p>}>
+      <RoomComponent
+        room={{}}
+        onSubmit={async (answer: unknown) => {
+          // No backend in preview mode, so the exit override is checked against
+          // the frontend's own answer text instead of the server. Room-02 only,
+          // since it's the only lock currently wired to a real API call.
+          const normalized = typeof answer === 'string' ? answer.trim().toLowerCase() : ''
+          const correct = roomId === 'room-02' && normalized === LOCKS.exit.answer.toLowerCase()
+          return {
+            correct,
+            feedback: correct ? undefined : 'Preview mode — checked locally, no backend involved.',
+            session: FAKE_SESSION,
+          }
+        }}
+        onHint={async () => ({ hint: 'Preview mode — no real hints.', hintsUsed: 0, hintsRemaining: 0 })}
+      />
+    </Suspense>
+  )
+}
 
 /**
  * The scaffold page, behind a sign-in gate.
@@ -19,6 +66,10 @@ import { ROOM_REGISTRY } from './rooms/registry'
  * code goes.
  */
 export function App() {
+  if (PREVIEW_ROOM_ID) {
+    return <PreviewRoom roomId={PREVIEW_ROOM_ID} />
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-10 px-6 py-16">
       <header className="space-y-3">
