@@ -1,9 +1,13 @@
 # ADR-0008: Session persistence is deliberately deferred
 
-- **Status:** Accepted — the decision inside it is **Open** on purpose
+- **Status:** Superseded by [ADR-0018](0018-dynamodb-persistence.md)
 - **Date:** 2026-08-03
 - **Deciders:** Nepomuk Crhonek
 - **Approved-by:** Nepomuk Crhonek, 2026-08-03
+
+> **Superseded the same day.** Tying games to accounts ([ADR-0017](0017-authentication-clerk.md)) made
+> the deferral untenable — an account whose progress vanishes on restart is worse than no account. The
+> repository interface below survived the change intact, which is what it was for.
 
 ## Context
 

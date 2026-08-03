@@ -8,9 +8,40 @@ terraform {
 
 locals {
   prefix = "escape-room-${var.name}"
+
+  # See the comment on the instance-role policy: the ARN is constructed rather
+  # than looked up so that a live Clerk key never enters Terraform state.
+  clerk_secret_key_arn = "arn:aws:ssm:us-east-1:${data.aws_caller_identity.current.account_id}:parameter/escape-room-secrets/${var.name}/clerk-secret-key"
 }
 
 data "aws_caller_identity" "current" {}
+
+# --------------------------------------------------------------------------
+# Game progress. One item per player, keyed on the Clerk user id.
+# --------------------------------------------------------------------------
+
+# Chosen over Postgres because the access pattern is a single key lookup, and
+# because the container reaches it with the IAM instance role — no VPC
+# connector, and no database password to keep out of a public repository.
+# See ADR-0018.
+resource "aws_dynamodb_table" "games" {
+  name         = "${local.prefix}-games"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    # Off deliberately: this is puzzle progress for a class demo, and PITR
+    # would be a continuous cost for data that is cheap to lose.
+    enabled = false
+  }
+
+  tags = var.tags
+}
 
 # --------------------------------------------------------------------------
 # Frontend: private S3 bucket, reachable only through CloudFront
@@ -247,10 +278,29 @@ resource "aws_iam_role" "apprunner_instance" {
 
 data "aws_iam_policy_document" "apprunner_instance" {
   statement {
-    sid       = "ReadOwnOriginSecret"
-    effect    = "Allow"
-    actions   = ["ssm:GetParameter", "ssm:GetParameters"]
-    resources = [aws_ssm_parameter.origin_secret.arn]
+    sid     = "ReadOwnSecrets"
+    effect  = "Allow"
+    actions = ["ssm:GetParameter", "ssm:GetParameters"]
+    resources = [
+      aws_ssm_parameter.origin_secret.arn,
+      # Clerk's secret key. Deliberately not a Terraform-managed resource and
+      # not read through a data source — either would put a live API key into
+      # the state file. It is created out of band with `aws ssm put-parameter`
+      # and referenced by ARN only, so Terraform never sees the value.
+      local.clerk_secret_key_arn,
+    ]
+  }
+
+  statement {
+    sid    = "ReadWriteOwnGames"
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:DeleteItem",
+    ]
+    resources = [aws_dynamodb_table.games.arn]
   }
 
   statement {
@@ -300,11 +350,16 @@ resource "aws_apprunner_service" "api" {
           TRUST_PROXY        = tostring(var.trust_proxy)
           ATTEMPT_RATE_LIMIT = tostring(var.attempt_rate_limit)
           CORS_ORIGIN        = "https://${var.domain_name}"
+          # Presence of this selects the DynamoDB repository over the in-memory
+          # one, so a local run without AWS credentials still works.
+          GAMES_TABLE_NAME = aws_dynamodb_table.games.name
+          AWS_REGION       = "us-east-1"
         }
         # Resolved by App Runner at start-up from SSM. DescribeService shows
         # only the ARN, never the value.
         runtime_environment_secrets = {
-          ORIGIN_SECRET = aws_ssm_parameter.origin_secret.arn
+          ORIGIN_SECRET    = aws_ssm_parameter.origin_secret.arn
+          CLERK_SECRET_KEY = local.clerk_secret_key_arn
         }
       }
     }
@@ -528,6 +583,7 @@ resource "aws_ssm_parameter" "outputs" {
     apprunner_service_arn = aws_apprunner_service.api.arn
     apprunner_url         = "https://${aws_apprunner_service.api.service_url}"
     url                   = "https://${var.domain_name}"
+    games_table           = aws_dynamodb_table.games.name
   }
 
   name  = "/escape-room/${var.name}/${each.key}"

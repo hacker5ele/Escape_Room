@@ -15,6 +15,48 @@ resource "aws_route53_zone" "main" {
 }
 
 # --------------------------------------------------------------------------
+# Clerk's production instance, which runs on our domain rather than theirs
+# --------------------------------------------------------------------------
+
+# The production publishable key encodes `clerk.cool.tf`, so sign-in in
+# production goes through our domain and not a *.clerk.accounts.dev host. That
+# only works once these five records exist — Clerk will not issue its
+# certificates until all of them resolve, and until it does, nobody can sign in
+# to production at all.
+#
+# Values come from the Clerk dashboard (Configure → Domains) and are specific to
+# this Clerk instance: the `iyd57rzfdwng` part is an instance identifier, so
+# these cannot be copied to another project.
+#
+# Staging is unaffected. It uses Clerk's own `.clerk.accounts.dev` test
+# instance, which needs no DNS of ours.
+locals {
+  clerk_dns_records = {
+    # The Frontend API the browser SDK talks to.
+    "clerk" = "frontend-api.clerk.services"
+    # Clerk's hosted sign-in and account pages.
+    "accounts" = "accounts.clerk.services"
+    # Outbound mail — verification and password-reset messages.
+    "clkmail" = "mail.iyd57rzfdwng.clerk.services"
+    # DKIM signing, so those messages are not treated as spam.
+    "clk._domainkey"  = "dkim1.iyd57rzfdwng.clerk.services"
+    "clk2._domainkey" = "dkim2.iyd57rzfdwng.clerk.services"
+  }
+}
+
+resource "aws_route53_record" "clerk" {
+  for_each = local.clerk_dns_records
+
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "${each.key}.${var.domain_name}"
+  type    = "CNAME"
+  records = [each.value]
+  # Short, because these are the records most likely to need correcting while
+  # the instance is being set up.
+  ttl = 300
+}
+
+# --------------------------------------------------------------------------
 # Certificate — covers the apex and every subdomain, so staging needs no second
 # certificate and a future room-specific subdomain needs no Terraform change.
 # --------------------------------------------------------------------------

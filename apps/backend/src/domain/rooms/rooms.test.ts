@@ -5,11 +5,14 @@ import { SOLUTIONS } from './solutions.fixture.js'
 
 const freshSession: GameSession = {
   id: '00000000-0000-4000-8000-000000000000',
+  userId: 'user_tester',
+  username: 'tester',
   playerName: 'Tester',
   solvedRooms: [],
   startedAt: new Date(0).toISOString(),
   finishedAt: null,
   hintsUsed: 0,
+  events: [],
 }
 
 /** Walks an object tree and returns every key it contains. */

@@ -18,6 +18,14 @@ export class ApiError extends Error {
     return new ApiError(400, 'VALIDATION_ERROR', message)
   }
 
+  static profileIncomplete(): ApiError {
+    return new ApiError(
+      409,
+      'PROFILE_INCOMPLETE',
+      'Choose a username before you start playing.',
+    )
+  }
+
   static sessionNotFound(): ApiError {
     return new ApiError(404, 'SESSION_NOT_FOUND', 'No game session with that id. Start a new game.')
   }

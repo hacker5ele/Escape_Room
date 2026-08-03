@@ -37,14 +37,22 @@ jobs:
         # Through env rather than direct interpolation. This workflow only runs
         # on main and dev so a hostile ref name cannot reach here today, but the
         # habit is what stops the next `run:` block being the exploitable one.
+        #
+        # The Clerk publishable key is not a secret — it identifies the Clerk
+        # instance and carries no authority, and Vite inlines it into the bundle
+        # where anyone can read it anyway. It lives here rather than in a
+        # repository variable because nobody on the team has admin to create
+        # one. The SECRET key is a different matter entirely and lives in SSM.
         env:
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           if [ "$REF_NAME" = "main" ]; then
             echo "name=prod" >> "$GITHUB_OUTPUT"
+            echo "clerk_key=pk_live_Y2xlcmsuY29vbC50ZiQ" >> "$GITHUB_OUTPUT"
           else
             echo "name=staging" >> "$GITHUB_OUTPUT"
+            echo "clerk_key=pk_test_Z2VudWluZS1zbG90aC02My5jbGVyay5hY2NvdW50cy5kZXYk" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/setup-node@v4
@@ -58,6 +66,10 @@ jobs:
       # The same bundle serves every environment — the frontend calls the
       # relative path /api and has no environment-specific configuration.
       - name: Build frontend
+        env:
+          # Vite inlines this at build time, so it must be set here rather than
+          # on the running container.
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ steps.target.outputs.clerk_key }}
         run: |
           npm run build --workspace @escape-room/shared
           npm run build --workspace @escape-room/frontend
