@@ -1,0 +1,34 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths: ['infra/**']
+
+jobs:
+  check:
+    name: Terraform format and validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          # Matches the version installed locally, so formatting never disagrees
+          # between a laptop and CI.
+          terraform_version: 1.5.7
+
+      - name: Format
+        run: terraform fmt -check -recursive infra
+
+      # `-backend=false` skips the S3 backend, so this needs no AWS credentials.
+      # That is deliberate: the deploy role's trust policy only allows the main
+      # and dev branches, so a pull request — including one from a fork of this
+      # public repository — cannot assume it. `terraform plan` therefore cannot
+      # run here; run it locally before opening the pull request.
+      - name: Validate
+        run: |
+          for dir in infra/live/*/; do
+            echo "── $dir"
+            terraform -chdir="$dir" init -backend=false -input=false >/dev/null
+            terraform -chdir="$dir" validate
+          done

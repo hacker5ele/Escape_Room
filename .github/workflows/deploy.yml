@@ -1,0 +1,163 @@
+name: Deploy
+
+# push only, never pull_request. The deploy role trusts exactly
+# `ref:refs/heads/main` and `ref:refs/heads/dev`, so a pull request cannot
+# assume it — but not offering the trigger at all is the belt to that braces,
+# because this repository is public and anyone can open a pull request.
+on:
+  push:
+    branches: [main, dev]
+
+permissions:
+  id-token: write # required to fetch the OIDC token
+  contents: read
+
+# Deploys queue rather than cancel: interrupting a half-finished App Runner
+# rollout leaves the service in a state that needs manual attention.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  # Not a secret. An ARN is public information; the trust policy is what
+  # protects it. Keeping it here means no repository secrets are needed, which
+  # matters because nobody on the team has admin rights to create them.
+  DEPLOY_ROLE_ARN: arn:aws:iam::445849136002:role/escape-room-deploy
+
+jobs:
+  deploy:
+    name: Deploy and verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target environment
+        id: target
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "name=prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=staging" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # The same bundle serves every environment — the frontend calls the
+      # relative path /api and has no environment-specific configuration.
+      - name: Build frontend
+        run: |
+          npm run build --workspace @escape-room/shared
+          npm run build --workspace @escape-room/frontend
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Terraform publishes these; the workflow does not hardcode a generated
+      # CloudFront id, and the deploy role never needs to read Terraform state
+      # (which also contains the origin secret).
+      - name: Look up environment resources
+        id: infra
+        env:
+          TARGET: ${{ steps.target.outputs.name }}
+        run: |
+          get() {
+            aws ssm get-parameter --name "/escape-room/$TARGET/$1" \
+              --query Parameter.Value --output text
+          }
+          {
+            echo "bucket=$(get site_bucket)"
+            echo "distribution=$(get distribution_id)"
+            echo "service=$(get apprunner_service_arn)"
+            echo "apprunner_url=$(get apprunner_url)"
+            echo "url=$(get url)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Build and push the backend image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TARGET: ${{ steps.target.outputs.name }}
+        run: |
+          IMAGE="$REGISTRY/escape-room-backend"
+          # Two tags: the sha so a deploy is traceable to a commit, and the
+          # moving environment tag that App Runner is configured to pull.
+          docker build -f apps/backend/Dockerfile \
+            -t "$IMAGE:${{ github.sha }}" \
+            -t "$IMAGE:$TARGET" .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:$TARGET"
+
+      # Backend before frontend: a new API serving an old page is fine, the
+      # reverse is not.
+      - name: Deploy the backend and wait for it
+        env:
+          SERVICE: ${{ steps.infra.outputs.service }}
+        run: |
+          aws apprunner start-deployment --service-arn "$SERVICE" >/dev/null
+          echo "Deployment started, waiting for the service to settle…"
+
+          for _ in $(seq 1 60); do
+            sleep 15
+            STATUS=$(aws apprunner describe-service --service-arn "$SERVICE" \
+              --query 'Service.Status' --output text)
+            echo "  status: $STATUS"
+            case "$STATUS" in
+              RUNNING) echo "Service is running."; exit 0 ;;
+              OPERATION_IN_PROGRESS) ;;
+              *) echo "::error::App Runner ended in state $STATUS"; exit 1 ;;
+            esac
+          done
+
+          echo "::error::Timed out waiting for App Runner to finish deploying"
+          exit 1
+
+      - name: Publish the frontend
+        env:
+          BUCKET: ${{ steps.infra.outputs.bucket }}
+        run: |
+          # Vite writes content-hashed filenames into /assets, so those can be
+          # cached forever. index.html must not be, or a deploy leaves browsers
+          # pointing at bundles that no longer exist.
+          aws s3 sync apps/frontend/dist "s3://$BUCKET" \
+            --delete \
+            --exclude index.html \
+            --cache-control "public,max-age=31536000,immutable"
+
+          aws s3 cp apps/frontend/dist/index.html "s3://$BUCKET/index.html" \
+            --cache-control "no-cache"
+
+      - name: Invalidate the CDN
+        env:
+          DISTRIBUTION: ${{ steps.infra.outputs.distribution }}
+        run: |
+          # Only the uncached entry point needs purging; everything else is
+          # content-hashed and therefore a new path already.
+          aws cloudfront create-invalidation \
+            --distribution-id "$DISTRIBUTION" \
+            --paths "/" "/index.html" >/dev/null
+
+      # The point of the whole pipeline: a deploy that serves a broken game is
+      # a failed deploy. This plays the actual game against the live domain.
+      - name: Smoke test the live site
+        env:
+          APPRUNNER_URL: ${{ steps.infra.outputs.apprunner_url }}
+        run: npm run smoke -- "${{ steps.infra.outputs.url }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### ${{ steps.target.outputs.name }} deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: ${{ steps.infra.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"

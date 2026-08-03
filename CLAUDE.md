@@ -24,9 +24,13 @@ These rules are not suggestions. They apply to every team member and to Claude.
 3. **Every ADR must be approved by Nepomuk Crhonek.** An ADR is only valid once its status is
    `Accepted` and the `Approved-by` field names Nepomuk Crhonek with a date. Nobody else may set an
    ADR to `Accepted`.
-4. **Claude must not push until the user explicitly says the ADR is approved.** Claude may write
-   files, install dependencies, run builds and tests — but it stops before `git push` and waits for an
-   explicit statement such as "the ADR is approved". No implicit approval, no assumptions.
+4. **A request from Nepomuk is itself the approval.** When Nepomuk asks for something, that request
+   approves the ADRs and the work needed to carry it out — Claude does not stop afterwards to ask for a
+   separate sign-off, and does not wait before pushing. This is a standing authorisation and it comes
+   from him. It does **not** weaken rule 1: deciding *what* to build is still his, and Claude still
+   stops and asks when a request leaves a genuine choice open. What this removes is the second
+   confirmation round on work he has already asked for. Requests from anyone else still need his
+   approval as normal.
 5. **This file stays current.** Any accepted decision is reflected here (architecture section and
    decision log) as part of the same change.
 6. **No direct pushes to `main`.** Feature branches and pull requests only — this is a rule from the
@@ -198,11 +202,26 @@ npm run lint           # ESLint across all workspaces
 npm run test           # Vitest across all workspaces
 
 docker compose up --build     # full stack, frontend on http://localhost:8080
+
+npm run smoke -- https://dev.cool.tf   # play the real game against a live environment
 ```
 
 ---
 
 ## 7. Git workflow
+
+Work flows one way, and it is enforced, not just agreed:
+
+```
+feature branch  →  dev  →  main
+                    │        │
+              dev.cool.tf   cool.tf
+```
+
+- Open pull requests against **`dev`**. Never against `main`.
+- **`main` accepts pull requests only from `dev`.** A CI job blocks anything else — see
+  [ADR-0016](docs/adr/0016-branch-policy.md).
+- Merging `dev` into `main` is the release, and it deploys production.
 
 Branch names: `feat/room-02-puzzle`, `fix/session-expiry`, `docs/adr-0011-persistence`, `chore/...`.
 Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`).
@@ -213,13 +232,55 @@ platform, not just by convention.
 
 ---
 
-## 8. Decision log
+## 8. Deployment
+
+Live on AWS. Details in [ADR-0012](docs/adr/0012-aws-hosting.md); the runbook is
+[`infra/README.md`](infra/README.md).
+
+| Branch | Environment | URL |
+| --- | --- | --- |
+| `dev` | staging | <https://dev.cool.tf> |
+| `main` | production | <https://cool.tf> |
+
+Each environment is one CloudFront distribution with two origins: a private S3 bucket for the built
+frontend, and App Runner for the API under `/api/*`. That keeps the browser talking to a single origin,
+so the frontend still has no backend URL in it and there is still no CORS anywhere.
+
+Pushing to a deploy branch builds the image, ships it, and then **plays the actual game against the
+live site** (`scripts/smoke-test.mjs`). A failed smoke test fails the deploy. GitHub Actions
+authenticates with OIDC — there are no AWS credentials stored in GitHub.
+
+Two constraints worth remembering:
+
+- **The API runs as a single instance.** Sessions are in memory ([ADR-0008](docs/adr/0008-session-persistence.md)),
+  so it cannot be scaled up without a shared session store first.
+- **A deploy restarts the API**, which drops every game in progress. Do not deploy during the demo.
+
+### Ruleset settings (requires repo admin — currently only Eleonora)
+
+The ruleset "Protect main and dev branch" needs these, or the rules above are advisory only:
+
+- **`main`** — require a pull request, 1 approving review, require Code Owner review, block force
+  pushes and deletion. Required status checks: `Lint, typecheck, test, build`,
+  `Container images build`, `Only dev may open PRs into main`.
+- **`dev`** — require a pull request, 0 approvals. Required status checks: `Lint, typecheck, test, build`,
+  `Container images build`.
+
+The dev-only-into-main rule cannot be expressed as a ruleset condition, which is why it is a required
+status check instead. Renaming that job silently disables the rule.
+
+## 9. Decision log
 
 Newest first. Every entry links to its ADR. An entry may only move to *Accepted* once Nepomuk has
 approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-03 | [0016](docs/adr/0016-branch-policy.md) | PRs target `dev`; `main` accepts them only from `dev` | Accepted |
+| 2026-08-03 | [0015](docs/adr/0015-github-oidc-deploys.md) | GitHub Actions deploys via OIDC, no stored AWS credentials | Accepted |
+| 2026-08-03 | [0014](docs/adr/0014-two-environments.md) | Two environments: `cool.tf` from `main`, `dev.cool.tf` from `dev` | Accepted |
+| 2026-08-03 | [0013](docs/adr/0013-terraform.md) | Terraform, state in S3 with DynamoDB locking | Accepted |
+| 2026-08-03 | [0012](docs/adr/0012-aws-hosting.md) | Host on AWS: CloudFront + S3 + App Runner per environment | Accepted |
 | 2026-08-03 | [0011](docs/adr/0011-decision-authority.md) | The user decides, the agent does not | Accepted |
 | 2026-08-03 | [0010](docs/adr/0010-git-workflow.md) | Feature branches, PRs, Conventional Commits, ADR per change | Accepted |
 | 2026-08-03 | [0009](docs/adr/0009-containerization.md) | Multi-stage Docker images + docker compose | Accepted |

@@ -9,6 +9,7 @@ import { createHealthRoutes } from './routes/health.routes.js'
 import { createSessionRoutes } from './routes/sessions.routes.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
 import { createAttemptRateLimiter } from './http/rate-limit.js'
+import { createOriginGuard } from './http/origin-guard.js'
 import { errorHandler, notFoundHandler } from './http/error-handler.js'
 
 export interface AppOptions {
@@ -16,6 +17,8 @@ export interface AppOptions {
   sessionRepository?: SessionRepository
   /** Attempts per IP per minute. Tests lower it to assert the limiter fires. */
   attemptRateLimit?: number
+  /** Shared secret CloudFront must present. Empty disables the check. */
+  originSecret?: string
 }
 
 /**
@@ -41,7 +44,14 @@ export function createApp(options: AppOptions = {}): Express {
   // 10 kB: an answer is a word or a number. Anything larger is not a player.
   app.use(express.json({ limit: '10kb' }))
 
+  // Health is mounted before the origin guard: App Runner's health check hits
+  // the container directly, without going through CloudFront, so it never
+  // carries the shared secret.
   app.use('/api', createHealthRoutes())
+
+  // Everything below is reachable only through CloudFront in production.
+  app.use('/api', createOriginGuard(options.originSecret ?? config.originSecret))
+
   app.use('/api/sessions', createSessionRoutes(sessionService))
   app.use(
     '/api/rooms',
