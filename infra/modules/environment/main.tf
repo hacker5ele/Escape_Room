@@ -19,6 +19,12 @@ data "aws_caller_identity" "current" {}
 resource "aws_s3_bucket" "site" {
   bucket = "${local.prefix}-site"
   tags   = var.tags
+
+  # `terraform destroy` refuses to remove a bucket that still has objects in it,
+  # and versioning below means even deleted objects leave versions behind. The
+  # project is meant to be removable in one command when the week is over, and
+  # the contents are a rebuildable static site — nothing here is worth keeping.
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_public_access_block" "site" {
@@ -41,6 +47,33 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "site" {
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Versioning plus `s3 sync --delete` on every deploy means each replaced asset
+# leaves a noncurrent version behind, and each deleted one leaves a delete
+# marker — all billed, forever. Versioning is worth keeping as a rollback path;
+# a week of history is plenty for a static site rebuildable from a commit.
+resource "aws_s3_bucket_lifecycle_configuration" "site" {
+  bucket = aws_s3_bucket.site.id
+
+  rule {
+    id     = "expire-old-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
     }
   }
 }
@@ -84,12 +117,25 @@ resource "aws_s3_bucket_policy" "site" {
 # Sessions live in memory (ADR-0008). More than one instance means a request
 # can land on a container that has never heard of the session, so the game
 # breaks at random. min = max = 1 until there is a shared session store.
+#
+# The same constraint has a second edge: with exactly one instance, every
+# deployment — and any change to the settings below, which triggers one — drops
+# all games in progress. Do not deploy during the demo.
 resource "aws_apprunner_auto_scaling_configuration_version" "single" {
   auto_scaling_configuration_name = "${local.prefix}-single"
   min_size                        = 1
   max_size                        = 1
   max_concurrency                 = 100
   tags                            = var.tags
+
+  # Every argument here forces replacement, and App Runner refuses to delete a
+  # configuration that a service still references. Without create_before_destroy
+  # the first edit to any of the values above fails mid-apply, with the service
+  # still bound to the old version. Reusing the name is fine — App Runner
+  # creates a new revision, the service moves to it, then the old one goes.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 data "aws_iam_policy_document" "apprunner_assume" {
@@ -98,6 +144,13 @@ data "aws_iam_policy_document" "apprunner_assume" {
     principals {
       type        = "Service"
       identifiers = ["build.apprunner.amazonaws.com"]
+    }
+    # Without this, any App Runner service in any account that the service
+    # principal can act for could assume this role. Scope it to us.
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
     }
   }
 }
@@ -108,9 +161,37 @@ resource "aws_iam_role" "apprunner_ecr_access" {
   tags               = var.tags
 }
 
-resource "aws_iam_role_policy_attachment" "apprunner_ecr_access" {
-  role       = aws_iam_role.apprunner_ecr_access.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess"
+# Deliberately NOT the AWS managed AWSAppRunnerServicePolicyForECRAccess.
+# That policy grants its ECR read actions on `Resource: "*"`, which in this
+# account means every image belonging to the unrelated production workloads —
+# not just ours. This grants the same actions against one repository.
+data "aws_iam_policy_document" "apprunner_ecr_access" {
+  statement {
+    sid    = "GetAuthToken"
+    effect = "Allow"
+    # The only ECR action that genuinely does not support resource-level
+    # permissions.
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PullProjectImageOnly"
+    effect = "Allow"
+    actions = [
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:BatchGetImage",
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:DescribeImages",
+    ]
+    resources = [var.ecr_repository_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "apprunner_ecr_access" {
+  name   = "${local.prefix}-apprunner-ecr"
+  role   = aws_iam_role.apprunner_ecr_access.name
+  policy = data.aws_iam_policy_document.apprunner_ecr_access.json
 }
 
 # Shared secret CloudFront sends on every origin request. The App Runner URL is
@@ -120,6 +201,78 @@ resource "aws_iam_role_policy_attachment" "apprunner_ecr_access" {
 resource "random_password" "origin_secret" {
   length  = 48
   special = false
+}
+
+# The secret is handed to the container as a *reference*, not as a plain
+# runtime environment variable.
+#
+# apprunner:DescribeService returns RuntimeEnvironmentVariables in clear text,
+# and the deploy role calls DescribeService on every run in its wait loop. A
+# plain variable would therefore put this secret one API call away from any
+# Actions run — defeating the point of keeping the deploy role out of Terraform
+# state in the first place. With a secret reference, DescribeService returns
+# this ARN and nothing else.
+#
+# Note the path: NOT under /escape-room/<env>/, because the deploy role holds
+# ssm:GetParameter on that entire prefix for the resource lookups.
+resource "aws_ssm_parameter" "origin_secret" {
+  name  = "/escape-room-secrets/${var.name}/origin-secret"
+  type  = "SecureString"
+  value = random_password.origin_secret.result
+  tags  = var.tags
+}
+
+data "aws_iam_policy_document" "apprunner_instance_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["tasks.apprunner.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+}
+
+# The role the running container itself uses — distinct from the ECR pull role,
+# which App Runner only uses at image-fetch time.
+resource "aws_iam_role" "apprunner_instance" {
+  name               = "${local.prefix}-apprunner-instance"
+  assume_role_policy = data.aws_iam_policy_document.apprunner_instance_assume.json
+  tags               = var.tags
+}
+
+data "aws_iam_policy_document" "apprunner_instance" {
+  statement {
+    sid       = "ReadOwnOriginSecret"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter", "ssm:GetParameters"]
+    resources = [aws_ssm_parameter.origin_secret.arn]
+  }
+
+  statement {
+    sid    = "DecryptThroughSsmOnly"
+    effect = "Allow"
+    # SecureString uses the account's aws/ssm key, whose ARN is not worth
+    # pinning; the ViaService condition is what constrains this — the role can
+    # only decrypt as part of an SSM call, not against arbitrary ciphertext.
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.us-east-1.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "apprunner_instance" {
+  name   = "${local.prefix}-apprunner-instance"
+  role   = aws_iam_role.apprunner_instance.name
+  policy = data.aws_iam_policy_document.apprunner_instance.json
 }
 
 resource "aws_apprunner_service" "api" {
@@ -147,15 +300,20 @@ resource "aws_apprunner_service" "api" {
           TRUST_PROXY        = tostring(var.trust_proxy)
           ATTEMPT_RATE_LIMIT = tostring(var.attempt_rate_limit)
           CORS_ORIGIN        = "https://${var.domain_name}"
-          ORIGIN_SECRET      = random_password.origin_secret.result
+        }
+        # Resolved by App Runner at start-up from SSM. DescribeService shows
+        # only the ARN, never the value.
+        runtime_environment_secrets = {
+          ORIGIN_SECRET = aws_ssm_parameter.origin_secret.arn
         }
       }
     }
   }
 
   instance_configuration {
-    cpu    = "0.25 vCPU"
-    memory = "0.5 GB"
+    cpu               = "0.25 vCPU"
+    memory            = "0.5 GB"
+    instance_role_arn = aws_iam_role.apprunner_instance.arn
   }
 
   health_check_configuration {
@@ -170,16 +328,47 @@ resource "aws_apprunner_service" "api" {
   auto_scaling_configuration_arn = aws_apprunner_auto_scaling_configuration_version.single.arn
   tags                           = var.tags
 
-  lifecycle {
-    # The pipeline moves the image forward. Without this, every terraform apply
-    # would drag the service back to whatever tag was current at plan time.
-    ignore_changes = [source_configuration[0].image_repository[0].image_identifier]
-  }
+  # No ignore_changes on image_identifier. It looks prudent but does nothing:
+  # the configured value is a moving tag, so it is byte-identical on every plan
+  # and there is no drift to suppress. What it would actually do is silently
+  # swallow a genuine edit to var.image_tag or var.ecr_repository_url.
 }
 
 # --------------------------------------------------------------------------
 # CloudFront: one distribution, two origins, so the browser sees one origin
 # --------------------------------------------------------------------------
+
+# SPA fallback, done as a viewer-request function rather than with
+# custom_error_response.
+#
+# This matters more than it looks. CustomErrorResponses is a DISTRIBUTION-level
+# setting in the CloudFront API — it cannot be scoped to one cache behavior. A
+# 403/404 -> /index.html rule would therefore also rewrite the API's own error
+# responses, and `GET /api/rooms/room-02` on a locked room would come back as
+# HTML with status 200 instead of 403 ROOM_LOCKED. The room gate would look
+# open to every client.
+#
+# A CloudFront Function attaches to a single behavior, so the rewrite applies to
+# the site only and API errors pass through untouched.
+resource "aws_cloudfront_function" "spa_fallback" {
+  name    = "${local.prefix}-spa-fallback"
+  runtime = "cloudfront-js-2.0"
+  comment = "Rewrite extensionless paths to /index.html so deep links work"
+  publish = true
+
+  code = <<-JS
+    function handler(event) {
+      var request = event.request;
+      // Anything with a file extension is a real asset — leave it alone so a
+      // missing bundle still 404s instead of silently returning the app shell.
+      if (request.uri.indexOf('.') !== -1) {
+        return request;
+      }
+      request.uri = '/index.html';
+      return request;
+    }
+  JS
+}
 
 data "aws_cloudfront_cache_policy" "caching_optimized" {
   name = "Managed-CachingOptimized"
@@ -235,6 +424,11 @@ resource "aws_cloudfront_distribution" "main" {
     cached_methods         = ["GET", "HEAD"]
     cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
     compress               = true
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_fallback.arn
+    }
   }
 
   ordered_cache_behavior {
@@ -250,28 +444,30 @@ resource "aws_cloudfront_distribution" "main" {
 
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
-    compress                 = true
+
+    # No `compress` here. CloudFront only compresses when the *cache policy*
+    # enables gzip/brotli, and Managed-CachingDisabled has both off — setting
+    # compress = true on the behavior would look like it did something while
+    # changing nothing. API responses are a few hundred bytes anyway.
   }
 
-  # SPA fallback. A deep link like /room/room-02 is not an object in the
-  # bucket, and OAC + the S3 REST endpoint answer 403 for anything missing.
-  #
-  # These rules apply to the default behavior only — CloudFront does not run
-  # custom error responses for a 404 produced by the /api/* behavior, so a
-  # genuine API 404 still reaches the browser as JSON rather than as HTML.
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
+  # `/api/*` does not match the path `/api` exactly, so without this behavior a
+  # request to /api falls through to the SPA and returns index.html with a 200.
+  # Sending it to the API instead means it gets the JSON 404 it deserves.
+  ordered_cache_behavior {
+    path_pattern           = "/api"
+    target_origin_id       = "apprunner-api"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
   }
 
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
+  # Deliberately no custom_error_response blocks — see the comment on
+  # aws_cloudfront_function.spa_fallback above. They are distribution-wide and
+  # would rewrite the API's error responses too.
 
   viewer_certificate {
     acm_certificate_arn      = var.certificate_arn

@@ -45,8 +45,12 @@ Four configuration details are load-bearing and are covered by the smoke test ra
   `POST /api/sessions` fail with a 403 before it ever reached the origin;
 - it uses **CachingDisabled** and an origin request policy that forwards the custom **`X-Session-Id`**
   header, without which every authenticated call becomes a 400;
-- SPA deep links work through **custom error responses** (403/404 → `/index.html`, 200), because OAC
-  requires the S3 REST endpoint, which cannot do website-style routing;
+- SPA deep links are rewritten by a **CloudFront Function on the default behavior**, and explicitly
+  *not* by custom error responses. This one nearly shipped wrong: `CustomErrorResponses` is a
+  distribution-level setting with no per-behavior scoping, so a 403/404 → `/index.html` rule would also
+  have rewritten the API's own errors. A locked room answers `403 ROOM_LOCKED`, which would have
+  reached the browser as HTML with status 200 — the gate would have looked open to every client. A
+  function attaches to one behavior, so the site is rewritten and the API is untouched;
 - **`TRUST_PROXY`** counts the real hops, or the rate limiter either blocks the whole world at once or
   can be bypassed with a forged `X-Forwarded-For`.
 

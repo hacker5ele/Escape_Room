@@ -62,6 +62,8 @@ dig +short NS cool.tf @8.8.8.8     # should return the awsdns names
 ```bash
 # 4. The rest of shared. The certificate validates automatically once delegation is live;
 #    if this hangs, DNS has not propagated yet.
+#    Optionally put your email in a gitignored terraform.tfvars first so the budget
+#    can notify you:  budget_alert_email = "you@example.com"
 terraform apply
 
 # 5. App Runner needs an image before the service can be created.
@@ -93,6 +95,14 @@ run `plan`, because the deploy role only trusts the `main` and `dev` branches an
 assume it — deliberate, since the repository is public. **Run `terraform plan` locally before opening a
 pull request.**
 
+## One manual step Terraform cannot do
+
+The budget filters on `Project=escape-room`, and **a tag-filtered budget matches nothing until the tag
+key is activated as a cost allocation tag**. Terraform has no resource for this. Go to
+**Billing → Cost allocation tags**, find `Project`, and activate it. It takes up to 24 hours to start
+collecting and is **not retroactive**, so until then the cost guard is decorative. Until you have
+confirmed it is reporting, treat an unfiltered account-level budget as the real backstop.
+
 ## Verifying a deployment
 
 ```bash
@@ -112,15 +122,59 @@ cd ../staging         && terraform destroy
 cd ../shared          && terraform destroy
 ```
 
-Then delete the state bucket and lock table by hand, and remove the delegation at Hostinger. Destroy
-`shared` last — the environments depend on its outputs.
+Then delete the state bucket and lock table by hand, and remove the delegation at Hostinger.
+
+`shared` must go last, and not only because of output dependencies. Two things bite:
+
+**The deploy role will not delete.** Each environment attaches an *inline* policy
+(`escape-room-prod-deploy`, `escape-room-staging-deploy`) to a role owned by the `shared` state.
+`shared` only knows about its own `escape-room-deploy-ecr`, so IAM refuses with `DeleteConflict`
+while the others exist. Destroying the environments first removes them. If you are recovering from a
+half-finished teardown:
+
+```bash
+aws iam delete-role-policy --role-name escape-room-deploy --policy-name escape-room-prod-deploy
+aws iam delete-role-policy --role-name escape-room-deploy --policy-name escape-room-staging-deploy
+```
+
+**The certificate can race CloudFront.** CloudFront holds its association for a while after a
+distribution is deleted, so destroying `shared` can fail with `ResourceInUseException` even though the
+environments reported success. Wait a few minutes and run it again.
 
 ## Gotchas
 
 **The certificate hangs on apply.** Nameservers are not delegated yet. `dig +short NS cool.tf @8.8.8.8`.
 
 **App Runner will not start.** It needs an image at the tag it is configured to pull. Check the tag
-exists in ECR.
+exists in ECR, and check the image is **linux/amd64** — an arm64 image built on a Mac pulls fine and
+then fails to run.
+
+**App Runner ends in `CREATE_FAILED` and Terraform errors with `unexpected state 'CREATE_FAILED',
+wanted target 'RUNNING'`.** This happened once on first apply while the identical image succeeded in
+the other environment, so treat it as transient before hunting for a bug. Confirm the image is fine by
+running it yourself with the same environment variables:
+
+```bash
+aws apprunner describe-service --service-arn "$ARN" \
+  --query 'Service.SourceConfiguration.ImageRepository.ImageConfiguration.RuntimeEnvironmentVariables'
+docker run --rm --platform linux/amd64 -e PORT=3000 -e NODE_ENV=production …  <image>
+```
+
+If it runs locally, recover like this — a `CREATE_FAILED` service still occupies the name, so it has to
+go before Terraform can make a new one:
+
+```bash
+ARN=$(aws apprunner list-services --region us-east-1 \
+  --query "ServiceSummaryList[?ServiceName=='escape-room-prod'].ServiceArn" --output text)
+aws apprunner delete-service --service-arn "$ARN" --region us-east-1
+# wait until it disappears from list-services, then:
+terraform state rm module.environment.aws_apprunner_service.api
+terraform apply
+```
+
+If it fails twice with the same image, it is not transient — read
+`/aws/apprunner/<service>/<id>/service` in CloudWatch. No *application* log group at all means the
+container never got far enough to write to stdout.
 
 **A deploy works but the site does not change.** `index.html` is served with `no-cache` and everything
 else is content-hashed, so this is almost always a missing CloudFront invalidation.

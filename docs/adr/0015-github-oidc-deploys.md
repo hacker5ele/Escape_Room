@@ -22,12 +22,21 @@ GitHub Actions authenticates to AWS through **OpenID Connect**. No AWS credentia
 The account already had a `token.actions.githubusercontent.com` OIDC provider, so this adds one role,
 `escape-room-deploy`, following the account's existing `<project>-deploy` naming.
 
-The trust policy names **exact branch refs**:
+The trust policy names **exact branch refs**, in both of the subject forms GitHub can issue:
 
 ```
 repo:hacker5ele/Escape_Room:ref:refs/heads/main
 repo:hacker5ele/Escape_Room:ref:refs/heads/dev
+repo:hacker5ele@180300197/Escape_Room@1321465032:ref:refs/heads/main
+repo:hacker5ele@180300197/Escape_Room@1321465032:ref:refs/heads/dev
 ```
+
+The second pair is the *immutable* form, with numeric owner and repository ids. This repository issues
+that form, which is why the first deploy failed with `Not authorized to perform
+sts:AssumeRoleWithWebIdentity` against a policy that looked correct. Check which form applies with
+`gh api repos/OWNER/REPO/actions/oidc/customization/sub`. Listing both means flipping that setting
+does not silently break deploys — and the immutable form is the better of the two, since it survives a
+rename and cannot be re-pointed by someone who later claims a freed-up repository name.
 
 Never `repo:hacker5ele/Escape_Room:*`. A pull request run receives a different subject
 (`…:pull_request`), so a fork PR cannot assume the role no matter what its workflow file says. The
