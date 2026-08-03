@@ -11,7 +11,7 @@ import type { RoomId } from '@escape-room/shared'
  */
 export const SOLUTIONS: Record<RoomId, unknown> = {
   'room-01': 90,
-  'room-02': 'ESCAPE ROOM',
+  'room-02': 'SEVERE',
   'room-03': 21,
   'room-04': 108,
 }

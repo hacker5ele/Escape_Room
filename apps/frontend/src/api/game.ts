@@ -1,4 +1,4 @@
-import type { ApiErrorCode, GameSession } from '@escape-room/shared'
+import type { ApiErrorCode, AttemptResponse, GameSession, HintResponse, RoomId, RoomPublicData } from '@escape-room/shared'
 
 /**
  * The API calls that need a signed-in user.
@@ -60,4 +60,30 @@ export async function startOrResumeGame(token: string | null): Promise<GameSessi
   const response = await request('/sessions', token, { method: 'POST', body: '{}' })
   const body = (await response.json()) as { session: GameSession }
   return body.session
+}
+
+/** Fetches a room's public data. 403s (as an ApiRequestError) if it is still locked. */
+export async function fetchRoom(roomId: RoomId, token: string | null): Promise<RoomPublicData> {
+  const response = await request(`/rooms/${roomId}`, token)
+  const body = (await response.json()) as { room: RoomPublicData }
+  return body.room
+}
+
+/** Submits an answer. `answer` is whatever the room's puzzle expects — the server narrows it. */
+export async function submitAttempt(
+  roomId: RoomId,
+  answer: unknown,
+  token: string | null,
+): Promise<AttemptResponse> {
+  const response = await request(`/rooms/${roomId}/attempt`, token, {
+    method: 'POST',
+    body: JSON.stringify({ answer }),
+  })
+  return (await response.json()) as AttemptResponse
+}
+
+/** Asks the server for the next hint, counted against the session. */
+export async function requestHint(roomId: RoomId, token: string | null): Promise<HintResponse> {
+  const response = await request(`/rooms/${roomId}/hint`, token, { method: 'POST', body: '{}' })
+  return (await response.json()) as HintResponse
 }

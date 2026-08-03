@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
-import type { GameSession } from '@escape-room/shared'
-import { ROOM_IDS } from '@escape-room/shared'
-import { ApiRequestError, startOrResumeGame } from './api/game'
+import type { AttemptResponse, GameSession, RoomId } from '@escape-room/shared'
+import { isRoomUnlocked, ROOM_IDS } from '@escape-room/shared'
+import { ApiRequestError, fetchRoom, requestHint, startOrResumeGame, submitAttempt } from './api/game'
 import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
+import { ROOM_REGISTRY } from './rooms/registry'
 
 /**
  * The scaffold page, behind a sign-in gate.
@@ -78,9 +79,16 @@ type GameState =
   | { kind: 'ready'; game: GameSession }
   | { kind: 'error'; message: string }
 
+type RoomViewState =
+  | { kind: 'closed' }
+  | { kind: 'loading'; roomId: RoomId }
+  | { kind: 'ready'; roomId: RoomId; room: import('@escape-room/shared').RoomPublicData }
+  | { kind: 'error'; roomId: RoomId; message: string }
+
 function GamePanel() {
   const { getToken } = useAuth()
   const [state, setState] = useState<GameState>({ kind: 'loading' })
+  const [roomView, setRoomView] = useState<RoomViewState>({ kind: 'closed' })
 
   // Held in a ref, and the effect runs on mount only.
   //
@@ -114,8 +122,66 @@ function GamePanel() {
     void open()
   }, [open])
 
+  const openRoom = useCallback(async (roomId: RoomId) => {
+    setRoomView({ kind: 'loading', roomId })
+    try {
+      const room = await fetchRoom(roomId, await getTokenRef.current())
+      setRoomView({ kind: 'ready', roomId, room })
+    } catch (error) {
+      setRoomView({
+        kind: 'error',
+        roomId,
+        message: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  }, [])
+
   if (state.kind === 'needs-profile') {
     return <ProfileForm onSaved={() => void open()} />
+  }
+
+  if (roomView.kind !== 'closed') {
+    const RoomComponent = roomView.kind === 'ready' ? ROOM_REGISTRY[roomView.roomId] : undefined
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setRoomView({ kind: 'closed' })}
+          className="fixed top-3 left-3 z-[9999] rounded bg-vault-900/90 px-3 py-1.5 font-mono text-xs text-vault-100 shadow"
+        >
+          ← Back to rooms
+        </button>
+
+        {roomView.kind === 'loading' && <p className="p-8 font-mono text-sm text-vault-300">Opening room…</p>}
+        {roomView.kind === 'error' && (
+          <p className="p-8 font-mono text-sm text-vault-300">Could not open room: {roomView.message}</p>
+        )}
+        {roomView.kind === 'ready' && RoomComponent && (
+          <Suspense fallback={<p className="p-8 font-mono text-sm text-vault-300">Loading room…</p>}>
+            <RoomComponent
+              room={roomView.room}
+              onSubmit={async (answer: unknown): Promise<AttemptResponse> => {
+                const result = await submitAttempt(roomView.roomId, answer, await getTokenRef.current())
+                setState((prev) => (prev.kind === 'ready' ? { kind: 'ready', game: result.session } : prev))
+                return result
+              }}
+              onHint={async () => {
+                const result = await requestHint(roomView.roomId, await getTokenRef.current())
+                setState((prev) =>
+                  prev.kind === 'ready'
+                    ? { kind: 'ready', game: { ...prev.game, hintsUsed: result.hintsUsed } as GameSession }
+                    : prev,
+                )
+                return result
+              }}
+            />
+          </Suspense>
+        )}
+        {roomView.kind === 'ready' && !RoomComponent && (
+          <p className="p-8 font-mono text-sm text-vault-300">This room doesn&apos;t have a frontend yet.</p>
+        )}
+      </>
+    )
   }
 
   return (
@@ -138,17 +204,20 @@ function GamePanel() {
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {ROOM_IDS.map((roomId, index) => {
             const solved = state.kind === 'ready' && state.game.solvedRooms.includes(roomId)
+            const unlocked = state.kind === 'ready' && isRoomUnlocked(state.game, roomId)
             return (
-              <li
-                key={roomId}
-                data-testid={roomId}
-                data-solved={solved}
-                className="flex items-center gap-3 rounded border border-vault-800 px-3 py-2 font-mono text-sm text-vault-300"
-              >
-                <span className={solved ? 'text-solved-400' : 'text-signal-400'}>
-                  {solved ? '✓' : index + 1}
-                </span>
-                {roomId}
+              <li key={roomId} data-testid={roomId} data-solved={solved}>
+                <button
+                  type="button"
+                  disabled={!unlocked}
+                  onClick={() => void openRoom(roomId)}
+                  className="flex w-full items-center gap-3 rounded border border-vault-800 px-3 py-2 font-mono text-sm text-vault-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className={solved ? 'text-solved-400' : 'text-signal-400'}>
+                    {solved ? '✓' : index + 1}
+                  </span>
+                  {roomId}
+                </button>
               </li>
             )
           })}
