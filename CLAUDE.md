@@ -174,19 +174,27 @@ interface RoomDefinition {
 
 Full detail in [`docs/api-contract.md`](docs/api-contract.md).
 
-| Method | Path | Body / header | Returns |
-| --- | --- | --- | --- |
-| `GET` | `/api/health` | — | service status |
-| `POST` | `/api/sessions` | `{ playerName }` | `{ session }` |
-| `GET` | `/api/sessions/:id` | — | `{ session }` |
-| `GET` | `/api/rooms` | — | `{ rooms }` — metadata only |
-| `GET` | `/api/rooms/:roomId` | `X-Session-Id` | `{ room }` or `403` if locked |
-| `POST` | `/api/rooms/:roomId/attempt` | `X-Session-Id`, `{ answer }` | `{ correct, session, feedback? }` |
-| `POST` | `/api/rooms/:roomId/hint` | `X-Session-Id` | `{ hint, hintsUsed }` |
+**Everything except `/api/health` requires a signed-in user.** Authentication is a Clerk session token
+in `Authorization: Bearer …`.
 
-The session id is a `crypto.randomUUID()`, kept in `localStorage` and sent as the `X-Session-Id`
-header. The frontend never hardcodes a backend URL: Vite proxies `/api` in development and nginx
-proxies it in production, so both environments are same-origin.
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| `GET` | `/api/health` | — | service status (the only open endpoint) |
+| `POST` | `/api/sessions` | — | `{ session }` — starts or resumes, idempotent |
+| `GET` | `/api/sessions/me` | — | `{ session }` including the activity log |
+| `DELETE` | `/api/sessions/me` | — | `204` — replay from room one |
+| `GET` | `/api/rooms` | — | `{ rooms }` — metadata only |
+| `GET` | `/api/rooms/:roomId` | — | `{ room }` or `403` if locked |
+| `POST` | `/api/rooms/:roomId/attempt` | `{ answer }` | `{ correct, session, feedback? }` |
+| `POST` | `/api/rooms/:roomId/hint` | — | `{ hint, hintsUsed }` |
+
+**There is no session id anywhere.** A player has exactly one game and the server finds it from the
+verified token, so nothing identifying a game travels on the wire to be forged
+([ADR-0019](docs/adr/0019-games-belong-to-accounts.md)). The frontend never hardcodes a backend URL:
+Vite proxies `/api` in development and nginx in production, so both are same-origin.
+
+Every action is recorded on the account as an activity log — attempts, hints, rooms entered and solved
+([ADR-0020](docs/adr/0020-activity-log.md)).
 
 ---
 
@@ -276,6 +284,10 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-03 | [0020](docs/adr/0020-activity-log.md) | Record an activity log against each account | Accepted |
+| 2026-08-03 | [0019](docs/adr/0019-games-belong-to-accounts.md) | A game belongs to an account; the session header goes away | Accepted |
+| 2026-08-03 | [0018](docs/adr/0018-dynamodb-persistence.md) | Store game progress in DynamoDB | Accepted |
+| 2026-08-03 | [0017](docs/adr/0017-authentication-clerk.md) | Authentication with Clerk | Accepted |
 | 2026-08-03 | [0016](docs/adr/0016-branch-policy.md) | PRs target `dev`; `main` accepts them only from `dev` | Accepted |
 | 2026-08-03 | [0015](docs/adr/0015-github-oidc-deploys.md) | GitHub Actions deploys via OIDC, no stored AWS credentials | Accepted |
 | 2026-08-03 | [0014](docs/adr/0014-two-environments.md) | Two environments: `cool.tf` from `main`, `dev.cool.tf` from `dev` | Accepted |
@@ -301,8 +313,11 @@ All eleven were approved by Nepomuk Crhonek on 2026-08-03.
 - **`apps/backend`** — complete for the scaffold. All seven endpoints, the 403 room gate, four
   **placeholder** puzzles, rate limiting, and 54 tests. The placeholder puzzles exist to prove the
   architecture and to serve as templates; the room sub-teams replace them.
-- **`apps/frontend`** — deliberately a single page. It proves React, Tailwind, the shared package and
-  the `/api` proxy all work, and nothing else. The game UI is the team's work, starting Tuesday.
+- **`apps/frontend`** — a sign-in gate and one page behind it. It proves the whole chain works: Clerk
+  issues a token, the browser sends it, the API verifies it and finds that account's game. The rooms
+  themselves are the team's work.
+- **Accounts** — players register with Clerk before they can reach anything. Progress and an activity
+  log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions

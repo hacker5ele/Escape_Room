@@ -1,29 +1,32 @@
 import { Router } from 'express'
-import { createSessionRequestSchema, type SessionResponse } from '@escape-room/shared'
-import type { SessionService } from '../services/session.service.js'
-import { ApiError } from '../http/api-error.js'
+import type { SessionResponse } from '@escape-room/shared'
+import type { GameService } from '../services/game.service.js'
+import type { Authenticator } from '../http/authenticator.js'
+import { requireGame, requireUserId } from '../http/require-auth.js'
 
-export function createSessionRoutes(sessions: SessionService): Router {
+export function createSessionRoutes(games: GameService, authenticator: Authenticator): Router {
   const router = Router()
 
-  // POST /api/sessions — start a new game.
+  // POST /api/sessions — start playing, or pick up where you left off.
+  // Idempotent, so opening a second tab cannot create a second game.
   router.post('/', async (req, res) => {
-    const parsed = createSessionRequestSchema.safeParse(req.body)
-    if (!parsed.success) {
-      throw ApiError.validation('playerName must be between 1 and 32 characters.')
-    }
-
-    const session = await sessions.create(parsed.data.playerName)
-    const body: SessionResponse = { session }
+    const userId = await requireUserId(req, authenticator)
+    const body: SessionResponse = { session: await games.startOrResume(userId) }
     res.status(201).json(body)
   })
 
-  // GET /api/sessions/:sessionId — rehydrate after a reload.
-  router.get('/:sessionId', async (req, res) => {
-    const sessionId = req.params.sessionId ?? ''
-    const session = await sessions.require(sessionId)
-    const body: SessionResponse = { session }
+  // GET /api/sessions/me — the caller's game. No id in the URL: there is only
+  // ever one game per account, and the server knows which account is calling.
+  router.get('/me', async (req, res) => {
+    const body: SessionResponse = { session: await requireGame(req, authenticator, games) }
     res.json(body)
+  })
+
+  // DELETE /api/sessions/me — start over from room one.
+  router.delete('/me', async (req, res) => {
+    const userId = await requireUserId(req, authenticator)
+    await games.reset(userId)
+    res.status(204).end()
   })
 
   return router

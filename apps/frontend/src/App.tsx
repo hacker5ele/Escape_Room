@@ -1,37 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Show, SignInButton, SignUpButton, UserButton, useAuth, useUser } from '@clerk/react'
+import type { GameSession } from '@escape-room/shared'
 import { ROOM_IDS } from '@escape-room/shared'
-import { fetchHealth } from './api/health'
-
-type BackendState = { kind: 'checking' } | { kind: 'up'; uptime: number } | { kind: 'down' }
+import { startOrResumeGame } from './api/game'
+import { NameForm } from './account/NameForm'
+import { ActivityLog } from './account/ActivityLog'
 
 /**
- * The scaffold page.
+ * The scaffold page, behind a sign-in gate.
  *
- * It exists to prove three things work before anyone builds a room: React and
- * Tailwind render, the shared contract package imports on the frontend, and
- * the browser can reach the backend through the /api proxy.
+ * Signed out you get the door and nothing else. Signed in, the app makes sure
+ * we have a name, then starts or resumes your game — which proves the whole
+ * chain: Clerk issues a token, the browser sends it, the API verifies it and
+ * finds the game belonging to that account.
  *
- * The rooms replace this. See ADR-0007 for where each sub-team's code goes.
+ * The rooms replace the panel below. See ADR-0007 for where each sub-team's
+ * code goes.
  */
 export function App() {
-  const [backend, setBackend] = useState<BackendState>({ kind: 'checking' })
-
-  useEffect(() => {
-    let cancelled = false
-
-    fetchHealth()
-      .then((health) => {
-        if (!cancelled) setBackend({ kind: 'up', uptime: health.uptime })
-      })
-      .catch(() => {
-        if (!cancelled) setBackend({ kind: 'down' })
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-10 px-6 py-16">
       <header className="space-y-3">
@@ -41,58 +27,158 @@ export function App() {
         <h1 className="font-mono text-4xl font-semibold text-vault-100 sm:text-5xl">
           Der digitale Escape Room
         </h1>
-        <p className="text-vault-300">
-          The scaffold is up. Nothing is built yet — the rooms are next.
-        </p>
       </header>
 
-      <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">
-        <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">Backend</h2>
-        <p className="mt-3 flex items-center gap-3">
-          <span
-            aria-hidden="true"
-            className={`inline-block size-2.5 rounded-full ${
-              backend.kind === 'up'
-                ? 'bg-solved-400'
-                : backend.kind === 'down'
-                  ? 'bg-alarm-400'
-                  : 'bg-vault-500'
-            }`}
-          />
-          <span className="font-mono text-sm text-vault-100">
-            {backend.kind === 'checking' && 'Checking /api/health…'}
-            {backend.kind === 'up' && `Reachable — up ${backend.uptime}s`}
-            {backend.kind === 'down' && 'Not reachable'}
-          </span>
-        </p>
-        {backend.kind === 'down' && (
-          <p className="mt-3 text-sm text-vault-300">
-            Start it with <code className="font-mono text-signal-300">npm run dev</code> from the
-            repository root, which runs the backend and this app together.
+      <Show when="signed-out">
+        <LockedDoor />
+      </Show>
+
+      <Show when="signed-in">
+        <SignedIn />
+      </Show>
+    </main>
+  )
+}
+
+function LockedDoor() {
+  return (
+    <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">
+      <h2 className="font-mono text-sm text-vault-100">The door is locked</h2>
+      <p className="mt-2 text-sm text-vault-300">
+        Create an account to enter. Your progress is saved to it, so you can leave a room
+        half-solved and come back to it.
+      </p>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        <SignUpButton mode="modal">
+          <button
+            type="button"
+            className="rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300"
+          >
+            Register
+          </button>
+        </SignUpButton>
+
+        <SignInButton mode="modal">
+          <button
+            type="button"
+            className="rounded border border-vault-700 px-4 py-2 font-mono text-sm text-vault-100 transition hover:border-vault-500"
+          >
+            I already have an account
+          </button>
+        </SignInButton>
+      </div>
+    </section>
+  )
+}
+
+function SignedIn() {
+  const { isLoaded, user } = useUser()
+  // Tracked separately from `user.firstName` so the panel advances immediately
+  // after saving, without waiting for Clerk to refresh its user object.
+  const [nameProvided, setNameProvided] = useState(false)
+  const handleSaved = useCallback(() => setNameProvided(true), [])
+
+  if (!isLoaded) {
+    return <Panel>Loading your account…</Panel>
+  }
+
+  // The name is collected before the game exists, so the name recorded on the
+  // game is always the real one.
+  if (!nameProvided && !user?.firstName) {
+    return <NameForm onSaved={handleSaved} />
+  }
+
+  return <GamePanel />
+}
+
+function Panel({ children }: { children: React.ReactNode }) {
+  return (
+    <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">
+      <p className="font-mono text-sm text-vault-100">{children}</p>
+    </section>
+  )
+}
+
+type GameState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; game: GameSession }
+  | { kind: 'error'; message: string }
+
+function GamePanel() {
+  const { getToken } = useAuth()
+  const [state, setState] = useState<GameState>({ kind: 'loading' })
+
+  // Held in a ref, and the effect runs on mount only.
+  //
+  // Depending on `getToken` directly would re-run this on every render that
+  // hands back a fresh function identity — which is every render — so the app
+  // would call the API in a loop for as long as the panel is mounted.
+  const getTokenRef = useRef(getToken)
+  getTokenRef.current = getToken
+
+  useEffect(() => {
+    let cancelled = false
+
+    getTokenRef
+      .current()
+      .then((token) => startOrResumeGame(token))
+      .then((game) => {
+        if (!cancelled) setState({ kind: 'ready', game })
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setState({ kind: 'error', message: error instanceof Error ? error.message : 'Unknown' })
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return (
+    <>
+      <section className="flex items-center justify-between rounded-lg border border-vault-800 bg-vault-900/60 p-5">
+        <div>
+          <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">Your game</h2>
+          <p className="mt-2 font-mono text-sm text-vault-100">
+            {state.kind === 'loading' && 'Opening your game…'}
+            {state.kind === 'ready' &&
+              `${state.game.playerName} — ${state.game.solvedRooms.length}/${ROOM_IDS.length} rooms solved`}
+            {state.kind === 'error' && `Could not load your game: ${state.message}`}
           </p>
-        )}
+        </div>
+        <UserButton />
       </section>
 
       <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">
-        <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
-          Rooms in the contract
-        </h2>
+        <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">Rooms</h2>
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-          {ROOM_IDS.map((roomId, index) => (
-            <li
-              key={roomId}
-              className="flex items-center gap-3 rounded border border-vault-800 px-3 py-2 font-mono text-sm text-vault-300"
-            >
-              <span className="text-signal-400">{index + 1}</span>
-              {roomId}
-            </li>
-          ))}
+          {ROOM_IDS.map((roomId, index) => {
+            const solved = state.kind === 'ready' && state.game.solvedRooms.includes(roomId)
+            return (
+              <li
+                key={roomId}
+                data-testid={roomId}
+                data-solved={solved}
+                className="flex items-center gap-3 rounded border border-vault-800 px-3 py-2 font-mono text-sm text-vault-300"
+              >
+                <span className={solved ? 'text-solved-400' : 'text-signal-400'}>
+                  {solved ? '✓' : index + 1}
+                </span>
+                {roomId}
+              </li>
+            )
+          })}
         </ul>
         <p className="mt-4 text-sm text-vault-500">
-          This list comes from <code className="font-mono">@escape-room/shared</code> — the same
-          declaration the backend uses. Change it there and both sides follow.
+          The rooms themselves are the team&apos;s work — this panel only proves the account and the
+          API agree about whose game this is.
         </p>
       </section>
-    </main>
+
+      {state.kind === 'ready' && <ActivityLog events={state.game.events} />}
+    </>
   )
 }

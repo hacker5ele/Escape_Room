@@ -18,6 +18,13 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/shared ./packages/shared
 COPY apps/frontend ./apps/frontend
+
+# Vite inlines env vars at build time, so this has to be present now rather
+# than at container start. A publishable key is public by design — it ends up
+# readable in the bundle whatever we do, which is what it is for.
+ARG VITE_CLERK_PUBLISHABLE_KEY
+ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
+
 RUN npm run build --workspace @escape-room/shared \
     && npm run build --workspace @escape-room/frontend
 

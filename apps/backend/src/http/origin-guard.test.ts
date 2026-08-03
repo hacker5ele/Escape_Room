@@ -1,26 +1,35 @@
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
-import { SESSION_HEADER } from '@escape-room/shared'
 import { createApp } from '../app.js'
 import { ORIGIN_SECRET_HEADER } from './origin-guard.js'
+import { createTestAuthenticator, TEST_USER_HEADER } from './test-authenticator.js'
 
 const SECRET = 'a-shared-secret-only-cloudfront-knows'
+const USER = 'user_alice'
 
 function guardedApp() {
-  return createApp({ originSecret: SECRET, attemptRateLimit: 1000 })
+  return createApp({
+    authenticator: createTestAuthenticator(),
+    originSecret: SECRET,
+    attemptRateLimit: 1000,
+  })
 }
 
 describe('origin guard', () => {
   it('is off when no secret is configured, so local dev is unaffected', async () => {
-    const response = await request(createApp())
+    const response = await request(createApp({ authenticator: createTestAuthenticator() }))
       .post('/api/sessions')
-      .send({ playerName: 'Local' })
+      .set(TEST_USER_HEADER, USER)
+      .send({})
 
     expect(response.status).toBe(201)
   })
 
   it('rejects a request that did not come through CloudFront', async () => {
-    const response = await request(guardedApp()).post('/api/sessions').send({ playerName: 'Direct' })
+    const response = await request(guardedApp())
+      .post('/api/sessions')
+      .set(TEST_USER_HEADER, USER)
+      .send({})
 
     expect(response.status).toBe(403)
   })
@@ -29,7 +38,8 @@ describe('origin guard', () => {
     const response = await request(guardedApp())
       .post('/api/sessions')
       .set(ORIGIN_SECRET_HEADER, 'not-the-secret')
-      .send({ playerName: 'Guesser' })
+      .set(TEST_USER_HEADER, USER)
+      .send({})
 
     expect(response.status).toBe(403)
   })
@@ -38,7 +48,8 @@ describe('origin guard', () => {
     const response = await request(guardedApp())
       .post('/api/sessions')
       .set(ORIGIN_SECRET_HEADER, SECRET)
-      .send({ playerName: 'ViaCloudFront' })
+      .set(TEST_USER_HEADER, USER)
+      .send({})
 
     expect(response.status).toBe(201)
   })
@@ -50,22 +61,13 @@ describe('origin guard', () => {
     expect(response.body.status).toBe('ok')
   })
 
-  it('guards room access too, not only session creation', async () => {
-    const app = guardedApp()
-    const created = await request(app)
-      .post('/api/sessions')
-      .set(ORIGIN_SECRET_HEADER, SECRET)
-      .send({ playerName: 'ViaCloudFront' })
-
-    const sessionId = created.body.session.id as string
-
-    const blocked = await request(app).get('/api/rooms/room-01').set(SESSION_HEADER, sessionId)
-    expect(blocked.status).toBe(403)
-
-    const allowed = await request(app)
+  it('runs before authentication, so it does not leak whether a caller is valid', async () => {
+    // A signed-in caller who skipped the CDN still gets 403, not 401 — the
+    // origin guard is the outer gate and answers first.
+    const response = await request(guardedApp())
       .get('/api/rooms/room-01')
-      .set(ORIGIN_SECRET_HEADER, SECRET)
-      .set(SESSION_HEADER, sessionId)
-    expect(allowed.status).toBe(200)
+      .set(TEST_USER_HEADER, USER)
+
+    expect(response.status).toBe(403)
   })
 })

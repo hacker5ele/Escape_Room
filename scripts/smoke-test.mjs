@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 /**
- * Walks the real game against a deployed environment.
+ * Verifies a deployed environment from the outside.
  *
- * Runs in the pipeline after every deploy, and by hand:
  *   npm run smoke -- https://dev.cool.tf
- *   npm run smoke -- https://cool.tf
- *
- * Optionally checks that the App Runner origin refuses direct traffic:
  *   APPRUNNER_URL=https://xxxx.awsapprunner.com npm run smoke -- https://cool.tf
  *
- * Deliberately dependency-free so it runs anywhere, including a bare CI step.
- * A non-zero exit fails the deploy.
+ * Since ADR-0019 the game itself is behind a Clerk sign-in, and this script has
+ * no way to hold a session — so it verifies the parts that are reachable
+ * without one, and asserts that everything else is properly refused. That turns
+ * out to cover most of what can silently break in the CDN and the API:
+ * routing, headers, methods, the auth gate, the origin lock and the rate
+ * limiter.
+ *
+ * Playing an actual game end to end against a deployment needs a Clerk testing
+ * token; until that exists the room logic is covered by the 61 backend tests.
+ *
+ * Dependency-free so it runs anywhere. A non-zero exit fails the deploy.
  */
 
 const baseUrl = (process.argv[2] ?? process.env.SMOKE_BASE_URL ?? '').replace(/\/$/, '')
@@ -21,15 +26,7 @@ if (!baseUrl) {
   process.exit(2)
 }
 
-/**
- * Room 1's answer. It also lives in the backend's solutions.fixture.ts — this
- * script cannot import TypeScript, so changing that puzzle means changing this
- * line too. The README's "adding a room" checklist says so.
- */
-const ROOM_01_ANSWER = 90
-
 const results = []
-let sessionId = null
 
 async function check(name, run) {
   try {
@@ -53,7 +50,6 @@ function api(path, { method = 'GET', body, headers = {} } = {}) {
     headers: {
       Accept: 'application/json',
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      ...(sessionId ? { 'X-Session-Id': sessionId } : {}),
       ...headers,
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -73,12 +69,19 @@ await check('serves the built app', async () => {
 })
 
 await check('SPA deep links fall back to index.html', async () => {
-  // A CloudFront custom error response turns the S3 403 into index.html with a
-  // 200. If this fails, reloading inside a room shows an XML error page.
+  // A CloudFront Function rewrites extensionless paths. If this breaks,
+  // reloading inside a room shows an S3 XML error instead of the app.
   const response = await fetch(`${baseUrl}/room/room-02`, { redirect: 'follow' })
   assert(response.status === 200, `expected 200, got ${response.status}`)
   const html = await response.text()
   assert(html.includes('<div id="root">'), 'deep link did not return the app shell')
+})
+
+await check('a missing asset still 404s', async () => {
+  // The rewrite must not swallow genuinely missing files, or a broken deploy
+  // looks healthy.
+  const response = await fetch(`${baseUrl}/assets/does-not-exist.js`, { redirect: 'follow' })
+  assert(response.status >= 400, `expected an error status, got ${response.status}`)
 })
 
 // --- The API through the CDN ----------------------------------------------
@@ -90,65 +93,41 @@ await check('/api/health reaches the API', async () => {
   assert(body.status === 'ok', `expected status ok, got ${JSON.stringify(body)}`)
 })
 
-await check('POST reaches the API and starts a game', async () => {
-  // If the /api/* behavior does not allow POST, CloudFront answers 403 here
-  // and the game can never start.
-  const response = await api('/api/sessions', { method: 'POST', body: { playerName: 'Smoke Test' } })
-  assert(response.status === 201, `expected 201, got ${response.status}`)
+await check('POST reaches the API rather than being blocked by the CDN', async () => {
+  // If the /api/* behavior does not allow POST, CloudFront answers 403 on its
+  // own and the game can never start. A 401 proves the request reached the
+  // origin and was refused by our own auth, which is the correct outcome.
+  const response = await api('/api/sessions', { method: 'POST', body: {} })
+  assert(response.status === 401, `expected 401 from the API, got ${response.status}`)
   const body = await response.json()
-  assert(typeof body.session?.id === 'string', 'no session id in response')
-  assert(Array.isArray(body.session.solvedRooms), 'session has no solvedRooms')
-  assert(body.session.solvedRooms.length === 0, 'a new session should have nothing solved')
-  sessionId = body.session.id
-})
-
-await check('the X-Session-Id header reaches the API intact', async () => {
-  // A wrong origin request policy strips custom headers, which would make this
-  // a 400 "missing session header" rather than the 403 we expect.
-  const response = await api('/api/rooms/room-02')
-  const body = await response.json()
-  assert(response.status === 403, `expected 403, got ${response.status} ${JSON.stringify(body)}`)
-  assert(body.error?.code === 'ROOM_LOCKED', `expected ROOM_LOCKED, got ${body.error?.code}`)
-})
-
-await check('room 1 is open and carries no solution', async () => {
-  const response = await api('/api/rooms/room-01')
-  assert(response.status === 200, `expected 200, got ${response.status}`)
-  const body = await response.json()
-  const serialized = JSON.stringify(body.room)
   assert(
-    !serialized.includes(String(ROOM_01_ANSWER)),
-    'the room payload contains its own answer — the solution is leaking to the browser',
+    body.error?.code === 'UNAUTHENTICATED',
+    `expected UNAUTHENTICATED, got ${body.error?.code}`,
   )
 })
 
-await check('a correct answer unlocks the next room', async () => {
-  const response = await api('/api/rooms/room-01/attempt', {
-    method: 'POST',
-    body: { answer: ROOM_01_ANSWER },
-  })
-  assert(response.status === 200, `expected 200, got ${response.status}`)
-  const body = await response.json()
-  assert(body.correct === true, 'the known-good answer was rejected')
-  assert(body.session.solvedRooms.includes('room-01'), 'room-01 not recorded as solved')
+await check('the rooms are closed to anyone not signed in', async () => {
+  for (const path of ['/api/rooms', '/api/rooms/room-01', '/api/sessions/me']) {
+    const response = await api(path)
+    assert(response.status === 401, `${path} returned ${response.status}, expected 401`)
+  }
 })
 
-await check('progress persisted — room 2 now opens', async () => {
-  // Also proves requests keep landing on the one App Runner instance. If this
-  // 403s intermittently, something scaled past a single instance and the
-  // in-memory session store is no longer coherent.
-  const response = await api('/api/rooms/room-02')
-  assert(response.status === 200, `expected 200, got ${response.status}`)
+await check('a room cannot be solved without signing in', async () => {
+  const response = await api('/api/rooms/room-01/attempt', { method: 'POST', body: { answer: 90 } })
+  assert(response.status === 401, `expected 401, got ${response.status}`)
 })
 
-await check('a wrong answer does not unlock anything', async () => {
-  const response = await api('/api/rooms/room-02/attempt', {
-    method: 'POST',
-    body: { answer: 'definitely-not-it' },
-  })
-  assert(response.status === 200, `expected 200, got ${response.status}`)
-  const body = await response.json()
-  assert(body.correct === false, 'a nonsense answer was accepted')
+await check('API errors come back as JSON, not as the app shell', async () => {
+  // Guards the CloudFront trap where a distribution-level error rule rewrites
+  // API responses into index.html — which would make every locked room look
+  // open. See ADR-0012.
+  const response = await api('/api/rooms/room-01')
+  const contentType = response.headers.get('content-type') ?? ''
+  assert(
+    contentType.includes('application/json'),
+    `expected JSON, got "${contentType}" — the SPA fallback is swallowing API responses`,
+  )
 })
 
 // --- Origin lock -----------------------------------------------------------
@@ -158,7 +137,7 @@ if (appRunnerUrl) {
     const response = await fetch(`${appRunnerUrl}/api/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerName: 'Bypass' }),
+      body: '{}',
     })
     assert(response.status === 403, `expected 403 from the direct origin, got ${response.status}`)
   })
@@ -169,17 +148,12 @@ if (appRunnerUrl) {
 // --- Rate limiting. Last, because it burns this IP's quota for a minute. ----
 
 await check('attempts are rate limited, and X-Forwarded-For cannot reset the count', async () => {
-  const fresh = await api('/api/sessions', { method: 'POST', body: { playerName: 'Rate Limit' } })
-  const freshSession = (await fresh.json()).session.id
-
+  // The limiter sits in front of the auth check on purpose, so it still
+  // protects the answer endpoint against an attacker who never signs in.
   const attempt = (extraHeaders = {}) =>
     fetch(`${baseUrl}/api/rooms/room-01/attempt`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Session-Id': freshSession,
-        ...extraHeaders,
-      },
+      headers: { 'Content-Type': 'application/json', ...extraHeaders },
       body: JSON.stringify({ answer: 0 }),
     })
 
@@ -190,11 +164,13 @@ await check('attempts are rate limited, and X-Forwarded-For cannot reset the cou
   }
   assert(limited, 'never got a 429 — the rate limiter is not protecting the answer endpoint')
 
-  // TRUST_PROXY verification. Express takes the client IP from the right-hand
-  // side of X-Forwarded-For, counting back the number of trusted hops. If that
-  // number is too high, a client can prepend a fake address and get a fresh
-  // quota — which would let the rival team brute-force a numeric answer.
-  const spoofed = await attempt({ 'X-Forwarded-For': `203.0.113.${Math.floor(Math.random() * 250)}` })
+  // TRUST_PROXY verification. Express takes the client IP from the right of
+  // X-Forwarded-For, counting back the trusted hops. Too many, and a client can
+  // prepend a fake address for a fresh quota — which would let the rival team
+  // brute-force a numeric answer.
+  const spoofed = await attempt({
+    'X-Forwarded-For': `203.0.113.${Math.floor(Math.random() * 250)}`,
+  })
   assert(
     spoofed.status === 429,
     `a spoofed X-Forwarded-For got past the rate limiter (status ${spoofed.status}). ` +

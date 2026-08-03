@@ -6,6 +6,7 @@
  * whole point of the package. See ADR-0005.
  */
 export * from './rooms.js'
+export * from './events.js'
 export * from './session.js'
 export * from './access.js'
 export * from './api.js'

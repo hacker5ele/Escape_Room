@@ -15,6 +15,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1101.0",
+    "@aws-sdk/lib-dynamodb": "^3.1101.0",
+    "@clerk/express": "^2.1.49",
     "@escape-room/shared": "*",
     "cors": "^2.8.5",
     "express": "^5.2.1",
