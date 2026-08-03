@@ -62,6 +62,8 @@ dig +short NS cool.tf @8.8.8.8     # should return the awsdns names
 ```bash
 # 4. The rest of shared. The certificate validates automatically once delegation is live;
 #    if this hangs, DNS has not propagated yet.
+#    Optionally put your email in a gitignored terraform.tfvars first so the budget
+#    can notify you:  budget_alert_email = "you@example.com"
 terraform apply
 
 # 5. App Runner needs an image before the service can be created.
@@ -93,6 +95,14 @@ run `plan`, because the deploy role only trusts the `main` and `dev` branches an
 assume it — deliberate, since the repository is public. **Run `terraform plan` locally before opening a
 pull request.**
 
+## One manual step Terraform cannot do
+
+The budget filters on `Project=escape-room`, and **a tag-filtered budget matches nothing until the tag
+key is activated as a cost allocation tag**. Terraform has no resource for this. Go to
+**Billing → Cost allocation tags**, find `Project`, and activate it. It takes up to 24 hours to start
+collecting and is **not retroactive**, so until then the cost guard is decorative. Until you have
+confirmed it is reporting, treat an unfiltered account-level budget as the real backstop.
+
 ## Verifying a deployment
 
 ```bash
@@ -112,8 +122,24 @@ cd ../staging         && terraform destroy
 cd ../shared          && terraform destroy
 ```
 
-Then delete the state bucket and lock table by hand, and remove the delegation at Hostinger. Destroy
-`shared` last — the environments depend on its outputs.
+Then delete the state bucket and lock table by hand, and remove the delegation at Hostinger.
+
+`shared` must go last, and not only because of output dependencies. Two things bite:
+
+**The deploy role will not delete.** Each environment attaches an *inline* policy
+(`escape-room-prod-deploy`, `escape-room-staging-deploy`) to a role owned by the `shared` state.
+`shared` only knows about its own `escape-room-deploy-ecr`, so IAM refuses with `DeleteConflict`
+while the others exist. Destroying the environments first removes them. If you are recovering from a
+half-finished teardown:
+
+```bash
+aws iam delete-role-policy --role-name escape-room-deploy --policy-name escape-room-prod-deploy
+aws iam delete-role-policy --role-name escape-room-deploy --policy-name escape-room-staging-deploy
+```
+
+**The certificate can race CloudFront.** CloudFront holds its association for a while after a
+distribution is deleted, so destroying `shared` can fail with `ResourceInUseException` even though the
+environments reported success. Wait a few minutes and run it again.
 
 ## Gotchas
 

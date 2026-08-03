@@ -113,13 +113,20 @@ jobs:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
           TARGET: ${{ steps.target.outputs.name }}
         run: |
+          set -euo pipefail
           IMAGE="$REGISTRY/escape-room-backend"
-          # Two tags: the sha so a deploy is traceable to a commit, and the
-          # moving environment tag that App Runner is configured to pull.
+
+          # Two tags: `sha-<commit>` so a deploy is traceable back to a commit,
+          # and the moving environment tag App Runner is configured to pull.
+          #
+          # The `sha-` prefix is load bearing. The ECR lifecycle rule prunes
+          # history by matching `sha-*`, which keeps the moving prod/staging
+          # tags permanently exempt from expiry. A bare sha tag would fall
+          # outside that pattern and go unpruned.
           docker build -f apps/backend/Dockerfile \
-            -t "$IMAGE:${{ github.sha }}" \
+            -t "$IMAGE:sha-$GITHUB_SHA" \
             -t "$IMAGE:$TARGET" .
-          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:sha-$GITHUB_SHA"
           docker push "$IMAGE:$TARGET"
 
       # Backend before frontend: a new API serving an old page is fine, the

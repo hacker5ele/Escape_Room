@@ -12,7 +12,20 @@ REGION="us-east-1"
 BUCKET="escape-room-tfstate-${REGION}"
 LOCK_TABLE="escape-room-tfstate-lock"
 
-echo "Account: $(aws sts get-caller-identity --query Account --output text)"
+# The whole premise here is a personal AWS account shared with unrelated
+# production workloads, so a stale AWS_PROFILE pointing somewhere else is a
+# realistic mistake — and one that would silently create state in the wrong
+# account. Assert rather than print.
+EXPECTED_ACCOUNT="445849136002"
+ACTUAL_ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
+
+if [ "$ACTUAL_ACCOUNT" != "$EXPECTED_ACCOUNT" ]; then
+  echo "Refusing to run: expected AWS account $EXPECTED_ACCOUNT, got $ACTUAL_ACCOUNT." >&2
+  echo "Check AWS_PROFILE, or update EXPECTED_ACCOUNT if the project genuinely moved." >&2
+  exit 1
+fi
+
+echo "Account: $ACTUAL_ACCOUNT"
 
 if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
   echo "State bucket $BUCKET already exists."

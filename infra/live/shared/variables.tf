@@ -4,12 +4,6 @@ variable "domain_name" {
   default     = "cool.tf"
 }
 
-variable "github_repository" {
-  description = "owner/repo allowed to assume the deploy role"
-  type        = string
-  default     = "hacker5ele/Escape_Room"
-}
-
 variable "oidc_subject_prefixes" {
   description = <<-EOT
     Subject prefixes GitHub may present in the OIDC token.
@@ -24,15 +18,20 @@ variable "oidc_subject_prefixes" {
     Check which one applies with:
       gh api repos/OWNER/REPO/actions/oidc/customization/sub
 
-    Both are listed so a change to that setting does not silently break deploys.
-    The immutable form is the safer of the two — it survives a rename and cannot
-    be re-pointed by someone who later claims a freed-up repository name.
+    Only the immutable form is accepted. Listing the legacy form alongside it
+    would hand back the exact property that makes the immutable one safer: if
+    the hacker5ele account were ever deleted or the Escape_Room name released,
+    whoever claimed it could present `repo:hacker5ele/Escape_Room:...` and
+    assume this role. The repository is public and the role ARN is committed in
+    deploy.yml, so that is not a theoretical concern.
+
+    If deploys ever start failing with "Not authorized to perform
+    sts:AssumeRoleWithWebIdentity", re-check the command above — someone has
+    changed the subject claim setting — and update this value rather than
+    widening it.
   EOT
   type        = list(string)
-  default = [
-    "repo:hacker5ele/Escape_Room",
-    "repo:hacker5ele@180300197/Escape_Room@1321465032",
-  ]
+  default     = ["repo:hacker5ele@180300197/Escape_Room@1321465032"]
 }
 
 variable "deploy_branches" {
@@ -53,10 +52,17 @@ variable "monthly_budget_usd" {
 
 variable "budget_alert_email" {
   description = <<-EOT
-    Where budget alerts go. The domain is written in punycode because AWS
-    Budgets rejects non-ASCII addresses — xn--btel-5qa.ch is bütel.ch.
-    Set to "" to create the budget without notifications.
+    Where budget alerts go. Empty creates the budget without notifications.
+
+    No default on purpose — this repository is public, and a personal address
+    committed here is a personal address scraped from here. Put it in
+    infra/live/shared/terraform.tfvars, which is gitignored:
+
+      budget_alert_email = "you@example.com"
+
+    AWS Budgets rejects non-ASCII addresses, so an internationalised domain has
+    to be written in punycode (bütel.ch becomes xn--btel-5qa.ch).
   EOT
   type        = string
-  default     = "nepomuk@xn--btel-5qa.ch"
+  default     = ""
 }

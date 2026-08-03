@@ -1,5 +1,3 @@
-data "aws_caller_identity" "current" {}
-
 # --------------------------------------------------------------------------
 # DNS
 # --------------------------------------------------------------------------
@@ -76,22 +74,46 @@ resource "aws_ecr_repository" "backend" {
   }
 }
 
-# ECR is billed by the gigabyte and a container image per commit adds up fast
-# over a week of pushing.
+# ECR is billed by the gigabyte and an image per commit adds up over a week.
+#
+# The obvious rule — tagStatus "any", keep the newest 15 — would take
+# production down. Both environments push to this one repository, and "any"
+# counts tagged images too, so after fifteen staging deploys the image still
+# carrying the `prod` tag falls out of the newest fifteen and is expired while
+# in use. App Runner re-pulls on every deployment and on instance replacement,
+# so the next prod deploy, or an unlucky restart, would fail to pull — and with
+# max_size = 1 there is no second instance to survive on.
+#
+# So: the moving `prod` and `staging` tags are never governed by a count rule,
+# and history is pruned through the immutable `sha-` tags instead.
 resource "aws_ecr_lifecycle_policy" "backend" {
   repository = aws_ecr_repository.backend.name
 
   policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Keep the 15 most recent images"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = 15
-      }
-      action = { type = "expire" }
-    }]
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Expire untagged images after 7 days"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 7
+        }
+        action = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the 20 most recent per-commit images"
+        selection = {
+          tagStatus      = "tagged"
+          tagPatternList = ["sha-*"]
+          countType      = "imageCountMoreThan"
+          countNumber    = 20
+        }
+        action = { type = "expire" }
+      },
+    ]
   })
 }
 

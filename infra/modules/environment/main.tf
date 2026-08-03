@@ -51,6 +51,33 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "site" {
   }
 }
 
+# Versioning plus `s3 sync --delete` on every deploy means each replaced asset
+# leaves a noncurrent version behind, and each deleted one leaves a delete
+# marker — all billed, forever. Versioning is worth keeping as a rollback path;
+# a week of history is plenty for a static site rebuildable from a commit.
+resource "aws_s3_bucket_lifecycle_configuration" "site" {
+  bucket = aws_s3_bucket.site.id
+
+  rule {
+    id     = "expire-old-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
 # Origin Access Control is the current way to let only CloudFront read the
 # bucket. It requires the S3 REST endpoint, which is why the SPA fallback below
 # is done with CloudFront error responses rather than S3 website hosting.
@@ -96,6 +123,15 @@ resource "aws_apprunner_auto_scaling_configuration_version" "single" {
   max_size                        = 1
   max_concurrency                 = 100
   tags                            = var.tags
+
+  # Every argument here forces replacement, and App Runner refuses to delete a
+  # configuration that a service still references. Without create_before_destroy
+  # the first edit to any of the values above fails mid-apply, with the service
+  # still bound to the old version. Reusing the name is fine — App Runner
+  # creates a new revision, the service moves to it, then the old one goes.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 data "aws_iam_policy_document" "apprunner_assume" {
@@ -104,6 +140,13 @@ data "aws_iam_policy_document" "apprunner_assume" {
     principals {
       type        = "Service"
       identifiers = ["build.apprunner.amazonaws.com"]
+    }
+    # Without this, any App Runner service in any account that the service
+    # principal can act for could assume this role. Scope it to us.
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
     }
   }
 }
@@ -114,9 +157,37 @@ resource "aws_iam_role" "apprunner_ecr_access" {
   tags               = var.tags
 }
 
-resource "aws_iam_role_policy_attachment" "apprunner_ecr_access" {
-  role       = aws_iam_role.apprunner_ecr_access.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess"
+# Deliberately NOT the AWS managed AWSAppRunnerServicePolicyForECRAccess.
+# That policy grants its ECR read actions on `Resource: "*"`, which in this
+# account means every image belonging to the unrelated production workloads —
+# not just ours. This grants the same actions against one repository.
+data "aws_iam_policy_document" "apprunner_ecr_access" {
+  statement {
+    sid    = "GetAuthToken"
+    effect = "Allow"
+    # The only ECR action that genuinely does not support resource-level
+    # permissions.
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PullProjectImageOnly"
+    effect = "Allow"
+    actions = [
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:BatchGetImage",
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:DescribeImages",
+    ]
+    resources = [var.ecr_repository_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "apprunner_ecr_access" {
+  name   = "${local.prefix}-apprunner-ecr"
+  role   = aws_iam_role.apprunner_ecr_access.name
+  policy = data.aws_iam_policy_document.apprunner_ecr_access.json
 }
 
 # Shared secret CloudFront sends on every origin request. The App Runner URL is
@@ -126,6 +197,78 @@ resource "aws_iam_role_policy_attachment" "apprunner_ecr_access" {
 resource "random_password" "origin_secret" {
   length  = 48
   special = false
+}
+
+# The secret is handed to the container as a *reference*, not as a plain
+# runtime environment variable.
+#
+# apprunner:DescribeService returns RuntimeEnvironmentVariables in clear text,
+# and the deploy role calls DescribeService on every run in its wait loop. A
+# plain variable would therefore put this secret one API call away from any
+# Actions run — defeating the point of keeping the deploy role out of Terraform
+# state in the first place. With a secret reference, DescribeService returns
+# this ARN and nothing else.
+#
+# Note the path: NOT under /escape-room/<env>/, because the deploy role holds
+# ssm:GetParameter on that entire prefix for the resource lookups.
+resource "aws_ssm_parameter" "origin_secret" {
+  name  = "/escape-room-secrets/${var.name}/origin-secret"
+  type  = "SecureString"
+  value = random_password.origin_secret.result
+  tags  = var.tags
+}
+
+data "aws_iam_policy_document" "apprunner_instance_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["tasks.apprunner.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+}
+
+# The role the running container itself uses — distinct from the ECR pull role,
+# which App Runner only uses at image-fetch time.
+resource "aws_iam_role" "apprunner_instance" {
+  name               = "${local.prefix}-apprunner-instance"
+  assume_role_policy = data.aws_iam_policy_document.apprunner_instance_assume.json
+  tags               = var.tags
+}
+
+data "aws_iam_policy_document" "apprunner_instance" {
+  statement {
+    sid       = "ReadOwnOriginSecret"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter", "ssm:GetParameters"]
+    resources = [aws_ssm_parameter.origin_secret.arn]
+  }
+
+  statement {
+    sid    = "DecryptThroughSsmOnly"
+    effect = "Allow"
+    # SecureString uses the account's aws/ssm key, whose ARN is not worth
+    # pinning; the ViaService condition is what constrains this — the role can
+    # only decrypt as part of an SSM call, not against arbitrary ciphertext.
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.us-east-1.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "apprunner_instance" {
+  name   = "${local.prefix}-apprunner-instance"
+  role   = aws_iam_role.apprunner_instance.name
+  policy = data.aws_iam_policy_document.apprunner_instance.json
 }
 
 resource "aws_apprunner_service" "api" {
@@ -153,15 +296,20 @@ resource "aws_apprunner_service" "api" {
           TRUST_PROXY        = tostring(var.trust_proxy)
           ATTEMPT_RATE_LIMIT = tostring(var.attempt_rate_limit)
           CORS_ORIGIN        = "https://${var.domain_name}"
-          ORIGIN_SECRET      = random_password.origin_secret.result
+        }
+        # Resolved by App Runner at start-up from SSM. DescribeService shows
+        # only the ARN, never the value.
+        runtime_environment_secrets = {
+          ORIGIN_SECRET = aws_ssm_parameter.origin_secret.arn
         }
       }
     }
   }
 
   instance_configuration {
-    cpu    = "0.25 vCPU"
-    memory = "0.5 GB"
+    cpu               = "0.25 vCPU"
+    memory            = "0.5 GB"
+    instance_role_arn = aws_iam_role.apprunner_instance.arn
   }
 
   health_check_configuration {
@@ -176,11 +324,10 @@ resource "aws_apprunner_service" "api" {
   auto_scaling_configuration_arn = aws_apprunner_auto_scaling_configuration_version.single.arn
   tags                           = var.tags
 
-  lifecycle {
-    # The pipeline moves the image forward. Without this, every terraform apply
-    # would drag the service back to whatever tag was current at plan time.
-    ignore_changes = [source_configuration[0].image_repository[0].image_identifier]
-  }
+  # No ignore_changes on image_identifier. It looks prudent but does nothing:
+  # the configured value is a moving tag, so it is byte-identical on every plan
+  # and there is no drift to suppress. What it would actually do is silently
+  # swallow a genuine edit to var.image_tag or var.ecr_repository_url.
 }
 
 # --------------------------------------------------------------------------
