@@ -63,6 +63,19 @@ data/
 Thumbs.db
 desktop.ini
 
+# Terraform — state and plans can contain secrets and must never be committed.
+# Real state lives in S3 (see infra/bootstrap.sh).
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+# Variable files may hold account-specific values; the checked-in defaults live
+# in variables.tf instead.
+*.auto.tfvars
+terraform.tfvars
+
 # Tooling state
 .omc/
 .claude/settings.local.json

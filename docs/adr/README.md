@@ -47,7 +47,17 @@ All of these were approved by Nepomuk Crhonek on 2026-08-03.
 | [0005](0005-shared-contract-package.md) | `@escape-room/shared` as the single interface contract | Accepted |
 | [0006](0006-server-authoritative-puzzles.md) | Server-authoritative puzzle validation | Accepted |
 | [0007](0007-room-registry-and-ownership.md) | Room plugin registry and ownership per sub-team | Accepted |
-| [0008](0008-session-persistence.md) | Session persistence — deliberately deferred | Accepted |
+| [0008](0008-session-persistence.md) | Session persistence — deliberately deferred | Superseded by 0018 |
 | [0009](0009-containerization.md) | Containerization with multi-stage Docker and compose | Accepted |
 | [0010](0010-git-workflow.md) | Git workflow: branches, pull requests, ADR per change | Accepted |
 | [0011](0011-decision-authority.md) | The user decides, the agent does not | Accepted |
+| [0012](0012-aws-hosting.md) | Host on AWS: CloudFront + S3 + App Runner per environment | Accepted |
+| [0013](0013-terraform.md) | Terraform, with state in S3 and DynamoDB locking | Accepted |
+| [0014](0014-two-environments.md) | Two environments: cool.tf from main, dev.cool.tf from dev | Accepted |
+| [0015](0015-github-oidc-deploys.md) | GitHub Actions deploys via OIDC, no stored AWS credentials | Accepted |
+| [0016](0016-branch-policy.md) | PRs target dev; main accepts them only from dev | Accepted |
+| [0017](0017-authentication-clerk.md) | Authentication with Clerk | Accepted |
+| [0018](0018-dynamodb-persistence.md) | Store game progress in DynamoDB | Accepted |
+| [0019](0019-games-belong-to-accounts.md) | A game belongs to an account; the session header goes away | Accepted |
+| [0020](0020-activity-log.md) | Record an activity log against each account | Accepted |
+| [0021](0021-unique-usernames.md) | Every player has a unique username, enforced by Clerk | Accepted |

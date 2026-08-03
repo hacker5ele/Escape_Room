@@ -15,6 +15,14 @@ services:
       TRUST_PROXY: 1
       CORS_ORIGIN: http://localhost:8080
       ATTEMPT_RATE_LIMIT: 30
+      # Needed to verify Clerk tokens. Put it in a gitignored .env beside this
+      # file; see .env.example. Without it the API starts but every signed-in
+      # request fails.
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
+      # Deliberately unset: no table means the in-memory repository, so compose
+      # stays a one-command experience with no AWS credentials. Progress does
+      # not survive `docker compose down`.
+      GAMES_TABLE_NAME: ''
     # Not published to the host: the browser reaches the API through nginx.
     expose:
       - '3000'
@@ -24,6 +32,8 @@ services:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-pk_test_Z2VudWluZS1zbG90aC02My5jbGVyay5hY2NvdW50cy5kZXYk}
     ports:
       - '8080:80'
     depends_on:

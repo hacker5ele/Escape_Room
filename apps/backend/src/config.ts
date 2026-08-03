@@ -29,4 +29,26 @@ export const config = {
 
   /** Answer attempts allowed per IP per minute. This is the brute-force defence. */
   attemptRateLimit: readNumber('ATTEMPT_RATE_LIMIT', 30),
+
+  /**
+   * Shared secret CloudFront sends on every origin request, so the public
+   * App Runner URL cannot be used to bypass the CDN. Empty means the check is
+   * off, which is what we want locally, in tests and under docker compose.
+   */
+  originSecret: process.env.ORIGIN_SECRET ?? '',
+
+  /**
+   * DynamoDB table holding one game per player. Empty selects the in-memory
+   * repository instead, which is what makes `docker compose up` and the test
+   * suite work without AWS credentials.
+   */
+  gamesTableName: process.env.GAMES_TABLE_NAME ?? '',
+
+  awsRegion: process.env.AWS_REGION ?? 'us-east-1',
+
+  /**
+   * Clerk's server-side key. Read by @clerk/express directly from the
+   * environment; listed here only so a missing value is visible at start-up.
+   */
+  clerkSecretKey: process.env.CLERK_SECRET_KEY ?? '',
 } as const

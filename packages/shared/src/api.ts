@@ -1,43 +1,46 @@
 import { z } from 'zod'
 import { roomPublicDataSchema, roomSummarySchema } from './rooms.js'
-import { gameSessionSchema, PLAYER_NAME_MAX_LENGTH } from './session.js'
+import { gameSessionSchema } from './session.js'
 
 /**
  * Every request and response the API speaks.
  *
  * The schemas are the contract and the TypeScript types are inferred from
  * them, so the runtime validation and the compile-time type are the same
- * declaration and cannot drift apart. The backend validates incoming requests
- * with these; the frontend gets its types from them.
+ * declaration and cannot drift apart.
  *
  * Changing anything in this file is an interface change: ADR and team
  * agreement first. See ADR-0005.
+ *
+ * There is deliberately no session header. Identity comes from the Clerk
+ * bearer token, and the server looks up the caller's game from it — so there
+ * is no identifier in flight for anyone to steal or forge. See ADR-0019.
  */
 
-/** The header carrying the session id on every request that needs one. */
-export const SESSION_HEADER = 'x-session-id'
+// --- Sessions -------------------------------------------------------------
 
-// --- POST /api/sessions ---
-
-export const createSessionRequestSchema = z.object({
-  playerName: z.string().trim().min(1).max(PLAYER_NAME_MAX_LENGTH),
-})
-export type CreateSessionRequest = z.infer<typeof createSessionRequestSchema>
-
+/**
+ * `POST /api/sessions` — starts the caller's game, or returns it if they
+ * already have one. Idempotent, so two browser tabs cannot race each other
+ * into two different games. Takes no body: the player's name comes from their
+ * Clerk profile.
+ *
+ * `GET /api/sessions/me` returns the same shape.
+ */
 export const sessionResponseSchema = z.object({ session: gameSessionSchema })
 export type SessionResponse = z.infer<typeof sessionResponseSchema>
 
-// --- GET /api/rooms ---
+// --- GET /api/rooms -------------------------------------------------------
 
 export const roomsResponseSchema = z.object({ rooms: z.array(roomSummarySchema) })
 export type RoomsResponse = z.infer<typeof roomsResponseSchema>
 
-// --- GET /api/rooms/:roomId ---
+// --- GET /api/rooms/:roomId ----------------------------------------------
 
 export const roomResponseSchema = z.object({ room: roomPublicDataSchema })
 export type RoomResponse = z.infer<typeof roomResponseSchema>
 
-// --- POST /api/rooms/:roomId/attempt ---
+// --- POST /api/rooms/:roomId/attempt -------------------------------------
 
 /**
  * `answer` is `unknown` on purpose: a room may ask for a word, a number, or a
@@ -55,7 +58,7 @@ export const attemptResponseSchema = z.object({
 })
 export type AttemptResponse = z.infer<typeof attemptResponseSchema>
 
-// --- POST /api/rooms/:roomId/hint ---
+// --- POST /api/rooms/:roomId/hint ----------------------------------------
 
 export const hintResponseSchema = z.object({
   hint: z.string(),
@@ -64,9 +67,17 @@ export const hintResponseSchema = z.object({
 })
 export type HintResponse = z.infer<typeof hintResponseSchema>
 
-// --- Errors ---
+// --- Errors ---------------------------------------------------------------
 
 export const API_ERROR_CODES = [
+  'UNAUTHENTICATED',
+  /**
+   * Signed in, but the Clerk profile is missing something the game needs —
+   * today a username. The frontend responds by collecting it; the server
+   * refuses to create a game without it, so bypassing the form achieves
+   * nothing.
+   */
+  'PROFILE_INCOMPLETE',
   'VALIDATION_ERROR',
   'SESSION_NOT_FOUND',
   'ROOM_NOT_FOUND',

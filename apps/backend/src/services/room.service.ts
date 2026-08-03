@@ -12,10 +12,10 @@ import {
 } from '@escape-room/shared'
 import { getRoom } from '../domain/rooms/index.js'
 import { ApiError } from '../http/api-error.js'
-import type { SessionService } from './session.service.js'
+import type { GameService } from './game.service.js'
 
 export class RoomService {
-  constructor(private readonly sessions: SessionService) {}
+  constructor(private readonly games: GameService) {}
 
   /** Room metadata for the map/progress view. Deliberately carries no puzzle data. */
   listRooms(session: GameSession): RoomSummary[] {
@@ -51,9 +51,10 @@ export class RoomService {
     if (!isRoomUnlocked(session, roomId)) throw ApiError.roomLocked()
 
     const outcome = getRoom(roomId).check(answer, session)
-    const updatedSession = outcome.correct
-      ? await this.sessions.markSolved(session, roomId)
-      : session
+
+    // Every attempt is logged, right or wrong — the wrong ones are what show
+    // where players get stuck.
+    const updatedSession = await this.games.applyAttempt(session, roomId, answer, outcome.correct)
 
     return {
       correct: outcome.correct,
@@ -73,7 +74,7 @@ export class RoomService {
     const nextHint = hints[session.hintsUsed]
     if (nextHint === undefined) throw ApiError.noHintsLeft()
 
-    const updatedSession = await this.sessions.recordHintUsed(session)
+    const updatedSession = await this.games.recordHintUsed(session, roomId)
     return {
       hint: nextHint,
       hintsUsed: updatedSession.hintsUsed,
