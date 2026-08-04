@@ -151,7 +151,9 @@ export function createInviteRoutes(
       throw new ApiError(400, 'CANNOT_FRIEND_SELF', 'That is your own invite link.')
     }
 
-    const body: FriendListResponse = await friends.request(userId, inviterUserId)
+    // Mutual straight away rather than a request the inviter has to approve —
+    // sending the link was the approval.
+    const body: FriendListResponse = await friends.acceptInvite(userId, inviterUserId)
     res.status(201).json(body)
   })
 

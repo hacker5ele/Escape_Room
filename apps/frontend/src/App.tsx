@@ -140,7 +140,10 @@ function GamePanel() {
     <>
       <section className="flex items-center justify-between rounded-lg border border-vault-800 bg-vault-900/60 p-5">
         <div className="flex items-center gap-4">
-          {state.kind === 'ready' && (
+          {/* Only where Clerk's UserButton is not rendering a face already.
+              With it, the same picture appeared twice in one header — once
+              here and once as the account menu on the right. */}
+          {state.kind === 'ready' && mode !== 'clerk' && (
             <Avatar
               size={44}
               subject={{

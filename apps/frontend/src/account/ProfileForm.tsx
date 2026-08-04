@@ -155,5 +155,21 @@ function describeClerkError(caught: unknown): string {
   if (first.code === 'form_identifier_exists') {
     return 'That username is taken. Pick another.'
   }
+
+  // Clerk rejects the parameter outright when the instance does not have
+  // usernames switched on — and its own wording ("username is not a valid
+  // parameter for this request") reads like the player typed something wrong,
+  // so they retype it for ever. The setting is per instance, so a development
+  // instance can have it off while production has it on.
+  //
+  // The game cannot start without a username (ADR-0021), so there is nothing to
+  // do but say plainly whose problem this is.
+  if (first.code === 'form_param_unknown') {
+    return (
+      'This site is not set up to accept usernames yet, so your profile cannot be saved. ' +
+      'Whoever administers it needs to enable Username for this Clerk instance.'
+    )
+  }
+
   return first.longMessage ?? first.message ?? 'Could not save that. Try again.'
 }

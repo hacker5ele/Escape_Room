@@ -40,14 +40,34 @@ export class InMemoryGameRepository implements GameRepository {
 
   async findByUserId(userId: string): Promise<GameSession | null> {
     const game = this.#games.get(userId)
-    return game ? structuredClone(game) : null
+    if (!game) return null
+
+    // Mirrors what the schema does on a real read: a row written before
+    // versioning existed has no `version`, and it reads back as zero.
+    const clone = structuredClone(game)
+    return { ...clone, version: clone.version ?? 0 }
+  }
+
+  /**
+   * Writes a game exactly as given, without the version check or the bump.
+   *
+   * Test support: `save` always writes a version, so it cannot express a row
+   * that predates versioning — which is precisely the state that needs
+   * covering, because it is what every existing player's game looks like.
+   */
+  seed(game: GameSession): void {
+    this.#games.set(game.userId, structuredClone(game))
   }
 
   async save(game: GameSession): Promise<GameSession> {
     const current = this.#games.get(game.userId)
     // Mirrors the DynamoDB condition below, so the retry path is exercised by
-    // the offline tests rather than only in a deployment.
-    if (current && current.version !== game.version) throw new GameConflictError()
+    // the offline tests rather than only in a deployment — including the
+    // legacy case where the stored game predates `version` and has none.
+    const storedVersion = current === undefined ? undefined : current.version
+    if (storedVersion !== undefined && storedVersion !== game.version) {
+      throw new GameConflictError()
+    }
 
     const saved = { ...game, version: game.version + 1 }
     this.#games.set(game.userId, saved)
@@ -100,12 +120,17 @@ export class DynamoGameRepository implements GameRepository {
         new PutCommand({
           TableName: this.#tableName,
           Item: saved,
-          // Either the game does not exist yet, or its stored version is the
-          // one we read. Without this, two players solving at the same moment
-          // each write their own copy and the second silently discards the
-          // first — a bug that never appears in testing and always appears in
-          // a demo.
-          ConditionExpression: 'attribute_not_exists(userId) OR version = :expected',
+          // Three cases, and the middle one is the reason this is not a
+          // one-liner. Either the game does not exist yet; or it was written
+          // before `version` existed, so the attribute is absent and comparing
+          // it to anything is false; or its stored version is the one we read.
+          //
+          // Without the middle clause every game created before this deployed
+          // conflicts on every write, retries twice, and 409s — the player's
+          // game stops working entirely and nothing in an offline test catches
+          // it, because an in-memory game always has the field.
+          ConditionExpression:
+            'attribute_not_exists(userId) OR attribute_not_exists(version) OR version = :expected',
           ExpressionAttributeValues: { ':expected': game.version },
         }),
       )

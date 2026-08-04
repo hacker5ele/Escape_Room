@@ -245,15 +245,51 @@ describe('invite links', () => {
     expect(JSON.stringify(preview.body)).not.toMatch(/useCount|createdAt|expiresAt/)
   })
 
-  it('makes the two people friends when accepted', async () => {
+  it('makes the two people friends immediately, with nothing left to approve', async () => {
     const app = buildApp()
     await signIn(app, ALICE, BOB)
     const token = await mint(app, ALICE)
 
     const accepted = await as(app, BOB).post(`/api/invites/${token}/accept`)
     expect(accepted.status).toBe(201)
-    expect(accepted.body.outgoing).toHaveLength(1)
-    expect((await as(app, ALICE).get('/api/friends')).body.incoming).toHaveLength(1)
+
+    // The link was Alice's consent — making her approve the person who used it
+    // asks her to confirm the same thing twice, and leaves Bob looking at a
+    // screen where nothing appears to have happened.
+    expect(accepted.body.friends).toHaveLength(1)
+    expect(accepted.body.outgoing).toHaveLength(0)
+
+    const aliceSees = await as(app, ALICE).get('/api/friends')
+    expect(aliceSees.body.friends.map((f: { profile: { userId: string } }) => f.profile.userId)).toEqual([BOB])
+    expect(aliceSees.body.incoming).toHaveLength(0)
+  })
+
+  it('does not let a link get somebody past a block', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE, BOB)
+    const token = await mint(app, ALICE)
+    await as(app, ALICE).post(`/api/friends/${BOB}/block`)
+
+    // A link sent before the block must not be a way back in. Bob is told
+    // nothing, exactly as with an ordinary request.
+    expect((await as(app, BOB).post(`/api/invites/${token}/accept`)).status).toBe(201)
+
+    const aliceSees = await as(app, ALICE).get('/api/friends')
+    expect(aliceSees.body.friends).toHaveLength(0)
+    expect(aliceSees.body.incoming).toHaveLength(0)
+  })
+
+  it('tells the inviter somebody joined', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE, BOB)
+    const token = await mint(app, ALICE)
+    await as(app, ALICE).post('/api/sync/read')
+
+    await as(app, BOB).post(`/api/invites/${token}/accept`)
+
+    const sync = await as(app, ALICE).get('/api/sync')
+    expect(sync.body.unreadCount).toBe(1)
+    expect(sync.body.notifications[0].message).toMatch(/invite link/i)
   })
 
   it('refuses your own link rather than making you your own friend', async () => {

@@ -178,8 +178,10 @@ interface RoomDefinition {
 
 Full detail in [`docs/api-contract.md`](docs/api-contract.md).
 
-**Everything except `/api/health` requires a signed-in user.** Authentication is a Clerk session token
-in `Authorization: Bearer …`.
+**Two endpoints are open; everything else requires a signed-in user.** Authentication is a Clerk
+session token in `Authorization: Bearer …`. The open pair are `/api/health` and the invite preview —
+the latter deliberately, because a link that demands an account before it shows you anything is a
+registration wall rather than a link ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)).
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
@@ -191,6 +193,41 @@ in `Authorization: Bearer …`.
 | `GET` | `/api/rooms/:roomId` | — | `{ room }` or `403` if locked |
 | `POST` | `/api/rooms/:roomId/attempt` | `{ answer }` | `{ correct, session, feedback? }` |
 | `POST` | `/api/rooms/:roomId/hint` | — | `{ hint, hintsUsed }` |
+
+The social layer, added by ADRs 0023–0029:
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| `GET` | `/api/profiles/me` | — | `{ profile }` — your own public profile |
+| `GET` | `/api/profiles/by-username/:username` | — | `{ profile }` — public fields only |
+| `GET` | `/api/friends` | — | `{ friends, incoming, outgoing }` |
+| `POST` | `/api/friends/by-username` | `{ username }` | the updated lists |
+| `POST` | `/api/friends/:userId/accept` | — | the updated lists |
+| `DELETE` | `/api/friends/:userId` | — | reject and unfriend are one operation |
+| `POST` | `/api/friends/:userId/block` · `/unblock` | — | the updated lists |
+| `GET` | `/api/invites/:token` | — | `{ inviter }` — **open, no account needed** |
+| `POST` | `/api/invites` | — | `{ invite }` — mints a link |
+| `GET` | `/api/invites` | — | `{ invites }` — your own, to share or revoke |
+| `DELETE` | `/api/invites/:token` | — | `204` — revoke |
+| `POST` | `/api/invites/:token/accept` | — | friends immediately; the link was the consent |
+| `GET` | `/api/sync?since=` | — | `{ now, notifications, unreadCount }` |
+| `POST` | `/api/sync/read` | — | `204` — marks everything seen |
+| `GET` | `/api/chat/:userId/messages?since=` | — | `{ messages }` |
+| `POST` | `/api/chat/:userId/messages` | `{ body }` | `{ message }` |
+| `GET` | `/api/leaderboard/friends` | — | `{ entries }` — you and your friends |
+| `GET` | `/api/party` | — | `{ party }` — host, members, `isHost` |
+| `POST` | `/api/party/invite/:userId` | — | `204` — notifies, moves nobody |
+| `POST` | `/api/party/join/:userId` | — | `{ party }` |
+| `DELETE` | `/api/party` | — | back to your own game |
+| `DELETE` | `/api/party/members/:userId` | — | the host sending somebody home |
+
+**No conversation id and no game id appear in any URL.** Chat is addressed by person and the server
+derives the conversation from the two ids ([ADR-0026](docs/adr/0026-chat.md)); a game is found from
+the party ([ADR-0028](docs/adr/0028-co-op-play.md)). There is nothing to forge in either case.
+
+**Rate limits key on the account** where a request carries one, and on the IP only where it does not
+— a whole class shares one address
+([ADR-0029](docs/adr/0029-rate-limits-per-account-and-invite-acceptance.md)).
 
 **There is no session id anywhere.** A player has exactly one game and the server finds it from the
 verified token, so nothing identifying a game travels on the wire to be forged
@@ -289,6 +326,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-04 | [0029](docs/adr/0029-rate-limits-per-account-and-invite-acceptance.md) | Rate limits key on the account; following an invite link makes you friends | Accepted |
 | 2026-08-04 | [0028](docs/adr/0028-co-op-play.md) | Co-op play: a player points at a host, and every write is versioned | Accepted |
 | 2026-08-04 | [0027](docs/adr/0027-friends-leaderboard.md) | A leaderboard scoped to friends, derived from the game | Accepted |
 | 2026-08-04 | [0026](docs/adr/0026-chat.md) | One-to-one chat; the conversation id is derived server-side | Accepted |
@@ -333,7 +371,9 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
 - **Friends** — add somebody by username, or send a revocable invite link that shows who is inviting
   before the recipient has an account. Accept, reject, unfriend and block all work
-  ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)).
+  ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)). Following a link makes the two of you
+  friends straight away — the link was the consent
+  ([ADR-0029](docs/adr/0029-rate-limits-per-account-and-invite-acceptance.md)).
 - **Notifications** — a bell with an unread badge, fed by a single polled `/api/sync`. App Runner
   supports neither WebSockets nor long-lived streams, so polling is the only option; it stops
   entirely while the tab is hidden ([ADR-0025](docs/adr/0025-notifications-by-polling.md)). Chat and
