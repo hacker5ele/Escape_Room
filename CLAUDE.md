@@ -136,6 +136,7 @@ Where things belong:
 | A room's look & interaction | — | `apps/frontend/src/rooms/room-0N/` |
 | Shared types / API shapes | `packages/shared/src/` | same file — one source |
 | Friends, invites, avatars | `apps/backend/src/{routes,services}/` | `apps/frontend/src/social/` |
+| Notifications / polling | `apps/backend/src/routes/sync.routes.ts` | `apps/frontend/src/sync/` |
 | Session handling | `apps/backend/src/services/session.service.ts` | `apps/frontend/src/game/` |
 
 ---
@@ -286,6 +287,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-04 | [0025](docs/adr/0025-notifications-by-polling.md) | Notifications delivered by one polled `/api/sync`, not WebSockets | Accepted |
 | 2026-08-04 | [0024](docs/adr/0024-friend-graph-and-invite-links.md) | Friend graph stored both ways; revocable invite links | Accepted |
 | 2026-08-04 | [0023](docs/adr/0023-public-profiles.md) | Cache a public profile per player | Accepted |
 | 2026-08-03 | [0022](docs/adr/0022-local-development-auth.md) | Local development runs without Clerk | Accepted |
@@ -326,8 +328,12 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
 - **Friends** — add somebody by username, or send a revocable invite link that shows who is inviting
   before the recipient has an account. Accept, reject, unfriend and block all work
-  ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)). Notifications, chat, a friends
-  leaderboard and co-op play build on this and are still to come.
+  ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)).
+- **Notifications** — a bell with an unread badge, fed by a single polled `/api/sync`. App Runner
+  supports neither WebSockets nor long-lived streams, so polling is the only option; it stops
+  entirely while the tab is hidden ([ADR-0025](docs/adr/0025-notifications-by-polling.md)). Chat and
+  co-op will add fields to the same response rather than endpoints of their own.
+- **Still to come** — chat, a friends leaderboard, and co-op play.
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions

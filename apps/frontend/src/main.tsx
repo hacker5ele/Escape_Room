@@ -6,6 +6,7 @@ import { App } from './App'
 import { AUTH_MODE } from './auth/types'
 import { ClerkAuthProvider } from './auth/ClerkAuthProvider'
 import { LocalAuthProvider } from './auth/LocalAuthProvider'
+import { SyncProvider } from './sync/SyncProvider'
 
 /**
  * Chooses the identity provider once, here.
@@ -43,7 +44,11 @@ if (!container) throw new Error('Missing #root element in index.html')
 createRoot(container).render(
   <StrictMode>
     <AuthProvider>
-      <App />
+      {/* Inside the auth provider: the poll needs an identity, and stops
+          entirely when there is not one. */}
+      <SyncProvider>
+        <App />
+      </SyncProvider>
     </AuthProvider>
   </StrictMode>,
 )

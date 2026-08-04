@@ -4,12 +4,19 @@ import type {
   FriendshipRepository,
 } from '../repositories/friendship.repository.js'
 import type { ProfileService } from './profile.service.js'
+import type { NotificationService } from './notification.service.js'
 import { ApiError } from '../http/api-error.js'
 
 export class FriendService {
   constructor(
     private readonly repository: FriendshipRepository,
     private readonly profiles: ProfileService,
+    /**
+     * Optional so the friend logic can be tested without standing up
+     * notifications, and so a missing one degrades to silence rather than an
+     * error.
+     */
+    private readonly notifications?: NotificationService,
   ) {}
 
   /**
@@ -76,6 +83,8 @@ export class FriendService {
         status: 'pending_out',
         since: new Date().toISOString(),
       })
+      // Deliberately no notification. The whole point of the block is that they
+      // are not told, and the blocker is not disturbed.
       return this.list(userId)
     }
 
@@ -89,10 +98,17 @@ export class FriendService {
     // They asked first — treat this as saying yes.
     if (mine?.status === 'pending_in') {
       await this.#writePair(userId, targetUserId, 'accepted', 'accepted')
+      await this.#tell(targetUserId, userId, 'friend_accepted', (who) => `${who} is now your friend.`)
       return this.list(userId)
     }
 
     await this.#writePair(userId, targetUserId, 'pending_out', 'pending_in')
+    await this.#tell(
+      targetUserId,
+      userId,
+      'friend_request',
+      (who) => `${who} wants to be your friend.`,
+    )
     return this.list(userId)
   }
 
@@ -103,6 +119,14 @@ export class FriendService {
     }
 
     await this.#writePair(userId, requesterUserId, 'accepted', 'accepted')
+    // Only the person who was waiting hears about it. Being turned down is not
+    // announced — there is nothing to do about it, and saying so is unkind.
+    await this.#tell(
+      requesterUserId,
+      userId,
+      'friend_accepted',
+      (who) => `${who} accepted your friend request.`,
+    )
     return this.list(userId)
   }
 
@@ -144,6 +168,30 @@ export class FriendService {
   async areFriends(userId: string, otherUserId: string): Promise<boolean> {
     const mine = await this.repository.find(userId, otherUserId)
     return mine?.status === 'accepted'
+  }
+
+  /**
+   * Tells `recipient` that `actor` did something.
+   *
+   * The actor's name is looked up here rather than passed in, so the message
+   * says who it was even when the caller only had an id. A missing profile
+   * falls back to something neutral rather than skipping the notification.
+   */
+  async #tell(
+    recipientUserId: string,
+    actorUserId: string,
+    type: 'friend_request' | 'friend_accepted',
+    compose: (who: string) => string,
+  ): Promise<void> {
+    if (!this.notifications) return
+
+    const actor = await this.profiles.findByUserId(actorUserId)
+    await this.notifications.notifyQuietly(
+      recipientUserId,
+      type,
+      compose(actor?.displayName || actor?.username || 'Somebody'),
+      actorUserId,
+    )
   }
 
   async #writePair(

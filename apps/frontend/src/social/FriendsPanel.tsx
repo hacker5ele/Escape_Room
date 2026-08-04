@@ -12,6 +12,7 @@ import {
   revokeInvite,
 } from '../api/social'
 import { useAppAuth } from '../auth/useAppAuth'
+import { useSync } from '../sync/useSync'
 import { Avatar } from './Avatar'
 
 const EMPTY: FriendListResponse = { friends: [], incoming: [], outgoing: [] }
@@ -25,6 +26,7 @@ const EMPTY: FriendListResponse = { friends: [], incoming: [], outgoing: [] }
  */
 export function FriendsPanel() {
   const { authHeaders } = useAppAuth()
+  const { notifications } = useSync()
   const [lists, setLists] = useState<FriendListResponse>(EMPTY)
   const [invites, setInvites] = useState<Invite[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -59,6 +61,15 @@ export function FriendsPanel() {
   useEffect(() => {
     void reload()
   }, [reload])
+
+  // Re-read the lists when the shared poll reports something new, so an
+  // incoming request appears on its own rather than after a refresh. Keyed on
+  // the newest notification's id: ids are stable and the poll deduplicates, so
+  // this fires once per genuinely new event rather than once per poll.
+  const newestNotificationId = notifications[0]?.id
+  useEffect(() => {
+    if (newestNotificationId) void reload()
+  }, [newestNotificationId, reload])
 
   return (
     <section className="space-y-5 rounded-lg border border-vault-800 bg-vault-900/60 p-5">

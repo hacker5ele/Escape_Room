@@ -9,6 +9,7 @@ import { Avatar } from './social/Avatar'
 import { FriendsPanel } from './social/FriendsPanel'
 import { InvitePage } from './social/InvitePage'
 import { inviteTokenFromPath } from './routing'
+import { NotificationBell } from './sync/NotificationBell'
 import { LocalSignIn } from './auth/LocalSignIn'
 import { useAppAuth } from './auth/useAppAuth'
 
@@ -162,17 +163,20 @@ function GamePanel() {
           </div>
         </div>
 
-        {mode === 'clerk' ? (
-          <UserButton />
-        ) : (
-          <button
-            type="button"
-            onClick={signOut}
-            className="rounded border border-vault-700 px-3 py-1.5 font-mono text-xs text-vault-300 transition hover:border-vault-500"
-          >
-            Sign out
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <NotificationBell />
+          {mode === 'clerk' ? (
+            <UserButton />
+          ) : (
+            <button
+              type="button"
+              onClick={signOut}
+              className="rounded border border-vault-700 px-3 py-1.5 font-mono text-xs text-vault-300 transition hover:border-vault-500"
+            >
+              Sign out
+            </button>
+          )}
+        </div>
       </section>
 
       <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">

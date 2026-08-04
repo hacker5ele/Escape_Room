@@ -23,7 +23,13 @@ import {
   InMemoryInviteRepository,
   type InviteRepository,
 } from './repositories/invite.repository.js'
+import {
+  DynamoNotificationRepository,
+  InMemoryNotificationRepository,
+  type NotificationRepository,
+} from './repositories/notification.repository.js'
 import { GameService } from './services/game.service.js'
+import { NotificationService } from './services/notification.service.js'
 import { FriendService } from './services/friend.service.js'
 import { InviteService } from './services/invite.service.js'
 import { ProfileService } from './services/profile.service.js'
@@ -34,6 +40,7 @@ import { createHealthRoutes } from './routes/health.routes.js'
 import { createSessionRoutes } from './routes/sessions.routes.js'
 import { createProfileRoutes } from './routes/profiles.routes.js'
 import { createFriendRoutes, createInviteRoutes } from './routes/friends.routes.js'
+import { createSyncRoutes } from './routes/sync.routes.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
 import {
   createAttemptRateLimiter,
@@ -49,6 +56,7 @@ export interface AppOptions {
   profileRepository?: ProfileRepository
   friendshipRepository?: FriendshipRepository
   inviteRepository?: InviteRepository
+  notificationRepository?: NotificationRepository
   /** Injected by tests so the suite needs no Clerk key and makes no network calls. */
   authenticator?: Authenticator
   /** Attempts per IP per minute. Tests lower it to assert the limiter fires. */
@@ -110,9 +118,16 @@ export function createApp(options: AppOptions = {}): Express {
       ? new DynamoInviteRepository(config.invitesTableName, config.awsRegion)
       : new InMemoryInviteRepository())
 
+  const notificationRepository =
+    options.notificationRepository ??
+    (config.notificationsTableName
+      ? new DynamoNotificationRepository(config.notificationsTableName, config.awsRegion)
+      : new InMemoryNotificationRepository())
+
   const gameService = new GameService(repository)
   const profileService = new ProfileService(profileRepository)
-  const friendService = new FriendService(friendshipRepository, profileService)
+  const notificationService = new NotificationService(notificationRepository, profileService)
+  const friendService = new FriendService(friendshipRepository, profileService, notificationService)
   const inviteService = new InviteService(inviteRepository, profileService)
   const roomService = new RoomService(gameService)
 
@@ -153,6 +168,18 @@ export function createApp(options: AppOptions = {}): Express {
     limit: 30,
     message: 'Slow down a moment.',
   })
+
+  // Polled every few seconds by every open tab, so its budget is much larger
+  // than the write limiter's — and still bounded, because a client stuck in a
+  // retry loop should not be able to saturate the one container.
+  app.use(
+    '/api/sync',
+    createSyncRoutes(
+      notificationService,
+      authenticator,
+      createRateLimiter({ limit: 240, message: 'Polling too fast. Slow down.' }),
+    ),
+  )
 
   app.use('/api/friends', createFriendRoutes(friendService, profileService, authenticator, socialWriteLimiter))
   app.use(

@@ -151,6 +151,43 @@ resource "aws_dynamodb_table" "invites" {
   tags = var.tags
 }
 
+# Notifications. See ADR-0025.
+#
+# Partitioned per player and sorted by `${createdAt}#${id}`, so "what has
+# happened since I last asked?" is one Query with a key condition rather than a
+# scan. toISOString() is fixed-width UTC, so it sorts chronologically as a
+# string; the id breaks same-millisecond ties.
+resource "aws_dynamodb_table" "notifications" {
+  name         = "${local.prefix}-notifications"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+  range_key    = "sk"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  # Unlike the invites table, nothing here depends on the TTL being punctual —
+  # it only keeps each player's partition small enough that counting unread
+  # items with a filter stays cheap.
+  ttl {
+    attribute_name = "expiresAtEpoch"
+    enabled        = true
+  }
+
+  point_in_time_recovery {
+    enabled = false
+  }
+
+  tags = var.tags
+}
+
 # --------------------------------------------------------------------------
 # Frontend: private S3 bucket, reachable only through CloudFront
 # --------------------------------------------------------------------------
@@ -418,6 +455,7 @@ data "aws_iam_policy_document" "apprunner_instance" {
       aws_dynamodb_table.profiles.arn,
       aws_dynamodb_table.friendships.arn,
       aws_dynamodb_table.invites.arn,
+      aws_dynamodb_table.notifications.arn,
       # Querying a GSI requires the index ARN as well as the table's; granting
       # only the table is the usual way this fails at runtime rather than plan
       # time.
@@ -475,11 +513,12 @@ resource "aws_apprunner_service" "api" {
           CORS_ORIGIN        = "https://${var.domain_name}"
           # Presence of this selects the DynamoDB repository over the in-memory
           # one, so a local run without AWS credentials still works.
-          GAMES_TABLE_NAME       = aws_dynamodb_table.games.name
-          PROFILES_TABLE_NAME    = aws_dynamodb_table.profiles.name
-          FRIENDSHIPS_TABLE_NAME = aws_dynamodb_table.friendships.name
-          INVITES_TABLE_NAME     = aws_dynamodb_table.invites.name
-          AWS_REGION             = "us-east-1"
+          GAMES_TABLE_NAME         = aws_dynamodb_table.games.name
+          PROFILES_TABLE_NAME      = aws_dynamodb_table.profiles.name
+          FRIENDSHIPS_TABLE_NAME   = aws_dynamodb_table.friendships.name
+          INVITES_TABLE_NAME       = aws_dynamodb_table.invites.name
+          NOTIFICATIONS_TABLE_NAME = aws_dynamodb_table.notifications.name
+          AWS_REGION               = "us-east-1"
           # The backend needs this too, not just the browser — see the variable.
           CLERK_PUBLISHABLE_KEY = var.clerk_publishable_key
         }
