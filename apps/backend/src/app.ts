@@ -28,7 +28,13 @@ import {
   InMemoryNotificationRepository,
   type NotificationRepository,
 } from './repositories/notification.repository.js'
+import {
+  DynamoMessageRepository,
+  InMemoryMessageRepository,
+  type MessageRepository,
+} from './repositories/message.repository.js'
 import { GameService } from './services/game.service.js'
+import { ChatService } from './services/chat.service.js'
 import { NotificationService } from './services/notification.service.js'
 import { FriendService } from './services/friend.service.js'
 import { InviteService } from './services/invite.service.js'
@@ -41,6 +47,7 @@ import { createSessionRoutes } from './routes/sessions.routes.js'
 import { createProfileRoutes } from './routes/profiles.routes.js'
 import { createFriendRoutes, createInviteRoutes } from './routes/friends.routes.js'
 import { createSyncRoutes } from './routes/sync.routes.js'
+import { createChatRoutes } from './routes/chat.routes.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
 import {
   createAttemptRateLimiter,
@@ -57,6 +64,7 @@ export interface AppOptions {
   friendshipRepository?: FriendshipRepository
   inviteRepository?: InviteRepository
   notificationRepository?: NotificationRepository
+  messageRepository?: MessageRepository
   /** Injected by tests so the suite needs no Clerk key and makes no network calls. */
   authenticator?: Authenticator
   /** Attempts per IP per minute. Tests lower it to assert the limiter fires. */
@@ -124,10 +132,22 @@ export function createApp(options: AppOptions = {}): Express {
       ? new DynamoNotificationRepository(config.notificationsTableName, config.awsRegion)
       : new InMemoryNotificationRepository())
 
+  const messageRepository =
+    options.messageRepository ??
+    (config.messagesTableName
+      ? new DynamoMessageRepository(config.messagesTableName, config.awsRegion)
+      : new InMemoryMessageRepository())
+
   const gameService = new GameService(repository)
   const profileService = new ProfileService(profileRepository)
   const notificationService = new NotificationService(notificationRepository, profileService)
   const friendService = new FriendService(friendshipRepository, profileService, notificationService)
+  const chatService = new ChatService(
+    messageRepository,
+    friendService,
+    profileService,
+    notificationService,
+  )
   const inviteService = new InviteService(inviteRepository, profileService)
   const roomService = new RoomService(gameService)
 
@@ -178,6 +198,20 @@ export function createApp(options: AppOptions = {}): Express {
       notificationService,
       authenticator,
       createRateLimiter({ limit: 240, message: 'Polling too fast. Slow down.' }),
+    ),
+  )
+
+  app.use(
+    '/api/chat',
+    createChatRoutes(
+      chatService,
+      authenticator,
+      // Sending is capped tighter than reading: a burst of messages is the one
+      // social action that costs somebody else attention.
+      createRateLimiter({ limit: 60, message: 'You are sending messages too quickly.' }),
+      // An open conversation polls faster than the bell does, so its read
+      // budget has to be larger than the shared write budget.
+      createRateLimiter({ limit: 300, message: 'Polling too fast. Slow down.' }),
     ),
   )
 

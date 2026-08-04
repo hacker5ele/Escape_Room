@@ -188,6 +188,37 @@ resource "aws_dynamodb_table" "notifications" {
   tags = var.tags
 }
 
+# Chat messages. See ADR-0026.
+#
+# Partitioned by conversation, which the *server* derives from the two user ids
+# — a client never supplies it. Reading a conversation is therefore one Query,
+# and there is no request shape that names somebody else's partition.
+#
+# No TTL: unlike notifications, a conversation is content people expect to still
+# be there tomorrow.
+resource "aws_dynamodb_table" "messages" {
+  name         = "${local.prefix}-messages"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "conversationId"
+  range_key    = "sk"
+
+  attribute {
+    name = "conversationId"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = false
+  }
+
+  tags = var.tags
+}
+
 # --------------------------------------------------------------------------
 # Frontend: private S3 bucket, reachable only through CloudFront
 # --------------------------------------------------------------------------
@@ -456,6 +487,7 @@ data "aws_iam_policy_document" "apprunner_instance" {
       aws_dynamodb_table.friendships.arn,
       aws_dynamodb_table.invites.arn,
       aws_dynamodb_table.notifications.arn,
+      aws_dynamodb_table.messages.arn,
       # Querying a GSI requires the index ARN as well as the table's; granting
       # only the table is the usual way this fails at runtime rather than plan
       # time.
@@ -518,6 +550,7 @@ resource "aws_apprunner_service" "api" {
           FRIENDSHIPS_TABLE_NAME   = aws_dynamodb_table.friendships.name
           INVITES_TABLE_NAME       = aws_dynamodb_table.invites.name
           NOTIFICATIONS_TABLE_NAME = aws_dynamodb_table.notifications.name
+          MESSAGES_TABLE_NAME      = aws_dynamodb_table.messages.name
           AWS_REGION               = "us-east-1"
           # The backend needs this too, not just the browser — see the variable.
           CLERK_PUBLISHABLE_KEY = var.clerk_publishable_key

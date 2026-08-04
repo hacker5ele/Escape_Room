@@ -50,6 +50,7 @@ export const config = {
   friendshipsTableName: process.env.FRIENDSHIPS_TABLE_NAME ?? '',
   invitesTableName: process.env.INVITES_TABLE_NAME ?? '',
   notificationsTableName: process.env.NOTIFICATIONS_TABLE_NAME ?? '',
+  messagesTableName: process.env.MESSAGES_TABLE_NAME ?? '',
 
   awsRegion: process.env.AWS_REGION ?? 'us-east-1',
 

@@ -112,6 +112,15 @@ export class NotificationService {
     }
   }
 
+  /** Used by chat to avoid one bell notification per message. */
+  async hasUnreadFrom(
+    userId: string,
+    type: NotificationType,
+    actorUserId: string,
+  ): Promise<boolean> {
+    return this.repository.hasUnreadFrom(userId, type, actorUserId)
+  }
+
   async markAllRead(userId: string): Promise<void> {
     await this.repository.markAllRead(userId, new Date().toISOString())
   }

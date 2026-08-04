@@ -6,6 +6,9 @@ import {
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb'
 import type { NotificationType } from '@escape-room/shared'
+import { sortKeyFor } from './sort-key.js'
+
+export { sortKeyFor }
 
 export interface NotificationRecord {
   userId: string
@@ -32,11 +35,14 @@ export interface NotificationRepository {
   /** Everything newer than `afterSk`, oldest first. Pass '' for everything. */
   listSince(userId: string, afterSk: string, limit: number): Promise<NotificationRecord[]>
   countUnread(userId: string): Promise<number>
+  /**
+   * Is there already an unread one of this kind from this person?
+   *
+   * Chat asks this before adding "you have a new message". Without it, a
+   * five-message burst becomes five bell notifications saying the same thing.
+   */
+  hasUnreadFrom(userId: string, type: NotificationType, actorUserId: string): Promise<boolean>
   markAllRead(userId: string, at: string): Promise<void>
-}
-
-export function sortKeyFor(createdAt: string, id: string): string {
-  return `${createdAt}#${id}`
 }
 
 export class InMemoryNotificationRepository implements NotificationRepository {
@@ -58,6 +64,17 @@ export class InMemoryNotificationRepository implements NotificationRepository {
 
   async countUnread(userId: string): Promise<number> {
     return (this.#byUser.get(userId) ?? []).filter((record) => record.readAt === null).length
+  }
+
+  async hasUnreadFrom(
+    userId: string,
+    type: NotificationType,
+    actorUserId: string,
+  ): Promise<boolean> {
+    return (this.#byUser.get(userId) ?? []).some(
+      (record) =>
+        record.readAt === null && record.type === type && record.actorUserId === actorUserId,
+    )
   }
 
   async markAllRead(userId: string, at: string): Promise<void> {
@@ -122,6 +139,30 @@ export class DynamoNotificationRepository implements NotificationRepository {
     } while (startKey)
 
     return count
+  }
+
+  async hasUnreadFrom(
+    userId: string,
+    type: NotificationType,
+    actorUserId: string,
+  ): Promise<boolean> {
+    const result = await this.#client.send(
+      new QueryCommand({
+        TableName: this.#tableName,
+        KeyConditionExpression: 'userId = :u',
+        FilterExpression:
+          '(attribute_not_exists(readAt) OR readAt = :null) AND #type = :type AND actorUserId = :actor',
+        ExpressionAttributeNames: { '#type': 'type' },
+        ExpressionAttributeValues: {
+          ':u': userId,
+          ':null': null,
+          ':type': type,
+          ':actor': actorUserId,
+        },
+        Limit: 1,
+      }),
+    )
+    return (result.Items?.length ?? 0) > 0
   }
 
   async markAllRead(userId: string, at: string): Promise<void> {

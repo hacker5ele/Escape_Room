@@ -205,7 +205,7 @@ function GamePanel() {
         </p>
       </section>
 
-      {state.kind === 'ready' && <FriendsPanel />}
+      {state.kind === 'ready' && <FriendsPanel meUserId={state.game.userId} />}
 
       {state.kind === 'ready' && <ActivityLog events={state.game.events} />}
     </>

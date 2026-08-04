@@ -14,6 +14,7 @@ import {
 import { useAppAuth } from '../auth/useAppAuth'
 import { useSync } from '../sync/useSync'
 import { Avatar } from './Avatar'
+import { ChatWindow } from './ChatWindow'
 
 const EMPTY: FriendListResponse = { friends: [], incoming: [], outgoing: [] }
 
@@ -24,9 +25,11 @@ const EMPTY: FriendListResponse = { friends: [], incoming: [], outgoing: [] }
  * state from the response rather than patching it optimistically. That costs a
  * little payload and buys never showing a friendship the server disagrees with.
  */
-export function FriendsPanel() {
+export function FriendsPanel({ meUserId }: { meUserId: string }) {
   const { authHeaders } = useAppAuth()
   const { notifications } = useSync()
+  /** The friend whose conversation is open, if any. One at a time. */
+  const [chattingWith, setChattingWith] = useState<Friend['profile'] | null>(null)
   const [lists, setLists] = useState<FriendListResponse>(EMPTY)
   const [invites, setInvites] = useState<Invite[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -128,10 +131,21 @@ export function FriendsPanel() {
           lists.friends.map((friend) => (
             <Row key={friend.profile.userId} friend={friend}>
               <Action
+                label="Chat"
+                primary
+                onClick={() => setChattingWith(friend.profile)}
+              />
+              <Action
                 label="Remove"
                 disabled={busy}
                 onClick={() =>
-                  run(async (auth) => setLists(await removeFriend(auth, friend.profile.userId)))
+                  run(async (auth) => {
+                    // Close the window first: the conversation stops working
+                    // the moment the friendship does, and leaving it open would
+                    // poll into a 403 loop.
+                    if (chattingWith?.userId === friend.profile.userId) setChattingWith(null)
+                    setLists(await removeFriend(auth, friend.profile.userId))
+                  })
                 }
               />
             </Row>
@@ -153,6 +167,15 @@ export function FriendsPanel() {
             </Row>
           ))}
         </Group>
+      )}
+
+      {chattingWith && (
+        <ChatWindow
+          key={chattingWith.userId}
+          friend={chattingWith}
+          meUserId={meUserId}
+          onClose={() => setChattingWith(null)}
+        />
       )}
 
       <InviteLinks
