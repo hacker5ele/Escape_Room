@@ -1,16 +1,18 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
-import type { Express } from 'express'
-import { createApp } from '../app.js'
+import type { Server } from 'node:http'
+import { createTestApp as createApp } from '../test/server.js'
+// The real factory, for the one test that reads its source rather than calls it.
+import { createApp as createAppSource } from '../app.js'
 import { createLocalAuthenticator } from './local-authenticator.js'
 import { SOLUTIONS } from '../domain/rooms/solutions.fixture.js'
 
 /** Builds an app in local mode the way `AUTH_MODE=local` would. */
-function localApp(): Express {
+function localApp(): Server {
   return createApp({ authenticator: createLocalAuthenticator(), attemptRateLimit: 1000 })
 }
 
-function as(app: Express, username: string, first = 'Ada', last = 'Lovelace') {
+function as(app: Server, username: string, first = 'Ada', last = 'Lovelace') {
   const headers = {
     'x-dev-username': username,
     'x-dev-first-name': first,
@@ -108,7 +110,7 @@ describe('the production guard', () => {
     // The real protection is layered: no deployed environment sets AUTH_MODE at
     // all, and `createApp()` throws rather than starts, so a misconfigured
     // service fails its health check instead of serving traffic wide open.
-    expect(createApp.toString()).toContain('AUTH_MODE=local')
-    expect(createApp.toString()).toContain('isProduction')
+    expect(createAppSource.toString()).toContain('AUTH_MODE=local')
+    expect(createAppSource.toString()).toContain('isProduction')
   })
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
-import type { Express } from 'express'
-import { createApp } from './app.js'
+import type { Server } from 'node:http'
+import { createTestApp as createApp } from './test/server.js'
 import {
   createTestAuthenticator,
   TEST_USER_HEADER,
@@ -14,12 +14,12 @@ const ALICE = 'user_alice'
 const BOB = 'user_bob'
 
 /** A fresh app per test: `createApp` builds its own store, so games never leak between cases. */
-function buildApp(attemptRateLimit = 1000): Express {
+function buildApp(attemptRateLimit = 1000): Server {
   return createApp({ authenticator: createTestAuthenticator(), attemptRateLimit })
 }
 
 /** Signed-in request helper. */
-function as(app: Express, user: string) {
+function as(app: Server, user: string) {
   return {
     get: (path: string) => request(app).get(path).set(TEST_USER_HEADER, user),
     post: (path: string) => request(app).post(path).set(TEST_USER_HEADER, user),
@@ -27,7 +27,7 @@ function as(app: Express, user: string) {
   }
 }
 
-async function startGame(app: Express, user: string) {
+async function startGame(app: Server, user: string) {
   const response = await as(app, user).post('/api/sessions').send({})
   expect(response.status).toBe(201)
   return response.body.session

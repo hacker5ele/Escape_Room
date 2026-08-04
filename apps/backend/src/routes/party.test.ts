@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
-import type { Express } from 'express'
+import type { Server } from 'node:http'
 import type { GameSession } from '@escape-room/shared'
-import { createApp } from '../app.js'
+import { createTestApp as createApp } from '../test/server.js'
 import { InMemoryGameRepository } from '../repositories/game.repository.js'
 import { createTestAuthenticator, TEST_USER_HEADER } from '../http/test-authenticator.js'
 import { SOLUTIONS } from '../domain/rooms/solutions.fixture.js'
@@ -20,7 +20,7 @@ function buildApp(gameRepository = new InMemoryGameRepository()) {
   return { app, gameRepository }
 }
 
-function as(app: Express, user: string) {
+function as(app: Server, user: string) {
   return {
     get: (path: string) => request(app).get(path).set(TEST_USER_HEADER, user),
     post: (path: string) => request(app).post(path).set(TEST_USER_HEADER, user),
@@ -28,21 +28,21 @@ function as(app: Express, user: string) {
   }
 }
 
-async function signIn(app: Express, ...users: string[]) {
+async function signIn(app: Server, ...users: string[]) {
   for (const user of users) await as(app, user).post('/api/sessions').send({})
 }
 
 const usernameOf = (user: string) => `handle_${user}`
 
-async function befriend(app: Express, a: string, b: string) {
+async function befriend(app: Server, a: string, b: string) {
   await as(app, a).post('/api/friends/by-username').send({ username: usernameOf(b) })
   await as(app, b).post(`/api/friends/${a}/accept`)
 }
 
-const gameOf = async (app: Express, user: string): Promise<GameSession> =>
+const gameOf = async (app: Server, user: string): Promise<GameSession> =>
   (await as(app, user).get('/api/sessions/me')).body.session as GameSession
 
-const solveFirstRoom = (app: Express, user: string) =>
+const solveFirstRoom = (app: Server, user: string) =>
   as(app, user).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
 
 describe('joining a friend’s game', () => {
