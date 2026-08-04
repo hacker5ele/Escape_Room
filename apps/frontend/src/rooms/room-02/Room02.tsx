@@ -19,6 +19,7 @@ import { LockModal } from './components/LockModal'
 import { EvidenceModal } from './components/EvidenceModal'
 import { PowerRouterModal } from './components/PowerRouterModal'
 import { LockdownOverlay } from './components/LockdownOverlay'
+import { FinalSprint } from './components/FinalSprint'
 import { EndingSequence } from './components/EndingSequence'
 import { EndScreen } from './components/EndScreen'
 import { Toast } from './components/Toast'
@@ -41,7 +42,7 @@ function getObjective(state: RoomState): string {
   return 'Reach the emergency exit.'
 }
 
-export function Room02({ onSubmit, onHint }: RoomProps) {
+export function Room02({ onSubmit }: RoomProps) {
   const [state, dispatch] = useReducer(roomReducer, undefined, createInitialState)
   const [screen, setScreen] = useState<Screen>('title')
   const [muted, setMuted] = useState(false)
@@ -54,6 +55,8 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
   const [travelLocationName, setTravelLocationName] = useState<string | null>(null)
 
   const [lockdownTextVisible, setLockdownTextVisible] = useState(false)
+  const [finalSprintActive, setFinalSprintActive] = useState(false)
+  const finalSprintTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [endingSequenceOpen, setEndingSequenceOpen] = useState(false)
   const [endingVariant, setEndingVariant] = useState<EndingVariant | null>(null)
 
@@ -64,6 +67,9 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
   const [timerRemaining, setTimerRemaining] = useState<number | null>(null)
   const timerInterval = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
   const timerDeadline = useRef<number>(0)
+
+  const recordingTimeouts = useRef<ReturnType<typeof setTimeout>[]>([])
+  const dnaTimeouts = useRef<ReturnType<typeof setTimeout>[]>([])
 
   // Keep the latest state/screen reachable from timers without re-subscribing effects.
   const stateRef = useRef(state)
@@ -87,19 +93,28 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>
     function scheduleAmbient() {
-      const delay = 13000 + Math.random() * 14000
+      const delay = 6000 + Math.random() * 6000
       timeout = setTimeout(() => {
         if (screenRef.current === 'game') {
           const line = STORY.ambientLines[Math.floor(Math.random() * STORY.ambientLines.length)]
-          if (Math.random() < 0.5) {
-            roomAudio.distantRoar()
-          } else {
-            roomAudio.staticBurst()
-            setStaticFlash(false)
-            requestAnimationFrame(() => {
-              setStaticFlash(true)
-              setTimeout(() => setStaticFlash(false), 600)
-            })
+          switch (Math.floor(Math.random() * 5)) {
+            case 0:
+            case 1:
+              roomAudio.distantRoar()
+              break
+            case 2:
+              roomAudio.heavySteps()
+              break
+            case 3:
+              roomAudio.scratchingMetal()
+              break
+            default:
+              roomAudio.staticBurst()
+              setStaticFlash(false)
+              requestAnimationFrame(() => {
+                setStaticFlash(true)
+                setTimeout(() => setStaticFlash(false), 600)
+              })
           }
           showToast(line, 3200)
         }
@@ -119,6 +134,9 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
   function handleRestart() {
     dispatch({ type: 'RESET' })
     roomAudio.stopSirenLoop()
+    roomAudio.stopRecordingLog()
+    clearRecordingSchedule()
+    clearDnaSchedule()
     stopEscapeTimer()
     setShake(false)
     setScreen('title')
@@ -127,6 +145,8 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
     setCurrentLockKind(null)
     setTravelLocationName(null)
     setLockdownTextVisible(false)
+    clearTimeout(finalSprintTimeout.current)
+    setFinalSprintActive(false)
     setEndingSequenceOpen(false)
     setEndingVariant(null)
   }
@@ -135,15 +155,6 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
     const next = !muted
     roomAudio.setMuted(next)
     setMuted(next)
-  }
-
-  async function handleHintRequest() {
-    try {
-      const result = await onHint()
-      showToast(result.hint, 4000)
-    } catch {
-      showToast('No hints left.', 2500)
-    }
   }
 
   // ---- Travel ---------------------------------------------------------------
@@ -169,6 +180,7 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
         break
       case 'recording':
         setOpenModal('recording')
+        void roomAudio.startRecordingLog().then(scheduleRecordingReveal)
         break
       case 'terminal':
         setOpenModal('terminal')
@@ -249,7 +261,6 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
           return true
         }
         dispatch({ type: 'FAIL_LOCK', kind })
-        roomAudio.error()
         return false
       } catch {
         showToast('Could not reach the server. Try again.')
@@ -266,7 +277,6 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
       return true
     }
     dispatch({ type: 'FAIL_LOCK', kind })
-    roomAudio.error()
     return false
   }
 
@@ -285,19 +295,63 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
   }
 
   // ---- DNA / recording steppers -----------------------------------------------
+  function clearDnaSchedule() {
+    dnaTimeouts.current.forEach(clearTimeout)
+    dnaTimeouts.current = []
+  }
+
+  /** Runs the whole DNA sequence after one click instead of one line per click. */
   function handleDnaRun() {
-    if (state.dnaStep < STORY.dnaSequence.length) {
-      dispatch({ type: 'ADVANCE_DNA' })
-      roomAudio.click()
+    clearDnaSchedule()
+    const startIndex = stateRef.current.dnaStep
+    const total = STORY.dnaSequence.length
+    for (let i = startIndex; i < total; i++) {
+      dnaTimeouts.current.push(
+        setTimeout(
+          () => {
+            dispatch({ type: 'ADVANCE_DNA' })
+            roomAudio.click()
+          },
+          (i - startIndex + 1) * 900,
+        ),
+      )
     }
   }
 
-  function handleRecordingPlay() {
-    if (state.recordingStep < STORY.recordingLines.length) {
-      const line = STORY.recordingLines[state.recordingStep]
-      dispatch({ type: 'ADVANCE_RECORDING' })
-      if (line.startsWith('[')) roomAudio.staticBurst()
-      else roomAudio.click()
+  function clearRecordingSchedule() {
+    recordingTimeouts.current.forEach(clearTimeout)
+    recordingTimeouts.current = []
+  }
+
+  // Cue points (seconds into recovered_audio_log.mp3) for the first four lines, timed
+  // by ear against the real recording: opening line right at the start, then the two
+  // "[SIGNAL DEGRADED]" dropouts at ~4-6s and ~10-11s, with the dialogue lines revealed
+  // as soon as each dropout clears rather than lagging behind the spoken audio.
+  const RECORDING_CUE_SECONDS = [0.1, 5, 6, 10.5] as const
+
+  /** Reveals the remaining log lines timed against the real clip, instead of a manual click-through. */
+  function scheduleRecordingReveal(duration: number) {
+    clearRecordingSchedule()
+    const startIndex = stateRef.current.recordingStep
+    const total = STORY.recordingLines.length
+    const lastCue = RECORDING_CUE_SECONDS[RECORDING_CUE_SECONDS.length - 1] ?? 0
+    for (let lineIndex = startIndex; lineIndex < total; lineIndex++) {
+      const line = STORY.recordingLines[lineIndex]
+      const cueSeconds = RECORDING_CUE_SECONDS[lineIndex] ?? Math.min(lastCue + 1, duration - 0.5)
+      const delayMs = Math.max(0, cueSeconds * 1000)
+      recordingTimeouts.current.push(
+        setTimeout(() => {
+          dispatch({ type: 'ADVANCE_RECORDING' })
+          if (line?.startsWith('[')) {
+            roomAudio.staticBurst()
+            setStaticFlash(false)
+            requestAnimationFrame(() => {
+              setStaticFlash(true)
+              setTimeout(() => setStaticFlash(false), 600)
+            })
+          }
+        }, delayMs),
+      )
     }
   }
 
@@ -316,7 +370,6 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
       return
     }
     const correct = isEvidenceSelectionCorrect(state.evidenceSelected)
-    roomAudio.error()
     if (correct) {
       dispatch({ type: 'EVIDENCE_COMPILED' })
       setOpenModal(null)
@@ -360,7 +413,6 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
 
   function handleWireWrong() {
     dispatch({ type: 'WIRE_WRONG' })
-    roomAudio.error()
   }
 
   // ---- Containment corridor / exit --------------------------------------------
@@ -378,13 +430,12 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
   }
 
   function proceedThroughExit() {
-    setInspectContent({ title: 'Emergency Exit', lines: [...STORY.exitUnlocked] })
-    setOpenModal('inspect')
-    setTimeout(() => {
-      setOpenModal(null)
-      setInspectContent(null)
+    setFinalSprintActive(true)
+    roomAudio.running()
+    finalSprintTimeout.current = setTimeout(() => {
+      setFinalSprintActive(false)
       startEndingSequence('win')
-    }, 1400)
+    }, 2600)
   }
 
   // ---- Ending -------------------------------------------------------------------
@@ -452,7 +503,7 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
 
       {screen === 'title' && <TitleScreen onEnter={handleEnter} />}
 
-      {screen !== 'title' && (
+      {screen !== 'title' && !finalSprintActive && (
         <>
           <Hud
             locationTitle={LOCATIONS[state.currentLocation].name}
@@ -464,11 +515,14 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
             muted={muted}
             onToggleMute={toggleMute}
             onRestart={handleRestart}
-            onHint={() => void handleHintRequest()}
           />
           <Scene location={LOCATIONS[state.currentLocation]} onHotspotClick={handleHotspotClick} />
           <InventoryBar inventory={state.inventory} />
         </>
+      )}
+
+      {finalSprintActive && (
+        <FinalSprint background={LOCATIONS[state.currentLocation].background} lines={STORY.exitUnlocked} />
       )}
 
       <TravelTransition locationName={travelLocationName} />
@@ -484,14 +538,20 @@ export function Room02({ onSubmit, onHint }: RoomProps) {
         step={state.dnaStep}
         complete={state.dnaComplete}
         onRun={handleDnaRun}
-        onClose={() => setOpenModal(null)}
+        onClose={() => {
+          setOpenModal(null)
+          clearDnaSchedule()
+        }}
       />
       <RecordingModal
         open={openModal === 'recording'}
         step={state.recordingStep}
         complete={state.recordingComplete}
-        onPlay={handleRecordingPlay}
-        onClose={() => setOpenModal(null)}
+        onClose={() => {
+          setOpenModal(null)
+          roomAudio.stopRecordingLog()
+          clearRecordingSchedule()
+        }}
       />
       <TerminalModal
         open={openModal === 'terminal'}

@@ -21,16 +21,13 @@ export function EndingSequence({
     }
     const timeouts =
       variant === 'win'
-        ? [
-            setTimeout(() => roomAudio.footstep(), 0),
-            setTimeout(() => roomAudio.footstep(), 450),
-            setTimeout(() => roomAudio.roar(), 900),
-            setTimeout(() => setDinoShow(true), 1100),
-          ]
+        ? [setTimeout(() => roomAudio.roar(), 900), setTimeout(() => setDinoShow(true), 1100)]
         : [
+            setTimeout(() => roomAudio.heavySteps(), 0),
             setTimeout(() => roomAudio.roar(), 0),
-            setTimeout(() => roomAudio.roar(), 500),
             setTimeout(() => setDinoShow(true), 300),
+            setTimeout(() => roomAudio.scratchingMetal(), 600),
+            setTimeout(() => roomAudio.roar(), 900),
           ]
     const doneTimeout = setTimeout(onDone, lines.length * 1100 + 1600)
     return () => [...timeouts, doneTimeout].forEach(clearTimeout)

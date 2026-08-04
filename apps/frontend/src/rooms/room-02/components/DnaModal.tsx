@@ -29,11 +29,12 @@ export function DnaModal({
             <p key={i}>{line}</p>
           ))}
         </div>
-        {!complete && (
+        {step === 0 && (
           <button type="button" className="btn btn-terminal" onClick={onRun}>
-            RUN SEQUENCE &gt;
+            START ANALYSIS &gt;
           </button>
         )}
+        {step > 0 && !complete && <p className="terminal-hint">Running analysis&hellip;</p>}
         {complete && <p className="terminal-hint">Analysis complete. Logged: Obsidian Rex.</p>}
       </div>
     </ModalShell>

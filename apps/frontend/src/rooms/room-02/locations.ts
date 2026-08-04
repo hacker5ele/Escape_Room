@@ -1,8 +1,8 @@
 /**
  * The facility map. Each location is a full scene with hotspots positioned by
- * percentage so it reads as a place, not a grid of buttons. Backgrounds fall
- * back to a CSS gradient until real images are dropped into
- * `public/images/room-02/` under the filenames below.
+ * percentage so it reads as a place, not a grid of buttons. A `background` of
+ * `null` falls back to the plain CSS gradient in `.scene`; the corridor is the
+ * only location currently using a real image.
  */
 
 export type LocationId = 'lab' | 'control' | 'corridor'
@@ -17,7 +17,7 @@ export interface Hotspot {
 export interface RoomLocation {
   id: LocationId
   name: string
-  background: string
+  background: string | null
   entryText: string | null
   hotspots: Hotspot[]
 }
@@ -26,7 +26,7 @@ export const LOCATIONS: Record<LocationId, RoomLocation> = {
   lab: {
     id: 'lab',
     name: 'Genetics Laboratory',
-    background: '/images/room-02/lab_background.jpg',
+    background: null,
     entryText: 'Broken glass. Flickering monitors. Whatever happened here, it happened fast.',
     hotspots: [
       { id: 'dnaStation', label: 'DNA Analysis', x: 20, y: 62 },
@@ -40,7 +40,7 @@ export const LOCATIONS: Record<LocationId, RoomLocation> = {
   control: {
     id: 'control',
     name: 'Security Control Room',
-    background: '/images/room-02/control_room_background.jpg',
+    background: null,
     entryText: "Dozens of monitors. Most are dead. The ones still running aren't showing good news.",
     hotspots: [
       { id: 'statusBoard', label: 'Containment Status', x: 25, y: 40 },

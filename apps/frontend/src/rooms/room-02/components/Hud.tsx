@@ -15,7 +15,6 @@ export function Hud({
   muted,
   onToggleMute,
   onRestart,
-  onHint,
 }: {
   locationTitle: string
   objective: string
@@ -26,7 +25,6 @@ export function Hud({
   muted: boolean
   onToggleMute: () => void
   onRestart: () => void
-  onHint: () => void
 }) {
   return (
     <header className="hud">
@@ -61,9 +59,6 @@ export function Hud({
       </div>
 
       <div className="hud-right">
-        <button type="button" className="icon-btn" title="Ask for a hint" onClick={onHint}>
-          HINT
-        </button>
         <button type="button" className="icon-btn" title="Toggle sound" onClick={onToggleMute}>
           {muted ? 'UNMUTE' : 'MUTE'}
         </button>

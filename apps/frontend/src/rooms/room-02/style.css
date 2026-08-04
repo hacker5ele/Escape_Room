@@ -128,7 +128,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at center, #161d26 0%, #05070a 100%);
+  background-image:
+    radial-gradient(ellipse at center, rgba(22,29,38,0.75) 0%, rgba(5,7,10,0.92) 100%),
+    url('/images/room-02/horrorforest.jpg');
+  background-size: cover;
+  background-position: center;
 }
 
 .room-02 .title-card {
@@ -139,16 +143,13 @@
 
 .room-02 .glitch-title, .room-02 .mission-complete {
   font-size: clamp(2.5rem, 7vw, 4.5rem);
+  line-height: 1.3;
   letter-spacing: 0.3rem;
   color: var(--steel-bright);
   text-shadow: 0 0 20px rgba(127, 184, 232, 0.5);
   margin: 0 0 1.75rem;
 }
 
-.room-02 .title-word-gap {
-  display: inline-block;
-  width: 1.5rem;
-}
 .room-02 .mission-complete { color: var(--terminal-green); text-shadow: 0 0 20px rgba(55,255,139,0.5); }
 .room-02 .mission-complete.failure { color: var(--danger-red); text-shadow: 0 0 20px rgba(227,61,61,0.6); }
 
@@ -278,14 +279,17 @@
 .room-02 .icon-btn {
   background: rgba(26,32,41,0.7);
   border: 1px solid var(--steel);
-  color: var(--white-light);
-  border-radius: 50%;
-  width: 2.2rem;
-  height: 2.2rem;
+  color: var(--steel-bright);
+  border-radius: 20px;
+  padding: 0.45rem 0.9rem;
   cursor: pointer;
-  font-size: 1rem;
+  font-family: 'Consolas', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08rem;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.room-02 .icon-btn:hover { background: rgba(76,126,168,0.3); }
+.room-02 .icon-btn:hover { background: rgba(76,126,168,0.3); border-color: var(--steel-bright); color: var(--white-light); }
 
 /* ---------------------------------------------------------------------- */
 /* Scene + hotspots (point-and-click, full background per location)       */
@@ -311,6 +315,59 @@
   background-size: cover;
   background-position: center;
   transition: background-image 0.3s;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Final sprint — the run to the exit, after the override is accepted     */
+/* ---------------------------------------------------------------------- */
+.room-02 .final-sprint {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  background-color: var(--bg-black);
+  background-size: cover;
+  background-position: center;
+  animation:
+    r2SprintZoom 2.6s ease-in forwards,
+    r2SprintJudder 0.3s ease-in-out infinite;
+}
+@keyframes r2SprintZoom {
+  0% { transform: scale(1); filter: brightness(1); }
+  100% { transform: scale(1.5); filter: brightness(0.55); }
+}
+@keyframes r2SprintJudder {
+  0%, 100% { margin: 0; }
+  25% { margin: 4px 0 0 -3px; }
+  50% { margin: -3px 3px 0 0; }
+  75% { margin: 3px -2px 0 2px; }
+}
+
+.room-02 .final-sprint-caption {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 10vh;
+  text-align: center;
+  pointer-events: none;
+}
+.room-02 .final-sprint-caption p {
+  margin: 0 0 0.5rem;
+  color: var(--white-light);
+  font-size: 1.15rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  text-shadow: 0 2px 14px rgba(0,0,0,0.9);
+  opacity: 0;
+  animation: r2CaptionFade 2s ease forwards;
+}
+@keyframes r2CaptionFade {
+  0% { opacity: 0; transform: translateY(10px); }
+  20% { opacity: 1; transform: translateY(0); }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .room-02 .hotspot-layer { position: absolute; inset: 0; }

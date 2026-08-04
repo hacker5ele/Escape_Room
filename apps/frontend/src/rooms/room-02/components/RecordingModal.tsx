@@ -5,13 +5,11 @@ export function RecordingModal({
   open,
   step,
   complete,
-  onPlay,
   onClose,
 }: {
   open: boolean
   step: number
   complete: boolean
-  onPlay: () => void
   onClose: () => void
 }) {
   return (
@@ -31,11 +29,7 @@ export function RecordingModal({
             </p>
           ))}
         </div>
-        {!complete && (
-          <button type="button" className="btn btn-terminal" onClick={onPlay}>
-            PLAY LOG &gt;
-          </button>
-        )}
+        {!complete && <p className="terminal-hint">Playing recovered audio&hellip;</p>}
         {complete && <p className="terminal-hint">End of recording.</p>}
       </div>
     </ModalShell>

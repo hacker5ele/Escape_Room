@@ -10,9 +10,13 @@ export function Scene({
   return (
     <main
       className="scene"
-      style={{
-        backgroundImage: `linear-gradient(rgba(6,8,11,0.55), rgba(6,8,11,0.75)), url('${location.background}')`,
-      }}
+      style={
+        location.background
+          ? {
+              backgroundImage: `linear-gradient(rgba(6,8,11,0.55), rgba(6,8,11,0.75)), url('${location.background}')`,
+            }
+          : undefined
+      }
     >
       <div className="hotspot-layer">
         {location.hotspots.map((h) => (

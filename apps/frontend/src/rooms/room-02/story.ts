@@ -85,10 +85,12 @@ export const STORY = {
     footprints: [
       'A single clawed print, pressed deep into cracked tile.',
       "Whatever left it was walking, not running. It wasn't in a hurry.",
+      "Whatever's still running on the DNA station could tell you exactly what made this.",
     ],
     equipment: [
       'An overturned incubation rig, glass cracked but intact.',
       'Vines have already started growing up through the housing. This has been like this for a while.',
+      'Something this old should have a paper trail — Control probably still has it on file.',
     ],
   },
 
