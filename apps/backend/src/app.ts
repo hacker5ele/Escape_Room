@@ -29,6 +29,11 @@ import {
   type NotificationRepository,
 } from './repositories/notification.repository.js'
 import {
+  DynamoPartyRepository,
+  InMemoryPartyRepository,
+  type PartyRepository,
+} from './repositories/party.repository.js'
+import {
   DynamoMessageRepository,
   InMemoryMessageRepository,
   type MessageRepository,
@@ -36,6 +41,7 @@ import {
 import { GameService } from './services/game.service.js'
 import { ChatService } from './services/chat.service.js'
 import { LeaderboardService } from './services/leaderboard.service.js'
+import { PartyService } from './services/party.service.js'
 import { NotificationService } from './services/notification.service.js'
 import { FriendService } from './services/friend.service.js'
 import { InviteService } from './services/invite.service.js'
@@ -50,6 +56,7 @@ import { createFriendRoutes, createInviteRoutes } from './routes/friends.routes.
 import { createSyncRoutes } from './routes/sync.routes.js'
 import { createChatRoutes } from './routes/chat.routes.js'
 import { createLeaderboardRoutes } from './routes/leaderboard.routes.js'
+import { createPartyRoutes } from './routes/party.routes.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
 import {
   createAttemptRateLimiter,
@@ -67,6 +74,7 @@ export interface AppOptions {
   inviteRepository?: InviteRepository
   notificationRepository?: NotificationRepository
   messageRepository?: MessageRepository
+  partyRepository?: PartyRepository
   /** Injected by tests so the suite needs no Clerk key and makes no network calls. */
   authenticator?: Authenticator
   /** Attempts per IP per minute. Tests lower it to assert the limiter fires. */
@@ -140,11 +148,24 @@ export function createApp(options: AppOptions = {}): Express {
       ? new DynamoMessageRepository(config.messagesTableName, config.awsRegion)
       : new InMemoryMessageRepository())
 
-  const gameService = new GameService(repository)
+  const partyRepository =
+    options.partyRepository ??
+    (config.partyTableName
+      ? new DynamoPartyRepository(config.partyTableName, config.awsRegion)
+      : new InMemoryPartyRepository())
+
+  const gameService = new GameService(repository, partyRepository)
   const profileService = new ProfileService(profileRepository)
   const notificationService = new NotificationService(notificationRepository, profileService)
   const friendService = new FriendService(friendshipRepository, profileService, notificationService)
   const leaderboardService = new LeaderboardService(repository, friendService, profileService)
+  const partyService = new PartyService(
+    partyRepository,
+    repository,
+    friendService,
+    profileService,
+    notificationService,
+  )
   const chatService = new ChatService(
     messageRepository,
     friendService,
@@ -205,6 +226,11 @@ export function createApp(options: AppOptions = {}): Express {
   )
 
   app.use(
+    '/api/party',
+    createPartyRoutes(partyService, authenticator, socialWriteLimiter),
+  )
+
+  app.use(
     '/api/leaderboard',
     createLeaderboardRoutes(
       leaderboardService,
@@ -248,6 +274,7 @@ export function createApp(options: AppOptions = {}): Express {
       roomService,
       authenticator,
       createAttemptRateLimiter(options.attemptRateLimit ?? config.attemptRateLimit),
+      profileService,
     ),
   )
 

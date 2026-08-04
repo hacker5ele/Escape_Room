@@ -38,6 +38,15 @@ export const gameEventSchema = z.object({
    * Truncated server-side, because this is untrusted input.
    */
   answer: z.string().optional(),
+  /**
+   * Who did it. Absent on a solo game, where the answer is always "the owner".
+   *
+   * Present once a game is shared, so the log reads as a shared history —
+   * "Ada solved room 2" rather than "room 2 was solved".
+   */
+  actorUserId: z.string().optional(),
+  /** The actor's display name at the time, so the log renders without a lookup. */
+  actorName: z.string().optional(),
 })
 
 export type GameEvent = z.infer<typeof gameEventSchema>

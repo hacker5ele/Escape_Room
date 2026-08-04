@@ -3,7 +3,7 @@ import type { SessionResponse } from '@escape-room/shared'
 import type { GameService } from '../services/game.service.js'
 import type { ProfileService } from '../services/profile.service.js'
 import type { Authenticator } from '../http/authenticator.js'
-import { requireGame, requireUserId } from '../http/require-auth.js'
+import { requirePlayer, requireUserId } from '../http/require-auth.js'
 
 export function createSessionRoutes(
   games: GameService,
@@ -32,7 +32,8 @@ export function createSessionRoutes(
   // GET /api/sessions/me — the caller's game. No id in the URL: there is only
   // ever one game per account, and the server knows which account is calling.
   router.get('/me', async (req, res) => {
-    const body: SessionResponse = { session: await requireGame(req, authenticator, games) }
+    const { game } = await requirePlayer(req, authenticator, games)
+    const body: SessionResponse = { session: game }
     res.json(body)
   })
 

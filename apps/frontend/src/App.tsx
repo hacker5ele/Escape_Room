@@ -208,7 +208,7 @@ function GamePanel() {
 
       {state.kind === 'ready' && <Leaderboard solvedCount={state.game.solvedRooms.length} />}
 
-      {state.kind === 'ready' && <FriendsPanel meUserId={state.game.userId} />}
+      {state.kind === 'ready' && <FriendsPanel meUserId={state.game.userId} onGameChanged={() => void open()} />}
 
       {state.kind === 'ready' && <ActivityLog events={state.game.events} />}
     </>

@@ -89,6 +89,25 @@ function emptyFriendsResponse() {
   })
 }
 
+/** A party of one — nobody has joined, and the player hosts their own game. */
+function soloPartyResponse() {
+  return new Response(
+    JSON.stringify({
+      party: {
+        host: {
+          userId: 'user_alice',
+          username: 'alice42',
+          displayName: 'Alice Example',
+          imageUrl: null,
+        },
+        members: [],
+        isHost: true,
+      },
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  )
+}
+
 function emptyLeaderboardResponse() {
   return new Response(JSON.stringify({ entries: [] }), {
     status: 200,
@@ -114,6 +133,7 @@ beforeEach(() => {
     'fetch',
     vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input)
+      if (url.includes('/party')) return Promise.resolve(soloPartyResponse())
       if (url.includes('/leaderboard')) return Promise.resolve(emptyLeaderboardResponse())
       if (url.includes('/friends')) return Promise.resolve(emptyFriendsResponse())
       if (url.includes('/invites')) return Promise.resolve(emptyInvitesResponse())

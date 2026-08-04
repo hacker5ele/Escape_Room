@@ -15,6 +15,7 @@ import { useAppAuth } from '../auth/useAppAuth'
 import { useSync } from '../sync/useSync'
 import { Avatar } from './Avatar'
 import { ChatWindow } from './ChatWindow'
+import { PartyPanel } from './PartyPanel'
 
 const EMPTY: FriendListResponse = { friends: [], incoming: [], outgoing: [] }
 
@@ -25,7 +26,14 @@ const EMPTY: FriendListResponse = { friends: [], incoming: [], outgoing: [] }
  * state from the response rather than patching it optimistically. That costs a
  * little payload and buys never showing a friendship the server disagrees with.
  */
-export function FriendsPanel({ meUserId }: { meUserId: string }) {
+export function FriendsPanel({
+  meUserId,
+  onGameChanged,
+}: {
+  meUserId: string
+  /** Joining or leaving a party changes which game the page is showing. */
+  onGameChanged: () => void
+}) {
   const { authHeaders } = useAppAuth()
   const { notifications } = useSync()
   /** The friend whose conversation is open, if any. One at a time. */
@@ -75,7 +83,10 @@ export function FriendsPanel({ meUserId }: { meUserId: string }) {
   }, [newestNotificationId, reload])
 
   return (
-    <section className="space-y-5 rounded-lg border border-vault-800 bg-vault-900/60 p-5">
+    <>
+      <PartyPanel friends={lists.friends} onChanged={onGameChanged} />
+
+      <section className="space-y-5 rounded-lg border border-vault-800 bg-vault-900/60 p-5">
       <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">Friends</h2>
 
       {error && (
@@ -194,7 +205,8 @@ export function FriendsPanel({ meUserId }: { meUserId: string }) {
           })
         }
       />
-    </section>
+      </section>
+    </>
   )
 }
 

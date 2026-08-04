@@ -138,6 +138,7 @@ Where things belong:
 | Friends, invites, avatars | `apps/backend/src/{routes,services}/` | `apps/frontend/src/social/` |
 | Notifications / polling | `apps/backend/src/routes/sync.routes.ts` | `apps/frontend/src/sync/` |
 | Chat | `apps/backend/src/services/chat.service.ts` | `apps/frontend/src/social/ChatWindow.tsx` |
+| Co-op parties | `apps/backend/src/services/party.service.ts` | `apps/frontend/src/social/PartyPanel.tsx` |
 | Session handling | `apps/backend/src/services/session.service.ts` | `apps/frontend/src/game/` |
 
 ---
@@ -288,6 +289,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-04 | [0028](docs/adr/0028-co-op-play.md) | Co-op play: a player points at a host, and every write is versioned | Accepted |
 | 2026-08-04 | [0027](docs/adr/0027-friends-leaderboard.md) | A leaderboard scoped to friends, derived from the game | Accepted |
 | 2026-08-04 | [0026](docs/adr/0026-chat.md) | One-to-one chat; the conversation id is derived server-side | Accepted |
 | 2026-08-04 | [0025](docs/adr/0025-notifications-by-polling.md) | Notifications delivered by one polled `/api/sync`, not WebSockets | Accepted |
@@ -343,7 +345,11 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
 - **Leaderboard** — you and your friends, ranked by rooms solved, then finishing time, then hints.
   Derived from what the game already records rather than a separate score table, and scoped to
   friends — there is no global board ([ADR-0027](docs/adr/0027-friends-leaderboard.md)).
-- **Still to come** — co-op play.
+- **Co-op play** — invite a friend into your game, or join theirs. Both see the same progress and
+  either can solve; the log says who did what. A player points at the *host's* user id rather than a
+  synthetic game id, so the games table never had to be re-keyed and no progress was thrown away,
+  and every write is conditional on a version so two simultaneous solves cannot lose an update
+  ([ADR-0028](docs/adr/0028-co-op-play.md)).
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions

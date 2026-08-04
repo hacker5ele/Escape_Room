@@ -20,16 +20,23 @@ export async function requireUserId(req: Request, authenticator: Authenticator):
   return userId
 }
 
-/** The caller's game, failing the request if they have not started one. */
-export async function requireGame(
+/**
+ * The caller, and the game they are in.
+ *
+ * Since co-op that game may belong to somebody else, so the caller's own id is
+ * returned alongside it — `game.userId` is the *host*, not necessarily whoever
+ * is playing right now, and anything that attributes an action needs to know
+ * the difference.
+ */
+export async function requirePlayer(
   req: Request,
   authenticator: Authenticator,
   games: GameService,
-): Promise<GameSession> {
+): Promise<{ userId: string; game: GameSession }> {
   const userId = await requireUserId(req, authenticator)
   const game = await games.find(userId)
   if (!game) {
     throw ApiError.sessionNotFound()
   }
-  return game
+  return { userId, game }
 }

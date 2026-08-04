@@ -1,4 +1,4 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
+import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, DeleteCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
 import { gameSessionSchema, type GameSession } from '@escape-room/shared'
 
@@ -14,8 +14,24 @@ import { gameSessionSchema, type GameSession } from '@escape-room/shared'
  */
 export interface GameRepository {
   findByUserId(userId: string): Promise<GameSession | null>
+  /**
+   * Writes the game, refusing if somebody else has written it since it was read.
+   *
+   * The stored `version` must equal the one on `game`; the saved copy comes back
+   * with it incremented. Throws `GameConflictError` when it does not match,
+   * which the service handles by re-reading and re-applying. Nothing is lost and
+   * nothing is silently overwritten. See ADR-0028.
+   */
   save(game: GameSession): Promise<GameSession>
   deleteByUserId(userId: string): Promise<void>
+}
+
+/** Somebody else wrote this game between our read and our write. */
+export class GameConflictError extends Error {
+  constructor() {
+    super('This game changed while you were playing.')
+    this.name = 'GameConflictError'
+  }
 }
 
 /** Used by every test, and by a local run with no AWS credentials. */
@@ -28,8 +44,14 @@ export class InMemoryGameRepository implements GameRepository {
   }
 
   async save(game: GameSession): Promise<GameSession> {
-    this.#games.set(game.userId, game)
-    return structuredClone(game)
+    const current = this.#games.get(game.userId)
+    // Mirrors the DynamoDB condition below, so the retry path is exercised by
+    // the offline tests rather than only in a deployment.
+    if (current && current.version !== game.version) throw new GameConflictError()
+
+    const saved = { ...game, version: game.version + 1 }
+    this.#games.set(game.userId, saved)
+    return structuredClone(saved)
   }
 
   async deleteByUserId(userId: string): Promise<void> {
@@ -71,8 +93,28 @@ export class DynamoGameRepository implements GameRepository {
   }
 
   async save(game: GameSession): Promise<GameSession> {
-    await this.#client.send(new PutCommand({ TableName: this.#tableName, Item: game }))
-    return game
+    const saved = { ...game, version: game.version + 1 }
+
+    try {
+      await this.#client.send(
+        new PutCommand({
+          TableName: this.#tableName,
+          Item: saved,
+          // Either the game does not exist yet, or its stored version is the
+          // one we read. Without this, two players solving at the same moment
+          // each write their own copy and the second silently discards the
+          // first — a bug that never appears in testing and always appears in
+          // a demo.
+          ConditionExpression: 'attribute_not_exists(userId) OR version = :expected',
+          ExpressionAttributeValues: { ':expected': game.version },
+        }),
+      )
+    } catch (error) {
+      if (error instanceof ConditionalCheckFailedException) throw new GameConflictError()
+      throw error
+    }
+
+    return saved
   }
 
   async deleteByUserId(userId: string): Promise<void> {
