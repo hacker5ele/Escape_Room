@@ -135,6 +135,7 @@ Where things belong:
 | A room's puzzle & solution | `apps/backend/src/domain/rooms/room-0N.ts` | — |
 | A room's look & interaction | — | `apps/frontend/src/rooms/room-0N/` |
 | Shared types / API shapes | `packages/shared/src/` | same file — one source |
+| Friends, invites, avatars | `apps/backend/src/{routes,services}/` | `apps/frontend/src/social/` |
 | Session handling | `apps/backend/src/services/session.service.ts` | `apps/frontend/src/game/` |
 
 ---
@@ -285,6 +286,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-04 | [0024](docs/adr/0024-friend-graph-and-invite-links.md) | Friend graph stored both ways; revocable invite links | Accepted |
 | 2026-08-04 | [0023](docs/adr/0023-public-profiles.md) | Cache a public profile per player | Accepted |
 | 2026-08-03 | [0022](docs/adr/0022-local-development-auth.md) | Local development runs without Clerk | Accepted |
 | 2026-08-03 | [0021](docs/adr/0021-unique-usernames.md) | Every player has a unique username, enforced by Clerk | Accepted |
@@ -309,7 +311,7 @@ approved the corresponding ADR.
 | 2026-08-03 | [0002](docs/adr/0002-monorepo-npm-workspaces.md) | npm workspaces monorepo | Accepted |
 | 2026-08-03 | [0001](docs/adr/0001-project-choice.md) | We build Projekt A, the digital escape room | Accepted |
 
-All eleven were approved by Nepomuk Crhonek on 2026-08-03.
+All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03, the rest as they were written.
 
 ### Where the code stands
 
@@ -322,6 +324,10 @@ All eleven were approved by Nepomuk Crhonek on 2026-08-03.
   themselves are the team's work.
 - **Accounts** — players register with Clerk before they can reach anything. Progress and an activity
   log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
+- **Friends** — add somebody by username, or send a revocable invite link that shows who is inviting
+  before the recipient has an account. Accept, reject, unfriend and block all work
+  ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)). Notifications, chat, a friends
+  leaderboard and co-op play build on this and are still to come.
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions

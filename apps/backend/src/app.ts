@@ -13,7 +13,19 @@ import {
   InMemoryProfileRepository,
   type ProfileRepository,
 } from './repositories/profile.repository.js'
+import {
+  DynamoFriendshipRepository,
+  InMemoryFriendshipRepository,
+  type FriendshipRepository,
+} from './repositories/friendship.repository.js'
+import {
+  DynamoInviteRepository,
+  InMemoryInviteRepository,
+  type InviteRepository,
+} from './repositories/invite.repository.js'
 import { GameService } from './services/game.service.js'
+import { FriendService } from './services/friend.service.js'
+import { InviteService } from './services/invite.service.js'
 import { ProfileService } from './services/profile.service.js'
 import { RoomService } from './services/room.service.js'
 import { createClerkAuthenticator, type Authenticator } from './http/authenticator.js'
@@ -21,8 +33,13 @@ import { createLocalAuthenticator } from './http/local-authenticator.js'
 import { createHealthRoutes } from './routes/health.routes.js'
 import { createSessionRoutes } from './routes/sessions.routes.js'
 import { createProfileRoutes } from './routes/profiles.routes.js'
+import { createFriendRoutes, createInviteRoutes } from './routes/friends.routes.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
-import { createAttemptRateLimiter, createLookupRateLimiter } from './http/rate-limit.js'
+import {
+  createAttemptRateLimiter,
+  createLookupRateLimiter,
+  createRateLimiter,
+} from './http/rate-limit.js'
 import { createOriginGuard } from './http/origin-guard.js'
 import { errorHandler, notFoundHandler } from './http/error-handler.js'
 
@@ -30,6 +47,8 @@ export interface AppOptions {
   /** Injected by tests so each test gets an isolated store. */
   gameRepository?: GameRepository
   profileRepository?: ProfileRepository
+  friendshipRepository?: FriendshipRepository
+  inviteRepository?: InviteRepository
   /** Injected by tests so the suite needs no Clerk key and makes no network calls. */
   authenticator?: Authenticator
   /** Attempts per IP per minute. Tests lower it to assert the limiter fires. */
@@ -79,8 +98,22 @@ export function createApp(options: AppOptions = {}): Express {
       ? new DynamoProfileRepository(config.profilesTableName, config.awsRegion)
       : new InMemoryProfileRepository())
 
+  const friendshipRepository =
+    options.friendshipRepository ??
+    (config.friendshipsTableName
+      ? new DynamoFriendshipRepository(config.friendshipsTableName, config.awsRegion)
+      : new InMemoryFriendshipRepository())
+
+  const inviteRepository =
+    options.inviteRepository ??
+    (config.invitesTableName
+      ? new DynamoInviteRepository(config.invitesTableName, config.awsRegion)
+      : new InMemoryInviteRepository())
+
   const gameService = new GameService(repository)
   const profileService = new ProfileService(profileRepository)
+  const friendService = new FriendService(friendshipRepository, profileService)
+  const inviteService = new InviteService(inviteRepository, profileService)
   const roomService = new RoomService(gameService)
 
   const app = express()
@@ -113,6 +146,26 @@ export function createApp(options: AppOptions = {}): Express {
   app.use(
     '/api/profiles',
     createProfileRoutes(profileService, authenticator, createLookupRateLimiter()),
+  )
+  // Social writes share one budget: creating links, sending requests and
+  // accepting are all cheap individually and all worth capping together.
+  const socialWriteLimiter = createRateLimiter({
+    limit: 30,
+    message: 'Slow down a moment.',
+  })
+
+  app.use('/api/friends', createFriendRoutes(friendService, profileService, authenticator, socialWriteLimiter))
+  app.use(
+    '/api/invites',
+    createInviteRoutes(
+      inviteService,
+      friendService,
+      authenticator,
+      socialWriteLimiter,
+      // The only unauthenticated endpoint that reads the database, so it gets
+      // the tightest budget of anything here.
+      createRateLimiter({ limit: 20, message: 'Too many requests. Wait a moment.' }),
+    ),
   )
   app.use(
     '/api/rooms',

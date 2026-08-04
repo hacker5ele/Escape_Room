@@ -81,6 +81,11 @@ export const API_ERROR_CODES = [
   'VALIDATION_ERROR',
   'SESSION_NOT_FOUND',
   'PROFILE_NOT_FOUND',
+  /** The invite link is unknown, revoked or expired — all reported identically. */
+  'INVITE_INVALID',
+  'ALREADY_FRIENDS',
+  'CANNOT_FRIEND_SELF',
+  'BLOCKED',
   'ROOM_NOT_FOUND',
   'ROOM_LOCKED',
   'ROOM_ALREADY_SOLVED',

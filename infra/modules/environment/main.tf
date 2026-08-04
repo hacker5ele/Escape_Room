@@ -83,6 +83,75 @@ resource "aws_dynamodb_table" "profiles" {
 }
 
 # --------------------------------------------------------------------------
+# The social graph. See ADR-0024.
+# --------------------------------------------------------------------------
+
+# Both directions of every friendship are stored: (A,B) and (B,A), written
+# together in a transaction. That makes "list my friends" a single Query
+# instead of a query plus a scan of the reverse direction, and it means a
+# crash can never leave a one-sided friendship behind.
+resource "aws_dynamodb_table" "friendships" {
+  name         = "${local.prefix}-friendships"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+  range_key    = "otherUserId"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "otherUserId"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = false
+  }
+
+  tags = var.tags
+}
+
+# Invite links. The token is the key, so following a link is a single GetItem.
+resource "aws_dynamodb_table" "invites" {
+  name         = "${local.prefix}-invites"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "token"
+
+  attribute {
+    name = "token"
+    type = "S"
+  }
+
+  attribute {
+    name = "inviterUserId"
+    type = "S"
+  }
+
+  # "Show me my own links, so I can share or revoke them."
+  global_secondary_index {
+    name            = "by-inviter"
+    hash_key        = "inviterUserId"
+    projection_type = "ALL"
+  }
+
+  # Housekeeping only. TTL deletion is best-effort and can lag by hours, so
+  # expiry is enforced in the service on every read; this just stops the table
+  # growing forever.
+  ttl {
+    attribute_name = "expiresAtEpoch"
+    enabled        = true
+  }
+
+  point_in_time_recovery {
+    enabled = false
+  }
+
+  tags = var.tags
+}
+
+# --------------------------------------------------------------------------
 # Frontend: private S3 bucket, reachable only through CloudFront
 # --------------------------------------------------------------------------
 
@@ -347,10 +416,13 @@ data "aws_iam_policy_document" "apprunner_instance" {
     resources = [
       aws_dynamodb_table.games.arn,
       aws_dynamodb_table.profiles.arn,
+      aws_dynamodb_table.friendships.arn,
+      aws_dynamodb_table.invites.arn,
       # Querying a GSI requires the index ARN as well as the table's; granting
       # only the table is the usual way this fails at runtime rather than plan
       # time.
       "${aws_dynamodb_table.profiles.arn}/index/*",
+      "${aws_dynamodb_table.invites.arn}/index/*",
     ]
   }
 
@@ -403,9 +475,11 @@ resource "aws_apprunner_service" "api" {
           CORS_ORIGIN        = "https://${var.domain_name}"
           # Presence of this selects the DynamoDB repository over the in-memory
           # one, so a local run without AWS credentials still works.
-          GAMES_TABLE_NAME    = aws_dynamodb_table.games.name
-          PROFILES_TABLE_NAME = aws_dynamodb_table.profiles.name
-          AWS_REGION          = "us-east-1"
+          GAMES_TABLE_NAME       = aws_dynamodb_table.games.name
+          PROFILES_TABLE_NAME    = aws_dynamodb_table.profiles.name
+          FRIENDSHIPS_TABLE_NAME = aws_dynamodb_table.friendships.name
+          INVITES_TABLE_NAME     = aws_dynamodb_table.invites.name
+          AWS_REGION             = "us-east-1"
           # The backend needs this too, not just the browser — see the variable.
           CLERK_PUBLISHABLE_KEY = var.clerk_publishable_key
         }

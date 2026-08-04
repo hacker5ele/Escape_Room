@@ -6,6 +6,9 @@ import { ApiRequestError, startOrResumeGame } from './api/game'
 import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
 import { Avatar } from './social/Avatar'
+import { FriendsPanel } from './social/FriendsPanel'
+import { InvitePage } from './social/InvitePage'
+import { inviteTokenFromPath } from './routing'
 import { LocalSignIn } from './auth/LocalSignIn'
 import { useAppAuth } from './auth/useAppAuth'
 
@@ -22,6 +25,10 @@ import { useAppAuth } from './auth/useAppAuth'
  */
 export function App() {
   const { isLoaded, isSignedIn, mode } = useAppAuth()
+
+  // Read after the hook, never before it, so the hook order cannot change.
+  const inviteToken = inviteTokenFromPath(window.location.pathname)
+  if (inviteToken) return <InvitePage token={inviteToken} />
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-10 px-6 py-16">
@@ -193,6 +200,8 @@ function GamePanel() {
           API agree about whose game this is.
         </p>
       </section>
+
+      {state.kind === 'ready' && <FriendsPanel />}
 
       {state.kind === 'ready' && <ActivityLog events={state.game.events} />}
     </>
