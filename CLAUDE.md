@@ -288,6 +288,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-04 | [0027](docs/adr/0027-friends-leaderboard.md) | A leaderboard scoped to friends, derived from the game | Accepted |
 | 2026-08-04 | [0026](docs/adr/0026-chat.md) | One-to-one chat; the conversation id is derived server-side | Accepted |
 | 2026-08-04 | [0025](docs/adr/0025-notifications-by-polling.md) | Notifications delivered by one polled `/api/sync`, not WebSockets | Accepted |
 | 2026-08-04 | [0024](docs/adr/0024-friend-graph-and-invite-links.md) | Friend graph stored both ways; revocable invite links | Accepted |
@@ -339,7 +340,10 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   ids server-side and never accepted from a client, so no request can name a conversation the caller
   is not part of; friendship is re-checked on every read and write, so blocking closes an open
   window ([ADR-0026](docs/adr/0026-chat.md)).
-- **Still to come** — a friends leaderboard, and co-op play.
+- **Leaderboard** — you and your friends, ranked by rooms solved, then finishing time, then hints.
+  Derived from what the game already records rather than a separate score table, and scoped to
+  friends — there is no global board ([ADR-0027](docs/adr/0027-friends-leaderboard.md)).
+- **Still to come** — co-op play.
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions

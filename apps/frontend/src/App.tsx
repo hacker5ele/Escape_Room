@@ -7,6 +7,7 @@ import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
 import { Avatar } from './social/Avatar'
 import { FriendsPanel } from './social/FriendsPanel'
+import { Leaderboard } from './social/Leaderboard'
 import { InvitePage } from './social/InvitePage'
 import { inviteTokenFromPath } from './routing'
 import { NotificationBell } from './sync/NotificationBell'
@@ -204,6 +205,8 @@ function GamePanel() {
           API agree about whose game this is.
         </p>
       </section>
+
+      {state.kind === 'ready' && <Leaderboard solvedCount={state.game.solvedRooms.length} />}
 
       {state.kind === 'ready' && <FriendsPanel meUserId={state.game.userId} />}
 

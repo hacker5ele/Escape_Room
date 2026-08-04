@@ -89,6 +89,13 @@ function emptyFriendsResponse() {
   })
 }
 
+function emptyLeaderboardResponse() {
+  return new Response(JSON.stringify({ entries: [] }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
 function emptyInvitesResponse() {
   return new Response(JSON.stringify({ invites: [] }), {
     status: 200,
@@ -107,6 +114,7 @@ beforeEach(() => {
     'fetch',
     vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input)
+      if (url.includes('/leaderboard')) return Promise.resolve(emptyLeaderboardResponse())
       if (url.includes('/friends')) return Promise.resolve(emptyFriendsResponse())
       if (url.includes('/invites')) return Promise.resolve(emptyInvitesResponse())
       return Promise.resolve(gameResponse())

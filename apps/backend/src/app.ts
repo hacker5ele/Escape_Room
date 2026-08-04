@@ -35,6 +35,7 @@ import {
 } from './repositories/message.repository.js'
 import { GameService } from './services/game.service.js'
 import { ChatService } from './services/chat.service.js'
+import { LeaderboardService } from './services/leaderboard.service.js'
 import { NotificationService } from './services/notification.service.js'
 import { FriendService } from './services/friend.service.js'
 import { InviteService } from './services/invite.service.js'
@@ -48,6 +49,7 @@ import { createProfileRoutes } from './routes/profiles.routes.js'
 import { createFriendRoutes, createInviteRoutes } from './routes/friends.routes.js'
 import { createSyncRoutes } from './routes/sync.routes.js'
 import { createChatRoutes } from './routes/chat.routes.js'
+import { createLeaderboardRoutes } from './routes/leaderboard.routes.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
 import {
   createAttemptRateLimiter,
@@ -142,6 +144,7 @@ export function createApp(options: AppOptions = {}): Express {
   const profileService = new ProfileService(profileRepository)
   const notificationService = new NotificationService(notificationRepository, profileService)
   const friendService = new FriendService(friendshipRepository, profileService, notificationService)
+  const leaderboardService = new LeaderboardService(repository, friendService, profileService)
   const chatService = new ChatService(
     messageRepository,
     friendService,
@@ -198,6 +201,16 @@ export function createApp(options: AppOptions = {}): Express {
       notificationService,
       authenticator,
       createRateLimiter({ limit: 240, message: 'Polling too fast. Slow down.' }),
+    ),
+  )
+
+  app.use(
+    '/api/leaderboard',
+    createLeaderboardRoutes(
+      leaderboardService,
+      authenticator,
+      // One read per friend, so this is the most expensive endpoint here.
+      createRateLimiter({ limit: 60, message: 'Slow down a moment.' }),
     ),
   )
 
