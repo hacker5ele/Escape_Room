@@ -121,7 +121,7 @@ their place.
 ## Alternatives considered
 
 **Re-keying `games` to a synthetic `gameId`.** The textbook design and the original plan. Rejected on
-the destructive-migration grounds above. Worth revisiting after the project week if games ever need
+the destructive-migration grounds above. Worth revisiting later if games ever need
 to outlive their host.
 
 **Merging progress on join.** No correct answer, and surprising however it is resolved.

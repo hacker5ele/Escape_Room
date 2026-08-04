@@ -55,7 +55,7 @@ publishes, which contain nothing sensitive.
 
 ## Consequences
 
-- There is no AWS credential in GitHub to leak, rotate, or forget about after the project week.
+- There is no AWS credential in GitHub to leak, rotate, or forget about once the project is over.
 - Credentials are minted per run and expire in an hour.
 - The blast radius of a compromised workflow is this project's own resources. It cannot reach the EKS
   cluster, the other Route 53 zones, or the other 40 buckets in the account.

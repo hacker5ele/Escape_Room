@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Der digitale Escape Room \u2014 Projektwoche KW 32",
+  "description": "Der digitale Escape Room",
   "engines": {
     "node": ">=22"
   },

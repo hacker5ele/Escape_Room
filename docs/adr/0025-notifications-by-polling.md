@@ -110,7 +110,7 @@ picture the person has since changed. One batched profile lookup per page covers
 ## Alternatives considered
 
 **WebSockets on ECS Fargate behind an ALB.** The technically correct answer, and about $16/month plus
-a day of work to migrate off App Runner. Not worth it in a five-day project week. This is the escape
+a day of work to migrate off App Runner. Not worth it in a five-day build. This is the escape
 hatch if polling ever stops being enough.
 
 **Server-sent events.** Cheaper than WebSockets and a natural fit for one-way notifications, but the

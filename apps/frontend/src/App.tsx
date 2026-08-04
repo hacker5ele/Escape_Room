@@ -35,9 +35,6 @@ export function App() {
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-10 px-6 py-16">
       <header className="space-y-3">
-        <p className="font-mono text-xs tracking-[0.3em] text-signal-400 uppercase">
-          Projektwoche KW 32
-        </p>
         <h1 className="font-mono text-4xl font-semibold text-vault-100 sm:text-5xl">
           Der digitale Escape Room
         </h1>

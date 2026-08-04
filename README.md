@@ -3,7 +3,7 @@
 A web-based escape room: a sequence of rooms, each holding a puzzle. A room only
 opens once the one before it has been solved.
 
-Built during project week KW 32 by Abigail Romero, Nepomuk Crhonek, Inaam Ahmed
+Built by Abigail Romero, Nepomuk Crhonek, Inaam Ahmed
 and Eleonora Vynogradova.
 
 > **Read [`CLAUDE.md`](CLAUDE.md) before your first commit.** It holds the team
