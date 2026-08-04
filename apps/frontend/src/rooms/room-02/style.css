@@ -518,6 +518,84 @@
 .room-02 .terminal-hint { color: var(--warn-yellow); margin-top: 0.6rem; font-size: 0.9rem; }
 .room-02 .static-line { color: var(--text-dim); font-style: italic; letter-spacing: 0.1rem; }
 
+/* ---------------------------------------------------------------------- */
+/* Circuit repair (gates the recovered audio log)                         */
+/* ---------------------------------------------------------------------- */
+.room-02 .circuit-intro { color: var(--white-light); font-family: 'Segoe UI', sans-serif; }
+
+.room-02 .circuit-board {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin: 1.2rem 0;
+}
+.room-02 .circuit-anchor {
+  font-weight: 700;
+  letter-spacing: 0.08rem;
+  color: var(--steel-bright);
+  border: 1px solid var(--steel);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  background: rgba(76,126,168,0.12);
+  font-size: 0.8rem;
+}
+.room-02 .circuit-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 3rem);
+  grid-template-rows: repeat(3, 3rem);
+  gap: 2px;
+  background: #05070a;
+  padding: 4px;
+  border: 1px solid var(--steel);
+  border-radius: 6px;
+}
+.room-02 .circuit-cell { position: relative; width: 3rem; height: 3rem; }
+.room-02 .circuit-cell-empty {
+  background: repeating-linear-gradient(45deg, rgba(0,0,0,0.4) 0 4px, transparent 4px 8px);
+}
+.room-02 .circuit-tile {
+  background: rgba(26,32,41,0.7);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.2s ease, filter 0.2s;
+}
+.room-02 .circuit-tile:hover { filter: brightness(1.4); }
+.room-02 .circuit-tile::before,
+.room-02 .circuit-tile::after {
+  content: '';
+  position: absolute;
+  background: var(--text-dim);
+}
+/* straight (base rotation, edges L/R): full-width bar through the center */
+.room-02 .circuit-straight::before,
+.room-02 .circuit-straight::after {
+  top: calc(50% - 3px);
+  width: 50%;
+  height: 6px;
+}
+.room-02 .circuit-straight::before { left: 0; }
+.room-02 .circuit-straight::after { right: 0; }
+/* corner (base rotation, edges T/R): arm up, arm right */
+.room-02 .circuit-corner::before {
+  top: 0;
+  left: calc(50% - 3px);
+  width: 6px;
+  height: 50%;
+}
+.room-02 .circuit-corner::after {
+  top: calc(50% - 3px);
+  right: 0;
+  width: 50%;
+  height: 6px;
+}
+.room-02 .circuit-tile.live::before,
+.room-02 .circuit-tile.live::after {
+  background: var(--terminal-green);
+  box-shadow: 0 0 8px rgba(55,255,139,0.8);
+}
+
 .room-02 .evidence-modal { width: min(620px, 94vw); }
 .room-02 .evidence-list { display: flex; flex-direction: column; gap: 0.6rem; margin: 1rem 0; }
 .room-02 .evidence-card {

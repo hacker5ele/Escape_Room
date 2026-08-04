@@ -13,6 +13,7 @@ import { InventoryBar } from './components/InventoryBar'
 import { TravelTransition } from './components/TravelTransition'
 import { InspectModal } from './components/InspectModal'
 import { DnaModal } from './components/DnaModal'
+import { CircuitModal } from './components/CircuitModal'
 import { RecordingModal } from './components/RecordingModal'
 import { TerminalModal } from './components/TerminalModal'
 import { LockModal } from './components/LockModal'
@@ -24,7 +25,7 @@ import { EndingSequence } from './components/EndingSequence'
 import { EndScreen } from './components/EndScreen'
 import { Toast } from './components/Toast'
 
-type ModalKind = 'inspect' | 'dna' | 'recording' | 'terminal' | 'lock' | 'evidence' | 'powerRouter' | null
+type ModalKind = 'inspect' | 'dna' | 'circuit' | 'recording' | 'terminal' | 'lock' | 'evidence' | 'powerRouter' | null
 type Screen = 'title' | 'game' | 'end'
 type EndingVariant = 'win' | 'death'
 
@@ -179,8 +180,12 @@ export function Room02({ onSubmit }: RoomProps) {
         setOpenModal('dna')
         break
       case 'recording':
-        setOpenModal('recording')
-        void roomAudio.startRecordingLog().then(scheduleRecordingReveal)
+        if (state.circuitSolved) {
+          setOpenModal('recording')
+          void roomAudio.startRecordingLog().then(scheduleRecordingReveal)
+        } else {
+          setOpenModal('circuit')
+        }
         break
       case 'terminal':
         setOpenModal('terminal')
@@ -292,6 +297,15 @@ export function Room02({ onSubmit }: RoomProps) {
       showToast('Access granted.')
       setOpenModal('evidence')
     }
+  }
+
+  // ---- Circuit repair (gates the recovered audio log) -------------------------
+  // Playback was already started by CircuitModal itself, synchronously inside the
+  // winning click, so the browser doesn't treat it as unrequested autoplay.
+  function handleCircuitSolved(duration: number) {
+    dispatch({ type: 'SOLVE_CIRCUIT' })
+    setOpenModal('recording')
+    scheduleRecordingReveal(duration)
   }
 
   // ---- DNA / recording steppers -----------------------------------------------
@@ -543,6 +557,7 @@ export function Room02({ onSubmit }: RoomProps) {
           clearDnaSchedule()
         }}
       />
+      <CircuitModal open={openModal === 'circuit'} onSolved={handleCircuitSolved} onClose={() => setOpenModal(null)} />
       <RecordingModal
         open={openModal === 'recording'}
         step={state.recordingStep}

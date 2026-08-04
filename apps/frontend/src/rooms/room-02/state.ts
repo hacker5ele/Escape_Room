@@ -10,6 +10,7 @@ export interface RoomState {
   // Laboratory discovery flags
   dnaStep: number
   dnaComplete: boolean
+  circuitSolved: boolean
   recordingStep: number
   recordingComplete: boolean
   terminalUnlocked: boolean
@@ -39,6 +40,7 @@ export function createInitialState(): RoomState {
 
     dnaStep: 0,
     dnaComplete: false,
+    circuitSolved: false,
     recordingStep: 0,
     recordingComplete: false,
     terminalUnlocked: false,
@@ -61,6 +63,7 @@ export function createInitialState(): RoomState {
 
 export type RoomAction =
   | { type: 'ADVANCE_DNA' }
+  | { type: 'SOLVE_CIRCUIT' }
   | { type: 'ADVANCE_RECORDING' }
   | { type: 'ADD_ITEM'; item: ItemId }
   | { type: 'UNLOCK_LOCATION'; location: LocationId }
@@ -87,6 +90,8 @@ export function roomReducer(state: RoomState, action: RoomAction): RoomState {
       const dnaStep = state.dnaStep + 1
       return { ...state, dnaStep, dnaComplete: dnaStep >= STORY.dnaSequence.length }
     }
+    case 'SOLVE_CIRCUIT':
+      return { ...state, circuitSolved: true }
     case 'ADVANCE_RECORDING': {
       const recordingStep = state.recordingStep + 1
       return { ...state, recordingStep, recordingComplete: recordingStep >= STORY.recordingLines.length }
