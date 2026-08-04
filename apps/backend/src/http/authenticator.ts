@@ -13,6 +13,8 @@ export interface PlayerProfile {
   username: string | null
   firstName: string | null
   lastName: string | null
+  /** Avatar URL, or null. Public CDN URL from the identity provider. */
+  imageUrl: string | null
 }
 
 /**
@@ -58,6 +60,7 @@ export function createClerkAuthenticator(): Authenticator {
           username: user.username ?? null,
           firstName: user.firstName ?? null,
           lastName: user.lastName ?? null,
+          imageUrl: user.imageUrl ?? null,
         }
       } catch {
         // A lookup failing must not read as "no username" — that would send a

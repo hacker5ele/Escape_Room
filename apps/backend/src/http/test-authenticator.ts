@@ -26,6 +26,7 @@ export function createTestAuthenticator(): Authenticator {
         username: userId === TEST_USER_WITHOUT_USERNAME ? null : `handle_${userId}`,
         firstName: userId === TEST_USER_WITHOUT_NAME ? null : 'Test',
         lastName: userId === TEST_USER_WITHOUT_NAME ? null : 'Player',
+        imageUrl: null,
       }
     },
   }

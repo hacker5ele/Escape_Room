@@ -5,6 +5,12 @@ import { ROOM_IDS } from '@escape-room/shared'
 import { ApiRequestError, startOrResumeGame } from './api/game'
 import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
+import { Avatar } from './social/Avatar'
+import { FriendsPanel } from './social/FriendsPanel'
+import { Leaderboard } from './social/Leaderboard'
+import { InvitePage } from './social/InvitePage'
+import { inviteTokenFromPath } from './routing'
+import { NotificationBell } from './sync/NotificationBell'
 import { LocalSignIn } from './auth/LocalSignIn'
 import { useAppAuth } from './auth/useAppAuth'
 
@@ -21,6 +27,10 @@ import { useAppAuth } from './auth/useAppAuth'
  */
 export function App() {
   const { isLoaded, isSignedIn, mode } = useAppAuth()
+
+  // Read after the hook, never before it, so the hook order cannot change.
+  const inviteToken = inviteTokenFromPath(window.location.pathname)
+  if (inviteToken) return <InvitePage token={inviteToken} />
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-10 px-6 py-16">
@@ -87,7 +97,7 @@ type GameState =
   | { kind: 'error'; message: string }
 
 function GamePanel() {
-  const { authHeaders, mode, signOut } = useAppAuth()
+  const { authHeaders, mode, signOut, profile } = useAppAuth()
   const [state, setState] = useState<GameState>({ kind: 'loading' })
 
   // Held in a ref, and the effect runs on mount only.
@@ -129,27 +139,45 @@ function GamePanel() {
   return (
     <>
       <section className="flex items-center justify-between rounded-lg border border-vault-800 bg-vault-900/60 p-5">
-        <div>
-          <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">Your game</h2>
-          <p className="mt-2 font-mono text-sm text-vault-100">
-            {state.kind === 'loading' && 'Opening your game…'}
-            {state.kind === 'ready' &&
-              `${state.game.username} — ${state.game.solvedRooms.length}/${ROOM_IDS.length} rooms solved`}
-            {state.kind === 'error' && `Could not load your game: ${state.message}`}
-          </p>
+        <div className="flex items-center gap-4">
+          {state.kind === 'ready' && (
+            <Avatar
+              size={44}
+              subject={{
+                userId: state.game.userId,
+                username: state.game.username,
+                displayName: state.game.playerName,
+                imageUrl: profile?.imageUrl ?? null,
+              }}
+            />
+          )}
+          <div>
+            <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+              Your game
+            </h2>
+            <p className="mt-2 font-mono text-sm text-vault-100">
+              {state.kind === 'loading' && 'Opening your game…'}
+              {state.kind === 'ready' &&
+                `${state.game.username} — ${state.game.solvedRooms.length}/${ROOM_IDS.length} rooms solved`}
+              {state.kind === 'error' && `Could not load your game: ${state.message}`}
+            </p>
+          </div>
         </div>
 
-        {mode === 'clerk' ? (
-          <UserButton />
-        ) : (
-          <button
-            type="button"
-            onClick={signOut}
-            className="rounded border border-vault-700 px-3 py-1.5 font-mono text-xs text-vault-300 transition hover:border-vault-500"
-          >
-            Sign out
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <NotificationBell />
+          {mode === 'clerk' ? (
+            <UserButton />
+          ) : (
+            <button
+              type="button"
+              onClick={signOut}
+              className="rounded border border-vault-700 px-3 py-1.5 font-mono text-xs text-vault-300 transition hover:border-vault-500"
+            >
+              Sign out
+            </button>
+          )}
+        </div>
       </section>
 
       <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">
@@ -177,6 +205,10 @@ function GamePanel() {
           API agree about whose game this is.
         </p>
       </section>
+
+      {state.kind === 'ready' && <Leaderboard solvedCount={state.game.solvedRooms.length} />}
+
+      {state.kind === 'ready' && <FriendsPanel meUserId={state.game.userId} onGameChanged={() => void open()} />}
 
       {state.kind === 'ready' && <ActivityLog events={state.game.events} />}
     </>

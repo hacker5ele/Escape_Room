@@ -26,6 +26,17 @@ export class ApiError extends Error {
     )
   }
 
+  /**
+   * One error for unknown, revoked and expired links alike.
+   *
+   * Deliberately indistinguishable: reporting them separately would let
+   * somebody probing tokens learn which ones once existed, and telling a
+   * blocked person their link was revoked invites a second account.
+   */
+  static inviteInvalid(): ApiError {
+    return new ApiError(404, 'INVITE_INVALID', 'That invite link is no longer valid.')
+  }
+
   static sessionNotFound(): ApiError {
     return new ApiError(404, 'SESSION_NOT_FOUND', 'No game session with that id. Start a new game.')
   }

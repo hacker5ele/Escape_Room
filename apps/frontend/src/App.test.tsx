@@ -81,10 +81,65 @@ function profileIncompleteResponse() {
   )
 }
 
+/** Empty social lists, so the friends panel renders without a network. */
+function emptyFriendsResponse() {
+  return new Response(JSON.stringify({ friends: [], incoming: [], outgoing: [] }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+/** A party of one — nobody has joined, and the player hosts their own game. */
+function soloPartyResponse() {
+  return new Response(
+    JSON.stringify({
+      party: {
+        host: {
+          userId: 'user_alice',
+          username: 'alice42',
+          displayName: 'Alice Example',
+          imageUrl: null,
+        },
+        members: [],
+        isHost: true,
+      },
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  )
+}
+
+function emptyLeaderboardResponse() {
+  return new Response(JSON.stringify({ entries: [] }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function emptyInvitesResponse() {
+  return new Response(JSON.stringify({ invites: [] }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
 beforeEach(() => {
+  // Routed by path rather than one canned reply for everything: the page now
+  // makes three different calls, and answering all of them with a game session
+  // would test nothing while looking like it passed.
+  //
   // A fresh Response per call — a consumed body throws rather than quietly
   // returning the wrong thing.
-  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(gameResponse())))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/party')) return Promise.resolve(soloPartyResponse())
+      if (url.includes('/leaderboard')) return Promise.resolve(emptyLeaderboardResponse())
+      if (url.includes('/friends')) return Promise.resolve(emptyFriendsResponse())
+      if (url.includes('/invites')) return Promise.resolve(emptyInvitesResponse())
+      return Promise.resolve(gameResponse())
+    }),
+  )
 })
 
 afterEach(() => {

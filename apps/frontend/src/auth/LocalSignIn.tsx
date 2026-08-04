@@ -32,7 +32,7 @@ export function LocalSignIn() {
       return
     }
 
-    signIn?.({ username: handle, firstName: first, lastName: last })
+    signIn?.({ username: handle, firstName: first, lastName: last, imageUrl: null })
   }
 
   return (

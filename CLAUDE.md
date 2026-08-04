@@ -135,6 +135,10 @@ Where things belong:
 | A room's puzzle & solution | `apps/backend/src/domain/rooms/room-0N.ts` | — |
 | A room's look & interaction | — | `apps/frontend/src/rooms/room-0N/` |
 | Shared types / API shapes | `packages/shared/src/` | same file — one source |
+| Friends, invites, avatars | `apps/backend/src/{routes,services}/` | `apps/frontend/src/social/` |
+| Notifications / polling | `apps/backend/src/routes/sync.routes.ts` | `apps/frontend/src/sync/` |
+| Chat | `apps/backend/src/services/chat.service.ts` | `apps/frontend/src/social/ChatWindow.tsx` |
+| Co-op parties | `apps/backend/src/services/party.service.ts` | `apps/frontend/src/social/PartyPanel.tsx` |
 | Session handling | `apps/backend/src/services/session.service.ts` | `apps/frontend/src/game/` |
 
 ---
@@ -285,6 +289,12 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-04 | [0028](docs/adr/0028-co-op-play.md) | Co-op play: a player points at a host, and every write is versioned | Accepted |
+| 2026-08-04 | [0027](docs/adr/0027-friends-leaderboard.md) | A leaderboard scoped to friends, derived from the game | Accepted |
+| 2026-08-04 | [0026](docs/adr/0026-chat.md) | One-to-one chat; the conversation id is derived server-side | Accepted |
+| 2026-08-04 | [0025](docs/adr/0025-notifications-by-polling.md) | Notifications delivered by one polled `/api/sync`, not WebSockets | Accepted |
+| 2026-08-04 | [0024](docs/adr/0024-friend-graph-and-invite-links.md) | Friend graph stored both ways; revocable invite links | Accepted |
+| 2026-08-04 | [0023](docs/adr/0023-public-profiles.md) | Cache a public profile per player | Accepted |
 | 2026-08-03 | [0022](docs/adr/0022-local-development-auth.md) | Local development runs without Clerk | Accepted |
 | 2026-08-03 | [0021](docs/adr/0021-unique-usernames.md) | Every player has a unique username, enforced by Clerk | Accepted |
 | 2026-08-03 | [0020](docs/adr/0020-activity-log.md) | Record an activity log against each account | Accepted |
@@ -308,7 +318,7 @@ approved the corresponding ADR.
 | 2026-08-03 | [0002](docs/adr/0002-monorepo-npm-workspaces.md) | npm workspaces monorepo | Accepted |
 | 2026-08-03 | [0001](docs/adr/0001-project-choice.md) | We build Projekt A, the digital escape room | Accepted |
 
-All eleven were approved by Nepomuk Crhonek on 2026-08-03.
+All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03, the rest as they were written.
 
 ### Where the code stands
 
@@ -321,6 +331,25 @@ All eleven were approved by Nepomuk Crhonek on 2026-08-03.
   themselves are the team's work.
 - **Accounts** — players register with Clerk before they can reach anything. Progress and an activity
   log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
+- **Friends** — add somebody by username, or send a revocable invite link that shows who is inviting
+  before the recipient has an account. Accept, reject, unfriend and block all work
+  ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)).
+- **Notifications** — a bell with an unread badge, fed by a single polled `/api/sync`. App Runner
+  supports neither WebSockets nor long-lived streams, so polling is the only option; it stops
+  entirely while the tab is hidden ([ADR-0025](docs/adr/0025-notifications-by-polling.md)). Chat and
+  co-op will add fields to the same response rather than endpoints of their own.
+- **Chat** — one-to-one messages between friends. The conversation id is derived from the two user
+  ids server-side and never accepted from a client, so no request can name a conversation the caller
+  is not part of; friendship is re-checked on every read and write, so blocking closes an open
+  window ([ADR-0026](docs/adr/0026-chat.md)).
+- **Leaderboard** — you and your friends, ranked by rooms solved, then finishing time, then hints.
+  Derived from what the game already records rather than a separate score table, and scoped to
+  friends — there is no global board ([ADR-0027](docs/adr/0027-friends-leaderboard.md)).
+- **Co-op play** — invite a friend into your game, or join theirs. Both see the same progress and
+  either can solve; the log says who did what. A player points at the *host's* user id rather than a
+  synthetic game id, so the games table never had to be re-keyed and no progress was thrown away,
+  and every write is conditional on a version so two simultaneous solves cannot lose an update
+  ([ADR-0028](docs/adr/0028-co-op-play.md)).
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions

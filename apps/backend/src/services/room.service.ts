@@ -12,7 +12,7 @@ import {
 } from '@escape-room/shared'
 import { getRoom } from '../domain/rooms/index.js'
 import { ApiError } from '../http/api-error.js'
-import type { GameService } from './game.service.js'
+import type { Actor, GameService } from './game.service.js'
 
 export class RoomService {
   constructor(private readonly games: GameService) {}
@@ -47,14 +47,25 @@ export class RoomService {
     }
   }
 
-  async attempt(session: GameSession, roomId: RoomId, answer: unknown): Promise<AttemptResponse> {
+  async attempt(
+    session: GameSession,
+    roomId: RoomId,
+    answer: unknown,
+    actor?: Actor,
+  ): Promise<AttemptResponse> {
     if (!isRoomUnlocked(session, roomId)) throw ApiError.roomLocked()
 
     const outcome = getRoom(roomId).check(answer, session)
 
     // Every attempt is logged, right or wrong — the wrong ones are what show
     // where players get stuck.
-    const updatedSession = await this.games.applyAttempt(session, roomId, answer, outcome.correct)
+    const updatedSession = await this.games.applyAttempt(
+      session,
+      roomId,
+      answer,
+      outcome.correct,
+      actor,
+    )
 
     return {
       correct: outcome.correct,
@@ -67,14 +78,14 @@ export class RoomService {
    * Hints come from the server too, so we can count them. `hintsUsed` is the
    * session total, which is what a scoreboard would rank on.
    */
-  async hint(session: GameSession, roomId: RoomId): Promise<HintResponse> {
+  async hint(session: GameSession, roomId: RoomId, actor?: Actor): Promise<HintResponse> {
     if (!isRoomUnlocked(session, roomId)) throw ApiError.roomLocked()
 
     const { hints } = getRoom(roomId)
     const nextHint = hints[session.hintsUsed]
     if (nextHint === undefined) throw ApiError.noHintsLeft()
 
-    const updatedSession = await this.games.recordHintUsed(session, roomId)
+    const updatedSession = await this.games.recordHintUsed(session, roomId, actor)
     return {
       hint: nextHint,
       hintsUsed: updatedSession.hintsUsed,

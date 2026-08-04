@@ -6,6 +6,8 @@ export interface AuthProfile {
   username: string | null
   firstName: string | null
   lastName: string | null
+  /** Avatar URL from the identity provider, or null. */
+  imageUrl: string | null
 }
 
 /**

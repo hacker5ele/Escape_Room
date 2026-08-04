@@ -8,20 +8,73 @@ import {
   InMemoryGameRepository,
   type GameRepository,
 } from './repositories/game.repository.js'
+import {
+  DynamoProfileRepository,
+  InMemoryProfileRepository,
+  type ProfileRepository,
+} from './repositories/profile.repository.js'
+import {
+  DynamoFriendshipRepository,
+  InMemoryFriendshipRepository,
+  type FriendshipRepository,
+} from './repositories/friendship.repository.js'
+import {
+  DynamoInviteRepository,
+  InMemoryInviteRepository,
+  type InviteRepository,
+} from './repositories/invite.repository.js'
+import {
+  DynamoNotificationRepository,
+  InMemoryNotificationRepository,
+  type NotificationRepository,
+} from './repositories/notification.repository.js'
+import {
+  DynamoPartyRepository,
+  InMemoryPartyRepository,
+  type PartyRepository,
+} from './repositories/party.repository.js'
+import {
+  DynamoMessageRepository,
+  InMemoryMessageRepository,
+  type MessageRepository,
+} from './repositories/message.repository.js'
 import { GameService } from './services/game.service.js'
+import { ChatService } from './services/chat.service.js'
+import { LeaderboardService } from './services/leaderboard.service.js'
+import { PartyService } from './services/party.service.js'
+import { NotificationService } from './services/notification.service.js'
+import { FriendService } from './services/friend.service.js'
+import { InviteService } from './services/invite.service.js'
+import { ProfileService } from './services/profile.service.js'
 import { RoomService } from './services/room.service.js'
 import { createClerkAuthenticator, type Authenticator } from './http/authenticator.js'
 import { createLocalAuthenticator } from './http/local-authenticator.js'
 import { createHealthRoutes } from './routes/health.routes.js'
 import { createSessionRoutes } from './routes/sessions.routes.js'
+import { createProfileRoutes } from './routes/profiles.routes.js'
+import { createFriendRoutes, createInviteRoutes } from './routes/friends.routes.js'
+import { createSyncRoutes } from './routes/sync.routes.js'
+import { createChatRoutes } from './routes/chat.routes.js'
+import { createLeaderboardRoutes } from './routes/leaderboard.routes.js'
+import { createPartyRoutes } from './routes/party.routes.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
-import { createAttemptRateLimiter } from './http/rate-limit.js'
+import {
+  createAttemptRateLimiter,
+  createLookupRateLimiter,
+  createRateLimiter,
+} from './http/rate-limit.js'
 import { createOriginGuard } from './http/origin-guard.js'
 import { errorHandler, notFoundHandler } from './http/error-handler.js'
 
 export interface AppOptions {
   /** Injected by tests so each test gets an isolated store. */
   gameRepository?: GameRepository
+  profileRepository?: ProfileRepository
+  friendshipRepository?: FriendshipRepository
+  inviteRepository?: InviteRepository
+  notificationRepository?: NotificationRepository
+  messageRepository?: MessageRepository
+  partyRepository?: PartyRepository
   /** Injected by tests so the suite needs no Clerk key and makes no network calls. */
   authenticator?: Authenticator
   /** Attempts per IP per minute. Tests lower it to assert the limiter fires. */
@@ -65,7 +118,61 @@ export function createApp(options: AppOptions = {}): Express {
   // a secret key to construct, which local development does not have.
   const usingClerk = options.authenticator === undefined && config.authMode === 'clerk'
 
-  const gameService = new GameService(repository)
+  const profileRepository =
+    options.profileRepository ??
+    (config.profilesTableName
+      ? new DynamoProfileRepository(config.profilesTableName, config.awsRegion)
+      : new InMemoryProfileRepository())
+
+  const friendshipRepository =
+    options.friendshipRepository ??
+    (config.friendshipsTableName
+      ? new DynamoFriendshipRepository(config.friendshipsTableName, config.awsRegion)
+      : new InMemoryFriendshipRepository())
+
+  const inviteRepository =
+    options.inviteRepository ??
+    (config.invitesTableName
+      ? new DynamoInviteRepository(config.invitesTableName, config.awsRegion)
+      : new InMemoryInviteRepository())
+
+  const notificationRepository =
+    options.notificationRepository ??
+    (config.notificationsTableName
+      ? new DynamoNotificationRepository(config.notificationsTableName, config.awsRegion)
+      : new InMemoryNotificationRepository())
+
+  const messageRepository =
+    options.messageRepository ??
+    (config.messagesTableName
+      ? new DynamoMessageRepository(config.messagesTableName, config.awsRegion)
+      : new InMemoryMessageRepository())
+
+  const partyRepository =
+    options.partyRepository ??
+    (config.partyTableName
+      ? new DynamoPartyRepository(config.partyTableName, config.awsRegion)
+      : new InMemoryPartyRepository())
+
+  const gameService = new GameService(repository, partyRepository)
+  const profileService = new ProfileService(profileRepository)
+  const notificationService = new NotificationService(notificationRepository, profileService)
+  const friendService = new FriendService(friendshipRepository, profileService, notificationService)
+  const leaderboardService = new LeaderboardService(repository, friendService, profileService)
+  const partyService = new PartyService(
+    partyRepository,
+    repository,
+    friendService,
+    profileService,
+    notificationService,
+  )
+  const chatService = new ChatService(
+    messageRepository,
+    friendService,
+    profileService,
+    notificationService,
+  )
+  const inviteService = new InviteService(inviteRepository, profileService)
   const roomService = new RoomService(gameService)
 
   const app = express()
@@ -94,7 +201,72 @@ export function createApp(options: AppOptions = {}): Express {
     app.use('/api', clerkMiddleware())
   }
 
-  app.use('/api/sessions', createSessionRoutes(gameService, authenticator))
+  app.use('/api/sessions', createSessionRoutes(gameService, profileService, authenticator))
+  app.use(
+    '/api/profiles',
+    createProfileRoutes(profileService, authenticator, createLookupRateLimiter()),
+  )
+  // Social writes share one budget: creating links, sending requests and
+  // accepting are all cheap individually and all worth capping together.
+  const socialWriteLimiter = createRateLimiter({
+    limit: 30,
+    message: 'Slow down a moment.',
+  })
+
+  // Polled every few seconds by every open tab, so its budget is much larger
+  // than the write limiter's — and still bounded, because a client stuck in a
+  // retry loop should not be able to saturate the one container.
+  app.use(
+    '/api/sync',
+    createSyncRoutes(
+      notificationService,
+      authenticator,
+      createRateLimiter({ limit: 240, message: 'Polling too fast. Slow down.' }),
+    ),
+  )
+
+  app.use(
+    '/api/party',
+    createPartyRoutes(partyService, authenticator, socialWriteLimiter),
+  )
+
+  app.use(
+    '/api/leaderboard',
+    createLeaderboardRoutes(
+      leaderboardService,
+      authenticator,
+      // One read per friend, so this is the most expensive endpoint here.
+      createRateLimiter({ limit: 60, message: 'Slow down a moment.' }),
+    ),
+  )
+
+  app.use(
+    '/api/chat',
+    createChatRoutes(
+      chatService,
+      authenticator,
+      // Sending is capped tighter than reading: a burst of messages is the one
+      // social action that costs somebody else attention.
+      createRateLimiter({ limit: 60, message: 'You are sending messages too quickly.' }),
+      // An open conversation polls faster than the bell does, so its read
+      // budget has to be larger than the shared write budget.
+      createRateLimiter({ limit: 300, message: 'Polling too fast. Slow down.' }),
+    ),
+  )
+
+  app.use('/api/friends', createFriendRoutes(friendService, profileService, authenticator, socialWriteLimiter))
+  app.use(
+    '/api/invites',
+    createInviteRoutes(
+      inviteService,
+      friendService,
+      authenticator,
+      socialWriteLimiter,
+      // The only unauthenticated endpoint that reads the database, so it gets
+      // the tightest budget of anything here.
+      createRateLimiter({ limit: 20, message: 'Too many requests. Wait a moment.' }),
+    ),
+  )
   app.use(
     '/api/rooms',
     createRoomRoutes(
@@ -102,6 +274,7 @@ export function createApp(options: AppOptions = {}): Express {
       roomService,
       authenticator,
       createAttemptRateLimiter(options.attemptRateLimit ?? config.attemptRateLimit),
+      profileService,
     ),
   )
 

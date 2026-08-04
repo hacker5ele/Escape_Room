@@ -44,6 +44,219 @@ resource "aws_dynamodb_table" "games" {
 }
 
 # --------------------------------------------------------------------------
+# Player profiles. A cache of what Clerk knows, so the app can look somebody up
+# by username and render their avatar without a network call per face.
+# --------------------------------------------------------------------------
+
+resource "aws_dynamodb_table" "profiles" {
+  name         = "${local.prefix}-profiles"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "usernameLower"
+    type = "S"
+  }
+
+  # Adding a friend by username needs username → userId, and Clerk is not a
+  # database we can index. Lower-cased so lookups are case-insensitive.
+  #
+  # Projects ALL because every read of this index wants the whole profile —
+  # the avatar and display name — so KEYS_ONLY would just force a second
+  # GetItem on every lookup.
+  global_secondary_index {
+    name            = "by-username"
+    hash_key        = "usernameLower"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = false
+  }
+
+  tags = var.tags
+}
+
+# --------------------------------------------------------------------------
+# The social graph. See ADR-0024.
+# --------------------------------------------------------------------------
+
+# Both directions of every friendship are stored: (A,B) and (B,A), written
+# together in a transaction. That makes "list my friends" a single Query
+# instead of a query plus a scan of the reverse direction, and it means a
+# crash can never leave a one-sided friendship behind.
+resource "aws_dynamodb_table" "friendships" {
+  name         = "${local.prefix}-friendships"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+  range_key    = "otherUserId"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "otherUserId"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = false
+  }
+
+  tags = var.tags
+}
+
+# Invite links. The token is the key, so following a link is a single GetItem.
+resource "aws_dynamodb_table" "invites" {
+  name         = "${local.prefix}-invites"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "token"
+
+  attribute {
+    name = "token"
+    type = "S"
+  }
+
+  attribute {
+    name = "inviterUserId"
+    type = "S"
+  }
+
+  # "Show me my own links, so I can share or revoke them."
+  global_secondary_index {
+    name            = "by-inviter"
+    hash_key        = "inviterUserId"
+    projection_type = "ALL"
+  }
+
+  # Housekeeping only. TTL deletion is best-effort and can lag by hours, so
+  # expiry is enforced in the service on every read; this just stops the table
+  # growing forever.
+  ttl {
+    attribute_name = "expiresAtEpoch"
+    enabled        = true
+  }
+
+  point_in_time_recovery {
+    enabled = false
+  }
+
+  tags = var.tags
+}
+
+# Notifications. See ADR-0025.
+#
+# Partitioned per player and sorted by `${createdAt}#${id}`, so "what has
+# happened since I last asked?" is one Query with a key condition rather than a
+# scan. toISOString() is fixed-width UTC, so it sorts chronologically as a
+# string; the id breaks same-millisecond ties.
+resource "aws_dynamodb_table" "notifications" {
+  name         = "${local.prefix}-notifications"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+  range_key    = "sk"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  # Unlike the invites table, nothing here depends on the TTL being punctual —
+  # it only keeps each player's partition small enough that counting unread
+  # items with a filter stays cheap.
+  ttl {
+    attribute_name = "expiresAtEpoch"
+    enabled        = true
+  }
+
+  point_in_time_recovery {
+    enabled = false
+  }
+
+  tags = var.tags
+}
+
+# Chat messages. See ADR-0026.
+#
+# Partitioned by conversation, which the *server* derives from the two user ids
+# — a client never supplies it. Reading a conversation is therefore one Query,
+# and there is no request shape that names somebody else's partition.
+#
+# No TTL: unlike notifications, a conversation is content people expect to still
+# be there tomorrow.
+resource "aws_dynamodb_table" "messages" {
+  name         = "${local.prefix}-messages"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "conversationId"
+  range_key    = "sk"
+
+  attribute {
+    name = "conversationId"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = false
+  }
+
+  tags = var.tags
+}
+
+# Co-op membership. See ADR-0028.
+#
+# A row exists only while somebody is playing in *another* person's game; no row
+# means "playing my own", which is the common case and costs nothing.
+#
+# `hostUserId` is a user id rather than a synthetic game id, which is what lets
+# the games table stay keyed on the owner exactly as it always was — no
+# migration, and no game data thrown away to add co-op.
+resource "aws_dynamodb_table" "party" {
+  name         = "${local.prefix}-party"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "hostUserId"
+    type = "S"
+  }
+
+  # "Who is in my game?" — for the host's party list.
+  global_secondary_index {
+    name            = "by-host"
+    hash_key        = "hostUserId"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = false
+  }
+
+  tags = var.tags
+}
+
+# --------------------------------------------------------------------------
 # Frontend: private S3 bucket, reachable only through CloudFront
 # --------------------------------------------------------------------------
 
@@ -292,15 +505,34 @@ data "aws_iam_policy_document" "apprunner_instance" {
   }
 
   statement {
-    sid    = "ReadWriteOwnGames"
+    sid    = "ReadWriteGameData"
     effect = "Allow"
     actions = [
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:UpdateItem",
       "dynamodb:DeleteItem",
+      # Query was missing entirely. The game table never needed it — one item
+      # per player, fetched by key — but every social table is queried, and the
+      # profile lookup queries a secondary index.
+      "dynamodb:Query",
+      "dynamodb:BatchGetItem",
     ]
-    resources = [aws_dynamodb_table.games.arn]
+    resources = [
+      aws_dynamodb_table.games.arn,
+      aws_dynamodb_table.profiles.arn,
+      aws_dynamodb_table.friendships.arn,
+      aws_dynamodb_table.invites.arn,
+      aws_dynamodb_table.notifications.arn,
+      aws_dynamodb_table.messages.arn,
+      aws_dynamodb_table.party.arn,
+      # Querying a GSI requires the index ARN as well as the table's; granting
+      # only the table is the usual way this fails at runtime rather than plan
+      # time.
+      "${aws_dynamodb_table.profiles.arn}/index/*",
+      "${aws_dynamodb_table.invites.arn}/index/*",
+      "${aws_dynamodb_table.party.arn}/index/*",
+    ]
   }
 
   statement {
@@ -352,8 +584,14 @@ resource "aws_apprunner_service" "api" {
           CORS_ORIGIN        = "https://${var.domain_name}"
           # Presence of this selects the DynamoDB repository over the in-memory
           # one, so a local run without AWS credentials still works.
-          GAMES_TABLE_NAME = aws_dynamodb_table.games.name
-          AWS_REGION       = "us-east-1"
+          GAMES_TABLE_NAME         = aws_dynamodb_table.games.name
+          PROFILES_TABLE_NAME      = aws_dynamodb_table.profiles.name
+          FRIENDSHIPS_TABLE_NAME   = aws_dynamodb_table.friendships.name
+          INVITES_TABLE_NAME       = aws_dynamodb_table.invites.name
+          NOTIFICATIONS_TABLE_NAME = aws_dynamodb_table.notifications.name
+          MESSAGES_TABLE_NAME      = aws_dynamodb_table.messages.name
+          PARTY_TABLE_NAME         = aws_dynamodb_table.party.name
+          AWS_REGION               = "us-east-1"
           # The backend needs this too, not just the browser — see the variable.
           CLERK_PUBLISHABLE_KEY = var.clerk_publishable_key
         }

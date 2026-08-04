@@ -43,6 +43,10 @@ export function createLocalAuthenticator(): Authenticator {
         username: normalize(req.header(DEV_USERNAME_HEADER)) ?? fromId,
         firstName: normalize(req.header(DEV_FIRST_NAME_HEADER)),
         lastName: normalize(req.header(DEV_LAST_NAME_HEADER)),
+        // No avatars locally. The UI falls back to initials, which is also
+        // what a real user without a photo sees — so the fallback gets
+        // exercised constantly rather than only in production.
+        imageUrl: null,
       }
     },
   }
