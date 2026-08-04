@@ -17,10 +17,17 @@ export function ChatWindow({
   friend,
   meUserId,
   onClose,
+  pollIntervalMs = INTERVAL_MS,
 }: {
   friend: PublicProfile
   meUserId: string
   onClose: () => void
+  /**
+   * How often to ask for new messages. Exposed so a test can drive the poll
+   * without a three-second wait or a fake clock, and so a future co-op view
+   * can ask for a different cadence without a second implementation.
+   */
+  pollIntervalMs?: number
 }) {
   const { authHeaders } = useAppAuth()
   const [messages, setMessages] = useState<Message[]>([])
@@ -34,14 +41,24 @@ export function ChatWindow({
   const cursorRef = useRef<string | undefined>(undefined)
   const bottom = useRef<HTMLDivElement>(null)
 
-  /** Deduped by id — the same guard the notification poll needs, for the same reason. */
-  const absorb = useCallback((incoming: Message[]) => {
+  /**
+   * Deduped by id — the same guard the notification poll needs, for the same
+   * reason.
+   *
+   * `advanceCursor` is false for a message we just sent. Our own message has a
+   * later timestamp than anything the other person wrote in the seconds before
+   * it, so moving the cursor to it would step straight over a reply that had
+   * not been polled yet — and that message would never be fetched again.
+   * Leaving the cursor alone costs one duplicate, which the dedupe below eats.
+   */
+  const absorb = useCallback((incoming: Message[], advanceCursor = true) => {
     if (incoming.length === 0) return
     setMessages((current) => {
       const byId = new Map(current.map((m) => [m.id, m]))
       for (const message of incoming) byId.set(message.id, message)
       return [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     })
+    if (!advanceCursor) return
     const last = incoming[incoming.length - 1]
     if (last) cursorRef.current = cursorFor(last)
   }, [])
@@ -72,7 +89,7 @@ export function ChatWindow({
           }
         }
       }
-      if (!controller.signal.aborted) timer = setTimeout(() => void tick(), INTERVAL_MS)
+      if (!controller.signal.aborted) timer = setTimeout(() => void tick(), pollIntervalMs)
     }
 
     void tick()
@@ -81,7 +98,7 @@ export function ChatWindow({
       controller.abort()
       if (timer) clearTimeout(timer)
     }
-  }, [friend.userId, absorb])
+  }, [friend.userId, absorb, pollIntervalMs])
 
   // Follow the conversation as it grows.
   useEffect(() => {
@@ -97,9 +114,10 @@ export function ChatWindow({
     try {
       const message = await sendMessage(await authRef.current(), friend.userId, body)
       setDraft('')
-      // Absorbed immediately rather than waiting up to three seconds for the
-      // poll to bring back a message we already have.
-      absorb([message])
+      // Shown immediately rather than waiting up to three seconds for the poll
+      // to bring back a message we already have — but without moving the
+      // cursor, or a reply written just before ours would be skipped.
+      absorb([message], false)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not send that.')
     } finally {

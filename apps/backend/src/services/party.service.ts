@@ -28,9 +28,12 @@ export class PartyService {
     const membership = await this.repository.find(userId)
     const hostUserId = membership?.hostUserId ?? userId
 
-    const memberIds = (await this.repository.listMembers(hostUserId)).map(
-      (record) => record.userId,
-    )
+    // Everybody pointing at this host, minus whoever is asking — the caller is
+    // never "somebody playing with you". Without this a guest is shown to
+    // themselves as another member of the party they are in.
+    const memberIds = (await this.repository.listMembers(hostUserId))
+      .map((record) => record.userId)
+      .filter((id) => id !== userId)
 
     const profiles = await this.profiles.mapOf([hostUserId, ...memberIds])
     const host = profiles.get(hostUserId) ?? placeholder(hostUserId)
@@ -102,6 +105,18 @@ export class PartyService {
     const hostMembership = await this.repository.find(hostUserId)
     if (hostMembership) {
       throw new ApiError(409, 'NOT_HOST', 'They are playing in somebody else’s game.')
+    }
+
+    // The same rule from the other end. Leaving while people are in *your*
+    // game does not move them with you — they would carry on pointing at a
+    // game you are no longer playing, alone and unaware.
+    const ownGuests = await this.repository.listMembers(userId)
+    if (ownGuests.length > 0) {
+      throw new ApiError(
+        409,
+        'NOT_HOST',
+        'People are playing in your game. Remove them first, or ask them to leave.',
+      )
     }
 
     if (!(await this.games.findByUserId(hostUserId))) {

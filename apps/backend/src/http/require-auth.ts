@@ -2,6 +2,7 @@ import type { Request } from 'express'
 import type { GameSession } from '@escape-room/shared'
 import { ApiError } from './api-error.js'
 import type { Authenticator } from './authenticator.js'
+import { identifyOnce } from './identify.js'
 import type { GameService } from '../services/game.service.js'
 
 /**
@@ -13,7 +14,7 @@ import type { GameService } from '../services/game.service.js'
  * See ADR-0019.
  */
 export async function requireUserId(req: Request, authenticator: Authenticator): Promise<string> {
-  const userId = await authenticator.identify(req)
+  const userId = await identifyOnce(req, authenticator)
   if (!userId) {
     throw new ApiError(401, 'UNAUTHENTICATED', 'Sign in to play.')
   }

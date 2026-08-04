@@ -204,12 +204,13 @@ export function createApp(options: AppOptions = {}): Express {
   app.use('/api/sessions', createSessionRoutes(gameService, profileService, authenticator))
   app.use(
     '/api/profiles',
-    createProfileRoutes(profileService, authenticator, createLookupRateLimiter()),
+    createProfileRoutes(profileService, authenticator, createLookupRateLimiter(30, authenticator)),
   )
   // Social writes share one budget: creating links, sending requests and
   // accepting are all cheap individually and all worth capping together.
   const socialWriteLimiter = createRateLimiter({
     limit: 30,
+    authenticator,
     message: 'Slow down a moment.',
   })
 
@@ -221,7 +222,7 @@ export function createApp(options: AppOptions = {}): Express {
     createSyncRoutes(
       notificationService,
       authenticator,
-      createRateLimiter({ limit: 240, message: 'Polling too fast. Slow down.' }),
+      createRateLimiter({ limit: 240, authenticator, message: 'Polling too fast. Slow down.' }),
     ),
   )
 
@@ -236,7 +237,7 @@ export function createApp(options: AppOptions = {}): Express {
       leaderboardService,
       authenticator,
       // One read per friend, so this is the most expensive endpoint here.
-      createRateLimiter({ limit: 60, message: 'Slow down a moment.' }),
+      createRateLimiter({ limit: 60, authenticator, message: 'Slow down a moment.' }),
     ),
   )
 
@@ -247,10 +248,10 @@ export function createApp(options: AppOptions = {}): Express {
       authenticator,
       // Sending is capped tighter than reading: a burst of messages is the one
       // social action that costs somebody else attention.
-      createRateLimiter({ limit: 60, message: 'You are sending messages too quickly.' }),
+      createRateLimiter({ limit: 60, authenticator, message: 'You are sending messages too quickly.' }),
       // An open conversation polls faster than the bell does, so its read
       // budget has to be larger than the shared write budget.
-      createRateLimiter({ limit: 300, message: 'Polling too fast. Slow down.' }),
+      createRateLimiter({ limit: 300, authenticator, message: 'Polling too fast. Slow down.' }),
     ),
   )
 
@@ -263,7 +264,9 @@ export function createApp(options: AppOptions = {}): Express {
       authenticator,
       socialWriteLimiter,
       // The only unauthenticated endpoint that reads the database, so it gets
-      // the tightest budget of anything here.
+      // the tightest budget of anything here — and it is the one limiter that
+      // stays keyed by IP, because a caller with no account offers nothing else
+      // to key on.
       createRateLimiter({ limit: 20, message: 'Too many requests. Wait a moment.' }),
     ),
   )
@@ -273,7 +276,7 @@ export function createApp(options: AppOptions = {}): Express {
       gameService,
       roomService,
       authenticator,
-      createAttemptRateLimiter(options.attemptRateLimit ?? config.attemptRateLimit),
+      createAttemptRateLimiter(options.attemptRateLimit ?? config.attemptRateLimit, authenticator),
       profileService,
     ),
   )

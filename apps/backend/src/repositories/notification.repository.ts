@@ -146,6 +146,9 @@ export class DynamoNotificationRepository implements NotificationRepository {
     type: NotificationType,
     actorUserId: string,
   ): Promise<boolean> {
+    let startKey: Record<string, unknown> | undefined
+
+    do {
     const result = await this.#client.send(
       new QueryCommand({
         TableName: this.#tableName,
@@ -159,10 +162,22 @@ export class DynamoNotificationRepository implements NotificationRepository {
           ':type': type,
           ':actor': actorUserId,
         },
-        Limit: 1,
+        // No `Limit` here, deliberately. DynamoDB applies Limit *before* the
+        // filter, so `Limit: 1` reads a single item — the oldest in the
+        // partition — filters it away and reports nothing unread. The bell then
+        // rings on every single message, which is the exact behaviour this
+        // method exists to prevent, and it looks like it is working because a
+        // notification does appear.
+        ProjectionExpression: 'id',
+        ExclusiveStartKey: startKey,
       }),
     )
-    return (result.Items?.length ?? 0) > 0
+
+    if ((result.Items?.length ?? 0) > 0) return true
+    startKey = result.LastEvaluatedKey
+  } while (startKey)
+
+  return false
   }
 
   async markAllRead(userId: string, at: string): Promise<void> {

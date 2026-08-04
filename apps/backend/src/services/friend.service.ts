@@ -112,6 +112,56 @@ export class FriendService {
     return this.list(userId)
   }
 
+  /**
+   * Becomes friends by following an invite link.
+   *
+   * Unlike `request`, this is immediately mutual. The link *is* the inviter's
+   * consent — they created it and sent it — so asking them to approve the
+   * person who used it makes them confirm the same thing twice, and leaves the
+   * visitor staring at a screen that looks like nothing happened.
+   *
+   * A block still wins: it is checked exactly as it is for an ordinary request,
+   * because an invite link somebody was sent before being blocked must not be a
+   * way back in.
+   */
+  async acceptInvite(userId: string, inviterUserId: string): Promise<FriendListResponse> {
+    if (userId === inviterUserId) {
+      throw new ApiError(400, 'CANNOT_FRIEND_SELF', 'That is your own invite link.')
+    }
+
+    const [mine, theirs] = await Promise.all([
+      this.repository.find(userId, inviterUserId),
+      this.repository.find(inviterUserId, userId),
+    ])
+
+    // Same silence as `request`: they are told nothing, and the block holds.
+    if (theirs?.status === 'blocked') {
+      await this.repository.putOne({
+        userId,
+        otherUserId: inviterUserId,
+        status: 'pending_out',
+        since: new Date().toISOString(),
+      })
+      return this.list(userId)
+    }
+
+    if (mine?.status === 'blocked') {
+      throw new ApiError(409, 'BLOCKED', 'Unblock them first.')
+    }
+    if (mine?.status === 'accepted') {
+      throw new ApiError(409, 'ALREADY_FRIENDS', 'You are already friends.')
+    }
+
+    await this.#writePair(userId, inviterUserId, 'accepted', 'accepted')
+    await this.#tell(
+      inviterUserId,
+      userId,
+      'friend_accepted',
+      (who) => `${who} joined through your invite link.`,
+    )
+    return this.list(userId)
+  }
+
   async accept(userId: string, requesterUserId: string): Promise<FriendListResponse> {
     const mine = await this.repository.find(userId, requesterUserId)
     if (mine?.status !== 'pending_in') {
