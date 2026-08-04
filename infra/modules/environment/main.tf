@@ -44,6 +44,45 @@ resource "aws_dynamodb_table" "games" {
 }
 
 # --------------------------------------------------------------------------
+# Player profiles. A cache of what Clerk knows, so the app can look somebody up
+# by username and render their avatar without a network call per face.
+# --------------------------------------------------------------------------
+
+resource "aws_dynamodb_table" "profiles" {
+  name         = "${local.prefix}-profiles"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "usernameLower"
+    type = "S"
+  }
+
+  # Adding a friend by username needs username → userId, and Clerk is not a
+  # database we can index. Lower-cased so lookups are case-insensitive.
+  #
+  # Projects ALL because every read of this index wants the whole profile —
+  # the avatar and display name — so KEYS_ONLY would just force a second
+  # GetItem on every lookup.
+  global_secondary_index {
+    name            = "by-username"
+    hash_key        = "usernameLower"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = false
+  }
+
+  tags = var.tags
+}
+
+# --------------------------------------------------------------------------
 # Frontend: private S3 bucket, reachable only through CloudFront
 # --------------------------------------------------------------------------
 
@@ -292,15 +331,27 @@ data "aws_iam_policy_document" "apprunner_instance" {
   }
 
   statement {
-    sid    = "ReadWriteOwnGames"
+    sid    = "ReadWriteGameData"
     effect = "Allow"
     actions = [
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:UpdateItem",
       "dynamodb:DeleteItem",
+      # Query was missing entirely. The game table never needed it — one item
+      # per player, fetched by key — but every social table is queried, and the
+      # profile lookup queries a secondary index.
+      "dynamodb:Query",
+      "dynamodb:BatchGetItem",
     ]
-    resources = [aws_dynamodb_table.games.arn]
+    resources = [
+      aws_dynamodb_table.games.arn,
+      aws_dynamodb_table.profiles.arn,
+      # Querying a GSI requires the index ARN as well as the table's; granting
+      # only the table is the usual way this fails at runtime rather than plan
+      # time.
+      "${aws_dynamodb_table.profiles.arn}/index/*",
+    ]
   }
 
   statement {
@@ -352,8 +403,9 @@ resource "aws_apprunner_service" "api" {
           CORS_ORIGIN        = "https://${var.domain_name}"
           # Presence of this selects the DynamoDB repository over the in-memory
           # one, so a local run without AWS credentials still works.
-          GAMES_TABLE_NAME = aws_dynamodb_table.games.name
-          AWS_REGION       = "us-east-1"
+          GAMES_TABLE_NAME    = aws_dynamodb_table.games.name
+          PROFILES_TABLE_NAME = aws_dynamodb_table.profiles.name
+          AWS_REGION          = "us-east-1"
           # The backend needs this too, not just the browser — see the variable.
           CLERK_PUBLISHABLE_KEY = var.clerk_publishable_key
         }

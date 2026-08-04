@@ -44,6 +44,9 @@ export const config = {
    */
   gamesTableName: process.env.GAMES_TABLE_NAME ?? '',
 
+  /** Profile cache. Empty selects the in-memory repository, as with games. */
+  profilesTableName: process.env.PROFILES_TABLE_NAME ?? '',
+
   awsRegion: process.env.AWS_REGION ?? 'us-east-1',
 
   /**

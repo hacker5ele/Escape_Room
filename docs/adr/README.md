@@ -62,3 +62,4 @@ All of these were approved by Nepomuk Crhonek on 2026-08-03.
 | [0020](0020-activity-log.md) | Record an activity log against each account | Accepted |
 | [0021](0021-unique-usernames.md) | Every player has a unique username, enforced by Clerk | Accepted |
 | [0022](0022-local-development-auth.md) | Local development runs without Clerk | Accepted |
+| [0023](0023-public-profiles.md) | Cache a public profile per player | Accepted |

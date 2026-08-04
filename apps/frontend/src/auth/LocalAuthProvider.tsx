@@ -34,6 +34,8 @@ export function LocalAuthProvider({ children }: { children: ReactNode }) {
         username: patch.username ?? current?.username ?? null,
         firstName: patch.firstName ?? current?.firstName ?? null,
         lastName: patch.lastName ?? current?.lastName ?? null,
+        // No avatars locally, so the initials fallback is what developers see.
+        imageUrl: null,
       }
       write(next)
       return next
@@ -77,6 +79,7 @@ function readStored(): AuthProfile | null {
           username: parsed.username,
           firstName: parsed.firstName ?? null,
           lastName: parsed.lastName ?? null,
+          imageUrl: null,
         }
       : null
   } catch {

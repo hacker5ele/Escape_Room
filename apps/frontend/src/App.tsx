@@ -5,6 +5,7 @@ import { ROOM_IDS } from '@escape-room/shared'
 import { ApiRequestError, startOrResumeGame } from './api/game'
 import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
+import { Avatar } from './social/Avatar'
 import { LocalSignIn } from './auth/LocalSignIn'
 import { useAppAuth } from './auth/useAppAuth'
 
@@ -87,7 +88,7 @@ type GameState =
   | { kind: 'error'; message: string }
 
 function GamePanel() {
-  const { authHeaders, mode, signOut } = useAppAuth()
+  const { authHeaders, mode, signOut, profile } = useAppAuth()
   const [state, setState] = useState<GameState>({ kind: 'loading' })
 
   // Held in a ref, and the effect runs on mount only.
@@ -129,14 +130,29 @@ function GamePanel() {
   return (
     <>
       <section className="flex items-center justify-between rounded-lg border border-vault-800 bg-vault-900/60 p-5">
-        <div>
-          <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">Your game</h2>
-          <p className="mt-2 font-mono text-sm text-vault-100">
-            {state.kind === 'loading' && 'Opening your game…'}
-            {state.kind === 'ready' &&
-              `${state.game.username} — ${state.game.solvedRooms.length}/${ROOM_IDS.length} rooms solved`}
-            {state.kind === 'error' && `Could not load your game: ${state.message}`}
-          </p>
+        <div className="flex items-center gap-4">
+          {state.kind === 'ready' && (
+            <Avatar
+              size={44}
+              subject={{
+                userId: state.game.userId,
+                username: state.game.username,
+                displayName: state.game.playerName,
+                imageUrl: profile?.imageUrl ?? null,
+              }}
+            />
+          )}
+          <div>
+            <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+              Your game
+            </h2>
+            <p className="mt-2 font-mono text-sm text-vault-100">
+              {state.kind === 'loading' && 'Opening your game…'}
+              {state.kind === 'ready' &&
+                `${state.game.username} — ${state.game.solvedRooms.length}/${ROOM_IDS.length} rooms solved`}
+              {state.kind === 'error' && `Could not load your game: ${state.message}`}
+            </p>
+          </div>
         </div>
 
         {mode === 'clerk' ? (

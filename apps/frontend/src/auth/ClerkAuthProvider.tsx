@@ -44,6 +44,7 @@ export function ClerkAuthProvider({ children }: { children: ReactNode }) {
             username: user.username ?? null,
             firstName: user.firstName ?? null,
             lastName: user.lastName ?? null,
+            imageUrl: user.imageUrl ?? null,
           }
         : null,
     [user],

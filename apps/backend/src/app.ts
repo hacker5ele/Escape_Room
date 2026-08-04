@@ -8,20 +8,28 @@ import {
   InMemoryGameRepository,
   type GameRepository,
 } from './repositories/game.repository.js'
+import {
+  DynamoProfileRepository,
+  InMemoryProfileRepository,
+  type ProfileRepository,
+} from './repositories/profile.repository.js'
 import { GameService } from './services/game.service.js'
+import { ProfileService } from './services/profile.service.js'
 import { RoomService } from './services/room.service.js'
 import { createClerkAuthenticator, type Authenticator } from './http/authenticator.js'
 import { createLocalAuthenticator } from './http/local-authenticator.js'
 import { createHealthRoutes } from './routes/health.routes.js'
 import { createSessionRoutes } from './routes/sessions.routes.js'
+import { createProfileRoutes } from './routes/profiles.routes.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
-import { createAttemptRateLimiter } from './http/rate-limit.js'
+import { createAttemptRateLimiter, createLookupRateLimiter } from './http/rate-limit.js'
 import { createOriginGuard } from './http/origin-guard.js'
 import { errorHandler, notFoundHandler } from './http/error-handler.js'
 
 export interface AppOptions {
   /** Injected by tests so each test gets an isolated store. */
   gameRepository?: GameRepository
+  profileRepository?: ProfileRepository
   /** Injected by tests so the suite needs no Clerk key and makes no network calls. */
   authenticator?: Authenticator
   /** Attempts per IP per minute. Tests lower it to assert the limiter fires. */
@@ -65,7 +73,14 @@ export function createApp(options: AppOptions = {}): Express {
   // a secret key to construct, which local development does not have.
   const usingClerk = options.authenticator === undefined && config.authMode === 'clerk'
 
+  const profileRepository =
+    options.profileRepository ??
+    (config.profilesTableName
+      ? new DynamoProfileRepository(config.profilesTableName, config.awsRegion)
+      : new InMemoryProfileRepository())
+
   const gameService = new GameService(repository)
+  const profileService = new ProfileService(profileRepository)
   const roomService = new RoomService(gameService)
 
   const app = express()
@@ -94,7 +109,11 @@ export function createApp(options: AppOptions = {}): Express {
     app.use('/api', clerkMiddleware())
   }
 
-  app.use('/api/sessions', createSessionRoutes(gameService, authenticator))
+  app.use('/api/sessions', createSessionRoutes(gameService, profileService, authenticator))
+  app.use(
+    '/api/profiles',
+    createProfileRoutes(profileService, authenticator, createLookupRateLimiter()),
+  )
   app.use(
     '/api/rooms',
     createRoomRoutes(

@@ -8,5 +8,6 @@
 export * from './rooms.js'
 export * from './events.js'
 export * from './session.js'
+export * from './profiles.js'
 export * from './access.js'
 export * from './api.js'

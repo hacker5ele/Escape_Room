@@ -285,6 +285,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-04 | [0023](docs/adr/0023-public-profiles.md) | Cache a public profile per player | Accepted |
 | 2026-08-03 | [0022](docs/adr/0022-local-development-auth.md) | Local development runs without Clerk | Accepted |
 | 2026-08-03 | [0021](docs/adr/0021-unique-usernames.md) | Every player has a unique username, enforced by Clerk | Accepted |
 | 2026-08-03 | [0020](docs/adr/0020-activity-log.md) | Record an activity log against each account | Accepted |

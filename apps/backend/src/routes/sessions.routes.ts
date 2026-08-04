@@ -1,10 +1,15 @@
 import { Router } from 'express'
 import type { SessionResponse } from '@escape-room/shared'
 import type { GameService } from '../services/game.service.js'
+import type { ProfileService } from '../services/profile.service.js'
 import type { Authenticator } from '../http/authenticator.js'
 import { requireGame, requireUserId } from '../http/require-auth.js'
 
-export function createSessionRoutes(games: GameService, authenticator: Authenticator): Router {
+export function createSessionRoutes(
+  games: GameService,
+  profiles: ProfileService,
+  authenticator: Authenticator,
+): Router {
   const router = Router()
 
   // POST /api/sessions — start playing, or pick up where you left off.
@@ -14,6 +19,12 @@ export function createSessionRoutes(games: GameService, authenticator: Authentic
     // The profile is resolved here rather than inside the service, so the
     // service never has to know which identity provider is in use.
     const profile = await authenticator.profile(req, userId)
+
+    // Refresh the public profile on every sign-in, not just the first, so a
+    // changed avatar or name propagates without any cache to invalidate. The
+    // identity lookup has already happened above, so this costs one write.
+    await profiles.recordFromIdentity(userId, profile)
+
     const body: SessionResponse = { session: await games.startOrResume(userId, profile) }
     res.status(201).json(body)
   })
