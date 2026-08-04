@@ -11,7 +11,7 @@
 # does not support ALIAS records. Route 53 alias records are the way out.
 resource "aws_route53_zone" "main" {
   name    = var.domain_name
-  comment = "Escape Room — project week KW 32"
+  comment = "Escape Room"
 }
 
 # --------------------------------------------------------------------------

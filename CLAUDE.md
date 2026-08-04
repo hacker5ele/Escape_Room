@@ -1,6 +1,6 @@
 # Escape Room — Project Guide
 
-Project week KW 32 (Mon 2026-08-03 → Fri 2026-08-07). We are building **Projekt A: Der digitale
+Monday 2026-08-03 → Friday 2026-08-07. We are building **Projekt A: Der digitale
 Escape Room**.
 
 This file is the single entry point for the whole team and for Claude. It holds the binding rules, the
@@ -326,6 +326,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-04 | [0031](docs/adr/0031-drop-project-week-branding.md) | Drop the project-week branding; the assignment quotation stays verbatim | Accepted |
 | 2026-08-04 | [0030](docs/adr/0030-tests-own-one-server-per-app.md) | Tests start one HTTP server per app instead of one per request | Accepted |
 | 2026-08-04 | [0029](docs/adr/0029-rate-limits-per-account-and-invite-acceptance.md) | Rate limits key on the account; following an invite link makes you friends | Accepted |
 | 2026-08-04 | [0028](docs/adr/0028-co-op-play.md) | Co-op play: a player points at a host, and every write is versioned | Accepted |

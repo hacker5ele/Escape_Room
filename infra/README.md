@@ -114,7 +114,7 @@ header surviving, the room lock, no answer leaking, and the rate limiter. See `s
 
 ## Tearing it down
 
-Everything is tagged `Project=escape-room`. When the project week is over:
+Everything is tagged `Project=escape-room`. When the project is over:
 
 ```bash
 cd infra/live/prod    && terraform destroy
