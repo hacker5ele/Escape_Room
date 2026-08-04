@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
-import { createApp } from '../app.js'
+import { createTestApp as createApp } from '../test/server.js'
 import { ORIGIN_SECRET_HEADER } from './origin-guard.js'
 import { createTestAuthenticator, TEST_USER_HEADER } from './test-authenticator.js'
 

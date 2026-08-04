@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
-import type { Express } from 'express'
-import { createApp } from '../app.js'
+import type { Server } from 'node:http'
+import { createTestApp as createApp } from '../test/server.js'
 import {
   createTestAuthenticator,
   TEST_USER_HEADER,
@@ -11,11 +11,11 @@ import {
 const ALICE = 'user_alice'
 const BOB = 'user_bob'
 
-function buildApp(): Express {
+function buildApp(): Server {
   return createApp({ authenticator: createTestAuthenticator(), attemptRateLimit: 1000 })
 }
 
-function as(app: Express, user: string) {
+function as(app: Server, user: string) {
   return {
     get: (path: string) => request(app).get(path).set(TEST_USER_HEADER, user),
     post: (path: string) => request(app).post(path).set(TEST_USER_HEADER, user),
@@ -23,7 +23,7 @@ function as(app: Express, user: string) {
 }
 
 /** Profiles are recorded as a side effect of opening a game. */
-async function signIn(app: Express, user: string) {
+async function signIn(app: Server, user: string) {
   await as(app, user).post('/api/sessions').send({})
 }
 

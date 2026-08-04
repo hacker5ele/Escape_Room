@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
-import type { Express } from 'express'
+import type { Server } from 'node:http'
 import { MAX_MESSAGE_LENGTH, type Message } from '@escape-room/shared'
-import { createApp } from '../app.js'
+import { createTestApp as createApp } from '../test/server.js'
 import { conversationIdFor } from '../services/chat.service.js'
 import { createTestAuthenticator, TEST_USER_HEADER } from '../http/test-authenticator.js'
 
@@ -10,11 +10,11 @@ const ALICE = 'user_alice'
 const BOB = 'user_bob'
 const MALLORY = 'user_mallory'
 
-function buildApp(): Express {
+function buildApp(): Server {
   return createApp({ authenticator: createTestAuthenticator(), attemptRateLimit: 1000 })
 }
 
-function as(app: Express, user: string) {
+function as(app: Server, user: string) {
   return {
     get: (path: string) => request(app).get(path).set(TEST_USER_HEADER, user),
     post: (path: string) => request(app).post(path).set(TEST_USER_HEADER, user),
@@ -22,22 +22,22 @@ function as(app: Express, user: string) {
   }
 }
 
-async function signIn(app: Express, ...users: string[]) {
+async function signIn(app: Server, ...users: string[]) {
   for (const user of users) await as(app, user).post('/api/sessions').send({})
 }
 
 const usernameOf = (user: string) => `handle_${user}`
 
 /** Leaves Alice and Bob mutual friends. */
-async function befriend(app: Express, a: string, b: string) {
+async function befriend(app: Server, a: string, b: string) {
   await as(app, a).post('/api/friends/by-username').send({ username: usernameOf(b) })
   await as(app, b).post(`/api/friends/${a}/accept`)
 }
 
-const send = (app: Express, from: string, to: string, body: string) =>
+const send = (app: Server, from: string, to: string, body: string) =>
   as(app, from).post(`/api/chat/${to}/messages`).send({ body })
 
-const history = (app: Express, user: string, other: string) =>
+const history = (app: Server, user: string, other: string) =>
   as(app, user).get(`/api/chat/${other}/messages`)
 
 describe('deriving the conversation id', () => {
@@ -191,7 +191,7 @@ describe('who is allowed to read a conversation', () => {
 })
 
 describe('notifying about messages', () => {
-  const unreadFor = async (app: Express, user: string) =>
+  const unreadFor = async (app: Server, user: string) =>
     ((await as(app, user).get('/api/sync')).body as { unreadCount: number }).unreadCount
 
   it('tells the recipient once, not once per message', async () => {

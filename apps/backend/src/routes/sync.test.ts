@@ -1,25 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
-import type { Express } from 'express'
+import type { Server } from 'node:http'
 import type { SyncResponse } from '@escape-room/shared'
-import { createApp } from '../app.js'
+import { createTestApp as createApp } from '../test/server.js'
 import { createTestAuthenticator, TEST_USER_HEADER } from '../http/test-authenticator.js'
 
 const ALICE = 'user_alice'
 const BOB = 'user_bob'
 
-function buildApp(): Express {
+function buildApp(): Server {
   return createApp({ authenticator: createTestAuthenticator(), attemptRateLimit: 1000 })
 }
 
-function as(app: Express, user: string) {
+function as(app: Server, user: string) {
   return {
     get: (path: string) => request(app).get(path).set(TEST_USER_HEADER, user),
     post: (path: string) => request(app).post(path).set(TEST_USER_HEADER, user),
   }
 }
 
-async function signIn(app: Express, ...users: string[]) {
+async function signIn(app: Server, ...users: string[]) {
   for (const user of users) {
     await as(app, user).post('/api/sessions').send({})
   }
@@ -27,7 +27,7 @@ async function signIn(app: Express, ...users: string[]) {
 
 const usernameOf = (user: string) => `handle_${user}`
 
-async function sync(app: Express, user: string, since?: string): Promise<SyncResponse> {
+async function sync(app: Server, user: string, since?: string): Promise<SyncResponse> {
   const path = since ? `/api/sync?since=${encodeURIComponent(since)}` : '/api/sync'
   const response = await as(app, user).get(path)
   expect(response.status).toBe(200)
@@ -35,7 +35,7 @@ async function sync(app: Express, user: string, since?: string): Promise<SyncRes
 }
 
 /** Alice asks Bob to be her friend. */
-async function askToBeFriends(app: Express) {
+async function askToBeFriends(app: Server) {
   await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(BOB) })
 }
 

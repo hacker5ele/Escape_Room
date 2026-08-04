@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
-import type { Express } from 'express'
+import type { Server } from 'node:http'
 import type { LeaderboardEntry } from '@escape-room/shared'
 import { ROOM_IDS } from '@escape-room/shared'
-import { createApp } from '../app.js'
+import { createTestApp as createApp } from '../test/server.js'
 import { InMemoryGameRepository } from '../repositories/game.repository.js'
 import { createTestAuthenticator, TEST_USER_HEADER } from '../http/test-authenticator.js'
 
@@ -22,20 +22,20 @@ function buildApp(gameRepository = new InMemoryGameRepository()) {
   }
 }
 
-function as(app: Express, user: string) {
+function as(app: Server, user: string) {
   return {
     get: (path: string) => request(app).get(path).set(TEST_USER_HEADER, user),
     post: (path: string) => request(app).post(path).set(TEST_USER_HEADER, user),
   }
 }
 
-async function signIn(app: Express, ...users: string[]) {
+async function signIn(app: Server, ...users: string[]) {
   for (const user of users) await as(app, user).post('/api/sessions').send({})
 }
 
 const usernameOf = (user: string) => `handle_${user}`
 
-async function befriend(app: Express, a: string, b: string) {
+async function befriend(app: Server, a: string, b: string) {
   await as(app, a).post('/api/friends/by-username').send({ username: usernameOf(b) })
   await as(app, b).post(`/api/friends/${a}/accept`)
 }
@@ -62,7 +62,7 @@ async function setProgress(
   })
 }
 
-const board = async (app: Express, user: string): Promise<LeaderboardEntry[]> => {
+const board = async (app: Server, user: string): Promise<LeaderboardEntry[]> => {
   const response = await as(app, user).get('/api/leaderboard/friends')
   expect(response.status).toBe(200)
   return response.body.entries as LeaderboardEntry[]

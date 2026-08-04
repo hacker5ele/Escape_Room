@@ -326,6 +326,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-04 | [0030](docs/adr/0030-tests-own-one-server-per-app.md) | Tests start one HTTP server per app instead of one per request | Accepted |
 | 2026-08-04 | [0029](docs/adr/0029-rate-limits-per-account-and-invite-acceptance.md) | Rate limits key on the account; following an invite link makes you friends | Accepted |
 | 2026-08-04 | [0028](docs/adr/0028-co-op-play.md) | Co-op play: a player points at a host, and every write is versioned | Accepted |
 | 2026-08-04 | [0027](docs/adr/0027-friends-leaderboard.md) | A leaderboard scoped to friends, derived from the game | Accepted |
