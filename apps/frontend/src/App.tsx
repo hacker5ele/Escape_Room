@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SignInButton, SignUpButton, UserButton } from '@clerk/react'
 import type { GameSession } from '@escape-room/shared'
-import { ROOM_IDS } from '@escape-room/shared'
+import { isRoomUnlocked, ROOM_IDS } from '@escape-room/shared'
 import { ApiRequestError, startOrResumeGame } from './api/game'
 import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
@@ -35,7 +35,11 @@ export function App() {
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-10 px-6 py-16">
       <header className="space-y-3">
-        <h1 className="font-mono text-4xl font-semibold text-vault-100 sm:text-5xl">
+        {/* Syne at its heaviest with the tracking pulled in — the masthead is
+            the one place the display face gets to be a poster. Deliberately
+            not uppercase: German capitalises its nouns already, and setting
+            it in caps loses that and shouts. */}
+        <h1 className="font-display text-5xl font-extrabold tracking-[-0.045em] text-stock-900 sm:text-6xl">
           Der digitale Escape Room
         </h1>
       </header>
@@ -49,17 +53,19 @@ export function App() {
 
 function Panel({ children }: { children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">
-      <p className="font-mono text-sm text-vault-100">{children}</p>
+    <section className="pane p-5">
+      <p className="font-mono text-sm text-stock-900">{children}</p>
     </section>
   )
 }
 
 function LockedDoor() {
   return (
-    <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">
-      <h2 className="font-mono text-sm text-vault-100">The door is locked</h2>
-      <p className="mt-2 text-sm text-vault-300">
+    <section className="pane p-6">
+      <h2 className="font-display text-2xl font-bold tracking-[-0.03em] text-stock-900">
+        The door is locked
+      </h2>
+      <p className="mt-2 text-sm text-stock-700">
         Create an account to enter. Your progress is saved to it, so you can leave a room
         half-solved and come back to it.
       </p>
@@ -68,7 +74,7 @@ function LockedDoor() {
         <SignUpButton mode="modal">
           <button
             type="button"
-            className="rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300"
+            className="btn"
           >
             Register
           </button>
@@ -77,7 +83,7 @@ function LockedDoor() {
         <SignInButton mode="modal">
           <button
             type="button"
-            className="rounded border border-vault-700 px-4 py-2 font-mono text-sm text-vault-100 transition hover:border-vault-500"
+            className="btn btn-ghost"
           >
             I already have an account
           </button>
@@ -135,7 +141,7 @@ function GamePanel() {
 
   return (
     <>
-      <section className="flex items-center justify-between rounded-lg border border-vault-800 bg-vault-900/60 p-5">
+      <section className="flex items-center justify-between pane p-5">
         <div className="flex items-center gap-4">
           {/* Only where Clerk's UserButton is not rendering a face already.
               With it, the same picture appeared twice in one header — once
@@ -152,10 +158,10 @@ function GamePanel() {
             />
           )}
           <div>
-            <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+            <h2 className="label">
               Your game
             </h2>
-            <p className="mt-2 font-mono text-sm text-vault-100">
+            <p className="mt-2 font-mono text-sm text-stock-900">
               {state.kind === 'loading' && 'Opening your game…'}
               {state.kind === 'ready' &&
                 `${state.game.username} — ${state.game.solvedRooms.length}/${ROOM_IDS.length} rooms solved`}
@@ -172,7 +178,7 @@ function GamePanel() {
             <button
               type="button"
               onClick={signOut}
-              className="rounded border border-vault-700 px-3 py-1.5 font-mono text-xs text-vault-300 transition hover:border-vault-500"
+              className="btn btn-ghost btn-sm"
             >
               Sign out
             </button>
@@ -180,27 +186,47 @@ function GamePanel() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">
-        <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">Rooms</h2>
+      <section className="pane p-5">
+        <h2 className="label">Rooms</h2>
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {ROOM_IDS.map((roomId, index) => {
-            const solved = state.kind === 'ready' && state.game.solvedRooms.includes(roomId)
+            const game = state.kind === 'ready' ? state.game : null
+            const solved = game !== null && game.solvedRooms.includes(roomId)
+            const unlocked = game !== null && isRoomUnlocked(game, roomId)
+
             return (
               <li
                 key={roomId}
                 data-testid={roomId}
                 data-solved={solved}
-                className="flex items-center gap-3 rounded border border-vault-800 px-3 py-2 font-mono text-sm text-vault-300"
+                data-unlocked={unlocked}
+                className="flex items-center gap-3 pane-inset px-3 py-2 font-mono text-sm text-stock-700"
               >
-                <span className={solved ? 'text-solved-400' : 'text-signal-400'}>
+                <span
+                  className={
+                    solved ? 'text-solved-600' : unlocked ? 'text-signal-600' : 'text-stock-400'
+                  }
+                >
                   {solved ? '✓' : index + 1}
                 </span>
-                {roomId}
+
+                {/* The frosted lock state (ADR-0032). A room you cannot enter
+                    yet is blurred: you can see there is one without being able
+                    to read it.
+
+                    Cosmetic, and only cosmetic. The server refuses a locked
+                    room outright and never sends its contents (ADR-0006) — so
+                    this is that fact made visible, not the thing enforcing it.
+                    Screen readers still get the name, which is right; the room
+                    ids were never the secret. */}
+                <span className="veil" data-unlocked={unlocked}>
+                  {roomId}
+                </span>
               </li>
             )
           })}
         </ul>
-        <p className="mt-4 text-sm text-vault-500">
+        <p className="mt-4 text-sm text-stock-600">
           The rooms themselves are the team&apos;s work — this panel only proves the account and the
           API agree about whose game this is.
         </p>

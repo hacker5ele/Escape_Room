@@ -59,9 +59,9 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
   }
 
   return (
-    <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">
-      <h2 className="font-mono text-sm text-vault-100">Before you go in</h2>
-      <p className="mt-2 text-sm text-vault-300">
+    <section className="pane p-6">
+      <h2 className="font-mono text-sm text-stock-900">Before you go in</h2>
+      <p className="mt-2 text-sm text-stock-700">
         {needsUsername
           ? 'Pick a username — it has to be unique, and it is what other players will see.'
           : 'We just need a name to put on your game.'}
@@ -75,7 +75,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
       >
         {needsUsername && (
           <label className="block">
-            <span className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+            <span className="label">
               Username
             </span>
             <input
@@ -84,7 +84,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
               autoComplete="username"
               maxLength={32}
               required
-              className="mt-1 w-full rounded border border-vault-700 bg-vault-950 px-3 py-2 font-mono text-sm text-vault-100 outline-none focus:border-signal-400"
+              className="mt-1 w-full field"
             />
           </label>
         )}
@@ -92,7 +92,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
         {needsName && (
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+              <span className="label">
                 First name
               </span>
               <input
@@ -101,12 +101,12 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
                 autoComplete="given-name"
                 maxLength={50}
                 required
-                className="mt-1 w-full rounded border border-vault-700 bg-vault-950 px-3 py-2 font-mono text-sm text-vault-100 outline-none focus:border-signal-400"
+                className="mt-1 w-full field"
               />
             </label>
 
             <label className="block">
-              <span className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+              <span className="label">
                 Last name
               </span>
               <input
@@ -115,7 +115,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
                 autoComplete="family-name"
                 maxLength={50}
                 required
-                className="mt-1 w-full rounded border border-vault-700 bg-vault-950 px-3 py-2 font-mono text-sm text-vault-100 outline-none focus:border-signal-400"
+                className="mt-1 w-full field"
               />
             </label>
           </div>
@@ -130,7 +130,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
         <button
           type="submit"
           disabled={saving}
-          className="rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300 disabled:opacity-50"
+          className="btn"
         >
           {saving ? 'Saving…' : 'Enter the first room'}
         </button>

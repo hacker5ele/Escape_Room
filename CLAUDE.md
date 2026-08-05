@@ -134,6 +134,7 @@ Where things belong:
 | --- | --- | --- |
 | A room's puzzle & solution | `apps/backend/src/domain/rooms/room-0N.ts` | — |
 | A room's look & interaction | — | `apps/frontend/src/rooms/room-0N/` |
+| Colours, type, panels, buttons | — | `apps/frontend/src/index.css` — the design system |
 | Shared types / API shapes | `packages/shared/src/` | same file — one source |
 | Friends, invites, avatars | `apps/backend/src/{routes,services}/` | `apps/frontend/src/social/` |
 | Notifications / polling | `apps/backend/src/routes/sync.routes.ts` | `apps/frontend/src/sync/` |
@@ -326,6 +327,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0032](docs/adr/0032-overprint-design-system.md) | Overprint: a design system of two spot inks on paper; glass panels are a third ink | Accepted |
 | 2026-08-04 | [0031](docs/adr/0031-drop-project-week-branding.md) | Drop the project-week branding; the assignment quotation stays verbatim | Accepted |
 | 2026-08-04 | [0030](docs/adr/0030-tests-own-one-server-per-app.md) | Tests start one HTTP server per app instead of one per request | Accepted |
 | 2026-08-04 | [0029](docs/adr/0029-rate-limits-per-account-and-invite-acceptance.md) | Rate limits key on the account; following an invite link makes you friends | Accepted |
@@ -369,6 +371,14 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
 - **`apps/frontend`** — a sign-in gate and one page behind it. It proves the whole chain works: Clerk
   issues a token, the browser sends it, the API verifies it and finds that account's game. The rooms
   themselves are the team's work.
+- **Design** — *Overprint* ([ADR-0032](docs/adr/0032-overprint-design-system.md)): two spot inks on
+  paper stock, and glass panels are a third ink rather than a floating card — `.pane` multiplies over
+  what is behind it. Syne and Martian Mono are self-hosted in `src/assets/fonts/`. Build rooms with
+  the component classes (`.pane`, `.btn`, `.field`, `.label`, `.veil`) and the `stock` / `signal` /
+  `solved` tokens; do not hardcode a colour. **A locked room is frosted** — that is `.veil`, and it is
+  cosmetic only, since the server never sends a locked room's contents at all. Two rules break the
+  design silently if ignored: never put `overflow: hidden` above a `.pane`, and never give a `.pane`
+  its own stacking context.
 - **Accounts** — players register with Clerk before they can reach anything. Progress and an activity
   log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
 - **Friends** — add somebody by username, or send a revocable invite link that shows who is inviting

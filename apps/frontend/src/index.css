@@ -1,111 +1,412 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+@import 'tailwindcss';
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+/* ==========================================================================
+   Overprint — the escape room design system.  See ADR-0032.
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+   The metaphor is screenprinting: two spot inks laid over paper stock, going
+   dark where they cross. Panels are not floating cards — they are a third ink
+   layer, set to `multiply`, so they behave like something printed rather than
+   something hovering.
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+   Two rules that are easy to break by accident:
+
+   1. Never put `overflow: hidden` on an ancestor of `.pane`. It silently
+      disables `backdrop-filter` on every descendant and the glass goes flat
+      with no error anywhere.
+   2. Body text sits on `.pane`, whose fill is above 0.7 alpha for exactly
+      this reason — below that, contrast over the ink fields drops under the
+      WCAG floor depending on what happens to be behind it.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Typefaces.  Self-hosted: there is no font CDN request, so nothing renders
+   in a fallback face while a third party is slow. Licences sit next to the
+   files in src/assets/fonts/.
+   -------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Syne';
+  src: url('./assets/fonts/syne-latin.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-@media (prefers-color-scheme: dark) {
+@font-face {
+  font-family: 'Syne';
+  src: url('./assets/fonts/syne-latin-ext.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Martian Mono';
+  src: url('./assets/fonts/martian-mono-latin.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Martian Mono';
+  src: url('./assets/fonts/martian-mono-latin-ext.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* --------------------------------------------------------------------------
+   Tokens.  Tailwind v4 turns every entry here into a utility, so `stock-900`
+   below is what makes `text-stock-900` and `border-stock-900` exist.
+   -------------------------------------------------------------------------- */
+
+@theme {
+  /* The stock: paper through to key ink. Warm-biased — a neutral grey ramp
+     reads as unconsidered, and paper is never neutral. */
+  --color-stock-50: #f6f2e6;
+  --color-stock-100: #ede7d6;
+  --color-stock-200: #e0d9c5;
+  --color-stock-300: #cec6b0;
+  --color-stock-400: #a9a08a;
+  --color-stock-500: #837b68;
+  --color-stock-600: #5c574c;
+  --color-stock-700: #3e3a32;
+  --color-stock-800: #2a2721;
+  --color-stock-900: #18160f;
+  --color-stock-950: #0e0d08;
+
+  /* Ink A — warm red. Everything you can act on, and nothing else. Used
+     decoratively it stops meaning anything. */
+  --color-signal-100: #fbddd7;
+  --color-signal-300: #f28a78;
+  --color-signal-500: #e8452e;
+  --color-signal-600: #c9331e;
+  --color-signal-700: #a02718;
+
+  /* Ink B — process cyan. Solved, complete, resolved. */
+  --color-solved-100: #cfe6f4;
+  --color-solved-300: #62b2db;
+  --color-solved-500: #0b7fbf;
+  --color-solved-600: #086495;
+  --color-solved-700: #064b70;
+
+  /* Where the two inks actually cross. Not picked by eye — this is A
+     multiplied by B, which is what the press would give you. */
+  --color-overprint: #0a2222;
+
+  --font-display: 'Syne', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Martian Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Screenprint shadow: a hard offset, never a soft blur. Ink does not
+     diffuse, and a blurred shadow is what makes a panel look like a card. */
+  --shadow-print: 3px 3px 0 var(--color-stock-900);
+  --shadow-print-sm: 2px 2px 0 var(--color-stock-900);
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+
+@layer base {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    color-scheme: light;
+
+    /* Blur radius lives in a variable so the reduced-transparency rule at the
+       bottom can flatten every pane at once. */
+    --pane-blur: 9px;
+    --pane-alpha: 0.78;
   }
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+  html {
+    background-color: var(--color-stock-100);
+  }
+
+  body {
+    margin: 0;
+    min-height: 100svh;
+    color: var(--color-stock-900);
+    font-family: var(--font-mono);
+    font-size: 15px;
+    line-height: 1.55;
+    /* Martian Mono is a wide face; without this it reads as spaced-out. */
+    letter-spacing: -0.015em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    /* The press sheet: two ink fields over stock, plus the halftone that
+       stops the gradients reading as gradients. Fixed, so the inks stay put
+       while content scrolls over them — the page is printed, not parallaxed. */
+    background-color: var(--color-stock-100);
+    background-image:
+      radial-gradient(circle at center, rgb(24 22 15 / 0.42) 1.1px, transparent 1.2px),
+      radial-gradient(58% 62% at 12% 88%, rgb(11 127 191 / 0.5) 0%, rgb(11 127 191 / 0) 62%),
+      radial-gradient(54% 58% at 88% 8%, rgb(232 69 46 / 0.45) 0%, rgb(232 69 46 / 0) 60%);
+    background-size:
+      6px 6px,
+      100% 100%,
+      100% 100%;
+    background-attachment: fixed, fixed, fixed;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  /* Focus is ink A on key — visible over paper and over either ink field. */
+  :focus-visible {
+    outline: 2px solid var(--color-signal-500);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-signal-500);
+    color: var(--color-stock-50);
+  }
+
+  /* Inputs inherit nothing useful by default; without this they arrive in the
+     browser's own face and the whole system breaks at the first form. */
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    letter-spacing: inherit;
   }
 }
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
+/* --------------------------------------------------------------------------
+   Components
 
-body {
-  margin: 0;
-}
+   These exist as classes rather than utility strings because each is several
+   properties that only make sense together — a `.pane` missing its rim or its
+   shadow is not a cheaper pane, it is a broken one.
+   -------------------------------------------------------------------------- */
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
+@layer components {
+  /* The glass. Its fill lives on a pseudo-element so that `multiply` applies
+     to the ink layer alone; putting the blend on the panel itself would
+     multiply the text too, and body copy would go muddy over the ink fields. */
+  .pane {
+    position: relative;
+    border: 1px solid var(--color-stock-900);
+    box-shadow: var(--shadow-print);
+    color: var(--color-stock-900);
+  }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+  /* Negative z-index, deliberately: it puts the ink and the sheen behind the
+     panel's own content without `.pane` needing a stacking context. Give it
+     one — `isolation: isolate`, or any z-index of its own — and `multiply`
+     would blend against the panel instead of the page, which flattens it. */
+  .pane::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: rgb(247 243 232 / var(--pane-alpha));
+    mix-blend-mode: multiply;
+    backdrop-filter: blur(var(--pane-blur)) saturate(1.05);
+    -webkit-backdrop-filter: blur(var(--pane-blur)) saturate(1.05);
+  }
+
+  /* The light on the top edge. Small, and most of what separates glass from
+     a translucent rectangle. */
+  .pane::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.3) 0%, transparent 28%);
+  }
+
+  .pane > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .pane::before {
+      background: var(--color-stock-50);
+      mix-blend-mode: normal;
+    }
+  }
+
+  /* A quieter pane for nested surfaces — a row inside a panel. No shadow,
+     because stacked hard shadows read as clutter rather than depth. */
+  .pane-inset {
+    position: relative;
+    border: 1px solid rgb(24 22 15 / 0.28);
+    background: rgb(247 243 232 / 0.45);
+    color: var(--color-stock-900);
+  }
+
+  /* Buttons. The press-down on :active is 1px of real travel, not a colour
+     change — a control should feel like it moved. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1.05rem;
+    border: 1px solid var(--color-stock-900);
+    background: var(--color-signal-500);
+    color: var(--color-stock-50);
+    font-size: 0.76rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: var(--shadow-print-sm);
+    transition:
+      transform 0.16s cubic-bezier(0.16, 0.84, 0.24, 1),
+      box-shadow 0.16s cubic-bezier(0.16, 0.84, 0.24, 1),
+      background-color 0.16s ease;
+  }
+
+  .btn:hover:not(:disabled) {
+    background: var(--color-signal-600);
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-stock-900);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: translate(1px, 1px);
+    box-shadow: 0 0 0 var(--color-stock-900);
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-stock-900);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--color-stock-900);
+    color: var(--color-stock-50);
+  }
+
+  .btn-sm {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.68rem;
+  }
+
+  /* Fields. Square, ink-bordered, and they gain ink A on focus so the active
+     field is unmistakable even mid-form. */
+  .field {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-stock-900);
+    background: rgb(247 243 232 / 0.72);
+    color: var(--color-stock-900);
+    font-size: 0.85rem;
+  }
+
+  .field::placeholder {
+    color: var(--color-stock-500);
+  }
+
+  .field:focus {
+    outline: none;
+    border-color: var(--color-signal-500);
+    box-shadow: inset 0 0 0 1px var(--color-signal-500);
+  }
+
+  /* The overline label: catalogue typography, used for every section heading
+     that is a name rather than a sentence. */
+  .label {
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-stock-600);
+  }
+
+  /* THE IDEA (ADR-0032): a locked room is frosted. You can see there is
+     something there and you cannot read it; solving clears the glass. The
+     blur is the lock state, not decoration.
+
+     Not a security boundary — the server never sends a locked room's payload
+     at all (ADR-0006). This is the same fact told visually. */
+  .veil {
+    filter: blur(6px);
+    opacity: 0.5;
+    user-select: none;
+    transition:
+      filter 0.6s cubic-bezier(0.4, 0, 0.15, 1),
+      opacity 0.6s ease;
+  }
+
+  .veil[data-unlocked='true'] {
+    filter: blur(0);
+    opacity: 1;
+    user-select: auto;
+  }
+
+  /* The ink rule — a hairline in key, for separating rows. */
+  .rule {
+    border: 0;
+    border-top: 1px solid rgb(24 22 15 / 0.22);
   }
 }
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+
+/* --------------------------------------------------------------------------
+   Accessibility
+
+   Both of these are why the blur and alpha are variables rather than literals
+   — one rule flattens every pane in the app.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --pane-blur: 0px;
+    --pane-alpha: 1;
+  }
+
+  .pane::before {
+    mix-blend-mode: normal;
+  }
+
+  body {
+    background-image: none;
   }
 }
-p {
-  margin: 0;
-}
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+  /* The veil still has to resolve, just without the travel. */
+  .veil {
+    transition: none;
+  }
 }
