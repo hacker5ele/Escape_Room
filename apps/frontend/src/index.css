@@ -1214,7 +1214,7 @@
 }
 
 @layer components {
-  .ink-flood {
+  .iris-wipe {
     position: fixed;
     inset: 0;
     z-index: 60;

@@ -88,6 +88,8 @@ export const API_ERROR_CODES = [
   'NOT_FRIENDS',
   'GAME_CONFLICT',
   'NOT_HOST',
+  /** The host's game already has as many people in it as a stage can hold. */
+  'PARTY_FULL',
   'BLOCKED',
   'ROOM_NOT_FOUND',
   'ROOM_LOCKED',

@@ -6,6 +6,8 @@ import { useAppAuth } from '../auth/useAppAuth'
 import { play } from '../audio/sfx'
 import { Stage, type Actor } from '../stage/Stage'
 import { useMovement } from '../stage/useMovement'
+import { usePresence, toActor } from '../stage/usePresence'
+import { setPhase, useRegisterStageAuth } from '../api/stage'
 import { spawnPoint } from '../stage/scenes'
 import { EmoteBar } from '../lobby/EmoteBar'
 import { type EmoteName, emoteDuration, emoteSound } from '../character/emotes'
@@ -53,7 +55,9 @@ export function RoomView({
   const [emote, setEmote] = useState<EmoteName | null>(null)
 
   const definition = roomDefinition(roomId)
-  const { position, walkTo, stopWalking } = useMovement(spawnPoint(0, 1))
+  const { position, walkTo, stopWalking, current } = useMovement(spawnPoint(0, 1))
+  useRegisterStageAuth()
+  const { actors, sendEmote } = usePresence({ position: current, character, ready: false })
 
   // Held in a ref, and the effect runs on mount only: depending on the function
   // itself would re-enter the room on every render.
@@ -89,11 +93,15 @@ export function RoomView({
     }
   }, [roomId])
 
-  const fire = useCallback((name: EmoteName) => {
-    setEmote(name)
-    play(emoteSound(name) as SoundName)
-    window.setTimeout(() => setEmote(null), emoteDuration(name))
-  }, [])
+  const fire = useCallback(
+    (name: EmoteName) => {
+      setEmote(name)
+      sendEmote(name)
+      play(emoteSound(name) as SoundName)
+      window.setTimeout(() => setEmote(null), emoteDuration(name))
+    },
+    [sendEmote],
+  )
 
   async function answer(value: unknown) {
     if (busy || solved) return
@@ -156,7 +164,17 @@ export function RoomView({
             {state.kind === 'ready' ? state.room.title : definition.title}
           </h1>
         </div>
-        <button type="button" onClick={onLeave} className="btn btn-ghost btn-sm">
+        <button
+          type="button"
+          onClick={() => {
+            // Puts the party back in the lobby as well as yourself. A host who
+            // walks out while guests are still in the room would otherwise
+            // leave them there with nobody to start anything.
+            void setPhase({ kind: 'lobby' })
+            onLeave()
+          }}
+          className="btn btn-ghost btn-sm"
+        >
           Leave the room
         </button>
       </header>
@@ -185,7 +203,7 @@ export function RoomView({
 
           <Stage
             scene={definition.scene}
-            actors={[me]}
+            actors={[me, ...actors.map(toActor)]}
             onWalkTo={walkTo}
             onWalkEnd={stopWalking}
           >

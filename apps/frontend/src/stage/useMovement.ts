@@ -143,5 +143,7 @@ export function useMovement(start: { x: number; y: number }, enabled = true) {
     target.current = null
   }
 
+  // `current` is the ref the heartbeat reads. State lags a frame behind it and
+  // would send yesterday's position twice a second.
   return { position, walkTo, stopWalking, current }
 }

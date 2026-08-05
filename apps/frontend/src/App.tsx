@@ -20,7 +20,7 @@ import { Tabs } from './ui/Tabs'
 import { LobbyView } from './lobby/LobbyView'
 import { RoomView } from './rooms/RoomView'
 import { unlockAudio } from './audio/sfx'
-import { InkFlood } from './fx/InkFlood'
+import { IrisWipe } from './fx/IrisWipe'
 
 /**
  * The scaffold page, behind a sign-in gate.
@@ -205,7 +205,7 @@ function GamePanel() {
     <>
       {content}
       {flooding && (
-        <InkFlood
+        <IrisWipe
           onCovered={() => flooding()}
           onDone={() => setFlooding(null)}
         />
