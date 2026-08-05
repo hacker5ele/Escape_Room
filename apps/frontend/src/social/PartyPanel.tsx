@@ -66,8 +66,8 @@ export function PartyPanel({
   )
 
   return (
-    <section className="space-y-4 rounded-lg border border-vault-800 bg-vault-900/60 p-5">
-      <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+    <section className="space-y-4 pane p-5">
+      <h2 className="label">
         {party.isHost ? 'Your game' : `${party.host.displayName}’s game`}
       </h2>
 
@@ -78,9 +78,9 @@ export function PartyPanel({
       )}
 
       {!party.isHost && (
-        <div className="flex flex-wrap items-center gap-3 rounded border border-vault-800 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-3 pane-inset px-3 py-2">
           <Avatar subject={party.host} size={32} />
-          <p className="min-w-0 flex-1 truncate font-mono text-sm text-vault-100">
+          <p className="min-w-0 flex-1 truncate font-mono text-sm text-stock-900">
             You are playing in {party.host.displayName}’s game.
           </p>
           <button
@@ -93,7 +93,7 @@ export function PartyPanel({
                 return next
               })
             }
-            className="rounded border border-vault-700 px-3 py-1.5 font-mono text-xs text-vault-300 transition hover:border-vault-500 disabled:opacity-50"
+            className="btn btn-ghost btn-sm"
           >
             Leave
           </button>
@@ -105,10 +105,10 @@ export function PartyPanel({
           {party.members.map((member) => (
             <li
               key={member.userId}
-              className="flex flex-wrap items-center gap-3 rounded border border-vault-800 px-3 py-2"
+              className="flex flex-wrap items-center gap-3 pane-inset px-3 py-2"
             >
               <Avatar subject={member} size={32} />
-              <p className="min-w-0 flex-1 truncate font-mono text-sm text-vault-100">
+              <p className="min-w-0 flex-1 truncate font-mono text-sm text-stock-900">
                 {member.displayName} is playing with you
               </p>
               {party.isHost && (
@@ -116,7 +116,7 @@ export function PartyPanel({
                   type="button"
                   disabled={busy}
                   onClick={() => void run(async (auth) => removeFromGame(auth, member.userId))}
-                  className="rounded border border-vault-700 px-3 py-1.5 font-mono text-xs text-vault-300 transition hover:border-vault-500 disabled:opacity-50"
+                  className="btn btn-ghost btn-sm"
                 >
                   Remove
                 </button>
@@ -128,16 +128,16 @@ export function PartyPanel({
 
       {party.isHost && invitable.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm text-vault-500">
+          <p className="text-sm text-stock-600">
             Invite a friend in, or join theirs instead — you keep your own progress either way.
           </p>
           {invitable.map((friend) => (
             <div
               key={friend.profile.userId}
-              className="flex flex-wrap items-center gap-2 rounded border border-vault-800 px-3 py-2"
+              className="flex flex-wrap items-center gap-2 pane-inset px-3 py-2"
             >
               <Avatar subject={friend.profile} size={28} />
-              <span className="min-w-0 flex-1 truncate font-mono text-sm text-vault-100">
+              <span className="min-w-0 flex-1 truncate font-mono text-sm text-stock-900">
                 {friend.profile.displayName}
               </span>
               <button
@@ -149,7 +149,7 @@ export function PartyPanel({
                     return null
                   })
                 }
-                className="rounded border border-vault-700 px-3 py-1.5 font-mono text-xs text-vault-300 transition hover:border-vault-500 disabled:opacity-50"
+                className="btn btn-ghost btn-sm"
               >
                 Invite
               </button>
@@ -163,7 +163,7 @@ export function PartyPanel({
                     return next
                   })
                 }
-                className="rounded bg-signal-400 px-3 py-1.5 font-mono text-xs font-semibold text-vault-950 transition hover:bg-signal-300 disabled:opacity-50"
+                className="rounded bg-signal-500 px-3 py-1.5 font-mono text-xs font-semibold text-stock-50 transition hover:bg-signal-600 disabled:opacity-50"
               >
                 Join theirs
               </button>
@@ -173,7 +173,7 @@ export function PartyPanel({
       )}
 
       {party.isHost && party.members.length === 0 && invitable.length === 0 && (
-        <p className="text-sm text-vault-500">
+        <p className="text-sm text-stock-600">
           Add a friend to play a room together.
         </p>
       )}

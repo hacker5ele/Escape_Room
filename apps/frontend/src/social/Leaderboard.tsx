@@ -40,15 +40,15 @@ export function Leaderboard({ solvedCount }: { solvedCount: number }) {
   }, [load, solvedCount])
 
   return (
-    <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">
-      <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+    <section className="pane p-5">
+      <h2 className="label">
         You and your friends
       </h2>
 
-      {entries === null && <p className="mt-3 text-sm text-vault-500">Loading…</p>}
+      {entries === null && <p className="mt-3 text-sm text-stock-600">Loading…</p>}
 
       {entries !== null && entries.length <= 1 && (
-        <p className="mt-3 text-sm text-vault-500">
+        <p className="mt-3 text-sm text-stock-600">
           Add a friend to see how you compare.
         </p>
       )}
@@ -59,26 +59,26 @@ export function Leaderboard({ solvedCount }: { solvedCount: number }) {
             <li
               key={entry.profile.userId}
               className={`flex items-center gap-3 rounded px-3 py-2 ${
-                entry.isMe ? 'bg-vault-800/60' : ''
+                entry.isMe ? 'bg-stock-200/60' : ''
               }`}
             >
-              <span className="w-5 shrink-0 text-right font-mono text-sm text-vault-500">
+              <span className="w-5 shrink-0 text-right font-mono text-sm text-stock-600">
                 {index + 1}
               </span>
               <Avatar subject={entry.profile} size={32} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-mono text-sm text-vault-100">
+                <p className="truncate font-mono text-sm text-stock-900">
                   {entry.profile.displayName}
-                  {entry.isMe && <span className="ml-2 text-xs text-vault-500">you</span>}
+                  {entry.isMe && <span className="ml-2 text-xs text-stock-600">you</span>}
                 </p>
-                <p className="truncate font-mono text-xs text-vault-500">
+                <p className="truncate font-mono text-xs text-stock-600">
                   {entry.solvedRooms}/{ROOM_IDS.length} rooms
                   {entry.hintsUsed > 0 &&
                     ` · ${entry.hintsUsed} ${entry.hintsUsed === 1 ? 'hint' : 'hints'}`}
                 </p>
               </div>
               {entry.finishedInMs !== null && (
-                <span className="shrink-0 font-mono text-xs text-solved-400">
+                <span className="shrink-0 font-mono text-xs text-solved-600">
                   {formatDuration(entry.finishedInMs)}
                 </span>
               )}

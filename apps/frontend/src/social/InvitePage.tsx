@@ -71,15 +71,15 @@ export function InvitePage({ token }: { token: string }) {
 
   return (
     <Shell>
-      {state.kind === 'loading' && <p className="font-mono text-sm text-vault-300">Loading…</p>}
+      {state.kind === 'loading' && <p className="font-mono text-sm text-stock-700">Loading…</p>}
 
       {state.kind === 'invalid' && (
         <>
-          <h2 className="font-mono text-sm text-vault-100">That link does not work</h2>
-          <p className="mt-2 text-sm text-vault-300">{state.message}</p>
+          <h2 className="font-mono text-sm text-stock-900">That link does not work</h2>
+          <p className="mt-2 text-sm text-stock-700">{state.message}</p>
           <a
             href="/"
-            className="mt-5 inline-block rounded border border-vault-700 px-4 py-2 font-mono text-sm text-vault-100 transition hover:border-vault-500"
+            className="mt-5 inline-block btn btn-ghost"
           >
             Go to the escape room
           </a>
@@ -89,13 +89,13 @@ export function InvitePage({ token }: { token: string }) {
       {state.kind === 'accepted' && (
         <>
           <Inviter profile={state.inviter} />
-          <p className="mt-4 text-sm text-vault-300">
+          <p className="mt-4 text-sm text-stock-700">
             Done — {state.inviter.displayName} has been asked to confirm. You will see them in your
             friend list once they do.
           </p>
           <a
             href="/"
-            className="mt-5 inline-block rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300"
+            className="mt-5 inline-block btn"
           >
             Go to the escape room
           </a>
@@ -106,7 +106,7 @@ export function InvitePage({ token }: { token: string }) {
         <>
           <Inviter profile={state.inviter} />
 
-          {!isLoaded && <p className="mt-5 font-mono text-sm text-vault-300">Loading…</p>}
+          {!isLoaded && <p className="mt-5 font-mono text-sm text-stock-700">Loading…</p>}
 
           {isLoaded && isSignedIn && (
             <div className="mt-5 flex flex-wrap gap-3">
@@ -114,13 +114,13 @@ export function InvitePage({ token }: { token: string }) {
                 type="button"
                 disabled={busy}
                 onClick={() => void accept()}
-                className="rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300 disabled:opacity-50"
+                className="btn"
               >
                 Accept
               </button>
               <a
                 href="/"
-                className="rounded border border-vault-700 px-4 py-2 font-mono text-sm text-vault-100 transition hover:border-vault-500"
+                className="btn btn-ghost"
               >
                 No thanks
               </a>
@@ -139,7 +139,7 @@ export function InvitePage({ token }: { token: string }) {
               <SignUpButton mode="modal">
                 <button
                   type="button"
-                  className="rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300"
+                  className="btn"
                 >
                   Create an account to accept
                 </button>
@@ -147,7 +147,7 @@ export function InvitePage({ token }: { token: string }) {
               <SignInButton mode="modal">
                 <button
                   type="button"
-                  className="rounded border border-vault-700 px-4 py-2 font-mono text-sm text-vault-100 transition hover:border-vault-500"
+                  className="btn btn-ghost"
                 >
                   I already have one
                 </button>
@@ -165,9 +165,9 @@ function Inviter({ profile }: { profile: PublicProfile }) {
     <div className="flex items-center gap-4">
       <Avatar subject={profile} size={64} />
       <div className="min-w-0">
-        <p className="font-mono text-lg text-vault-100">{profile.displayName}</p>
-        <p className="font-mono text-sm text-vault-500">@{profile.username}</p>
-        <p className="mt-1 text-sm text-vault-300">wants to be your friend.</p>
+        <p className="font-mono text-lg text-stock-900">{profile.displayName}</p>
+        <p className="font-mono text-sm text-stock-600">@{profile.username}</p>
+        <p className="mt-1 text-sm text-stock-700">wants to be your friend.</p>
       </div>
     </div>
   )
@@ -177,10 +177,10 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-8 px-6 py-16">
       <header className="space-y-3">
-        <p className="font-mono text-xs tracking-[0.3em] text-signal-400 uppercase">Invitation</p>
-        <h1 className="font-mono text-3xl font-semibold text-vault-100">Der digitale Escape Room</h1>
+        <p className="font-mono text-xs tracking-[0.3em] text-signal-600 uppercase">Invitation</p>
+        <h1 className="font-mono text-3xl font-semibold text-stock-900">Der digitale Escape Room</h1>
       </header>
-      <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">{children}</section>
+      <section className="pane p-6">{children}</section>
     </main>
   )
 }

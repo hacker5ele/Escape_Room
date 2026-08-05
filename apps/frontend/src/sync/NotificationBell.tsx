@@ -51,13 +51,13 @@ export function NotificationBell() {
         aria-label={
           unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications, none unread'
         }
-        className="relative rounded border border-vault-700 px-3 py-1.5 font-mono text-xs text-vault-300 transition hover:border-vault-500"
+        className="relative btn btn-ghost btn-sm"
       >
         <span aria-hidden="true">Bell</span>
         {unreadCount > 0 && (
           <span
             data-testid="unread-badge"
-            className="absolute -top-2 -right-2 min-w-5 rounded-full bg-signal-400 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-vault-950"
+            className="absolute -top-2 -right-2 min-w-5 rounded-full bg-signal-500 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-stock-50"
           >
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
@@ -65,9 +65,9 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-10 mt-2 w-80 rounded-lg border border-vault-800 bg-vault-950 p-2 shadow-xl">
+        <div className="absolute right-0 z-10 mt-2 w-80 pane p-2">
           {notifications.length === 0 ? (
-            <p className="p-3 text-sm text-vault-500">Nothing yet.</p>
+            <p className="p-3 text-sm text-stock-600">Nothing yet.</p>
           ) : (
             <ul className="max-h-96 space-y-1 overflow-y-auto">
               {notifications.map((notification) => (
@@ -83,20 +83,20 @@ export function NotificationBell() {
 
 function Row({ notification }: { notification: Notification }) {
   return (
-    <li className="flex items-start gap-3 rounded px-2 py-2 hover:bg-vault-900">
+    <li className="flex items-start gap-3 rounded px-2 py-2 hover:bg-stock-100">
       {notification.actor ? (
         <Avatar subject={notification.actor} size={28} />
       ) : (
-        <span className="h-7 w-7 shrink-0 rounded-full bg-vault-800" />
+        <span className="h-7 w-7 shrink-0 rounded-full bg-stock-200" />
       )}
       <div className="min-w-0 flex-1">
         {/* Plain text. React escapes it, and nothing here uses
             dangerouslySetInnerHTML — a display name is somebody else's input. */}
-        <p className="text-sm text-vault-100">{notification.message}</p>
-        <p className="font-mono text-xs text-vault-600">{relativeTime(notification.createdAt)}</p>
+        <p className="text-sm text-stock-900">{notification.message}</p>
+        <p className="font-mono text-xs text-stock-500">{relativeTime(notification.createdAt)}</p>
       </div>
       {notification.readAt === null && (
-        <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-signal-400" />
+        <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-signal-500" />
       )}
     </li>
   )

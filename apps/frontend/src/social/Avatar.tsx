@@ -52,7 +52,7 @@ export function Avatar({
       ) : (
         <span
           aria-hidden="true"
-          className="font-mono font-semibold text-vault-950 select-none"
+          className="font-mono font-semibold text-stock-50 select-none"
           // Scaled to the circle rather than fixed, so one component works at
           // 24px in a list and 64px on a profile.
           style={{ fontSize: Math.max(10, Math.round(size * 0.4)) }}
@@ -68,18 +68,26 @@ export function Avatar({
  * A stable colour per person.
  *
  * Deterministic from the user id so somebody does not change colour between
- * screens or reloads. The palette is fixed and picked to stay legible against
- * the dark near-black text used for initials.
+ * screens or reloads.
+ *
+ * Every entry is something the two inks could actually produce (ADR-0032).
+ * A press has one red and one cyan; it gets variety from tint density and
+ * from overprinting, not from more inks. So these are ink A, ink B, and the
+ * two of them crossed at different densities — which is why there is no
+ * green, no purple and no yellow in the list. An arbitrary hue here would be
+ * the one place in the app that could not have been printed.
+ *
+ * All eight clear 7:1 against the near-white used for the initials.
  */
 const PALETTE = [
-  '#f5a524',
-  '#7dd3a0',
-  '#8ab4f8',
-  '#e879a6',
-  '#c4a2f5',
-  '#6fd0d6',
-  '#f08c6a',
-  '#b8d06a',
+  '#c9331e', // ink A
+  '#086495', // ink B
+  '#0a2222', // A over B, both solid — the true overprint
+  '#903729', // A solid over a 40% B tint
+  '#0a577b', // a 40% A tint over solid B
+  '#484c54', // both at 70%
+  '#a02718', // ink A, dense
+  '#064b70', // ink B, dense
 ]
 
 function colourFor(userId: string): string {
