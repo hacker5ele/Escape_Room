@@ -96,22 +96,24 @@ export function Stage({
     return () => observer.disconnect()
   }, [])
 
-  // Props and players in one list, sorted back to front. This single sort is
-  // what makes a character able to walk *behind* the armchair — without it the
-  // room is a painted backdrop with stickers on top.
-  const drawn = useMemo(() => {
-    const props = layout.props
-      // `depth` where a piece has one, otherwise its ground line. A rug lies
-      // flat: it sits at the front of the room but must draw *behind* anybody
-      // standing on it, and its base would otherwise sort it in front of their
-      // feet.
-      .map((prop) => ({ kind: 'prop' as const, y: prop.depth ?? prop.y, prop }))
-      .filter((entry) => pieceSize(entry.prop.piece) !== null)
+  // Depth is `z-index`, not DOM order — and that is a fix rather than a
+  // preference. Sorting the children by `y` meant React reordered keyed nodes
+  // every time a walking player crossed a prop, and **moving a DOM node
+  // restarts its CSS animations**: the drop-in played again on every crossing,
+  // dozens of times a minute.
+  //
+  // With a stable DOM order nothing is ever re-inserted, so an animation runs
+  // exactly once. The stacking is identical because every layer is positioned.
+  const props = useMemo(
+    () => layout.props.filter((prop) => pieceSize(prop.piece) !== null),
+    [layout],
+  )
 
-    const people = actors.map((actor) => ({ kind: 'actor' as const, y: actor.y, actor }))
-
-    return [...props, ...people].sort((a, b) => a.y - b.y)
-  }, [layout, actors])
+  // Sorted by id rather than by position, so the order is stable as people move.
+  const people = useMemo(
+    () => [...actors].sort((a, b) => a.userId.localeCompare(b.userId)),
+    [actors],
+  )
 
   /**
    * Pointer input, converted from screen pixels into stage units.
@@ -157,30 +159,32 @@ export function Stage({
         <img className="stage-wall" src={pieceUrl(layout.wall)} alt="" draggable={false} />
         <img className="stage-floor" src={pieceUrl(layout.floor)} alt="" draggable={false} />
 
-        {drawn.map((entry) => {
-          if (entry.kind === 'prop') {
-            const { prop } = entry
-            const size = pieceSize(prop.piece)!
-            return (
-              <img
-                key={`${prop.piece}-${prop.x}-${prop.y}`}
-                src={pieceUrl(prop.piece)}
-                alt=""
-                draggable={false}
-                data-sway={prop.sway}
-                className="stage-prop"
-                style={{
-                  left: prop.x - size.w / 2,
-                  top: prop.y - size.h,
-                  width: size.w,
-                  height: size.h,
-                  transform: prop.flip ? 'scaleX(-1)' : undefined,
-                }}
-              />
-            )
-          }
+        {props.map((prop) => {
+          const size = pieceSize(prop.piece)!
+          return (
+            <img
+              key={`${prop.piece}-${prop.x}-${prop.y}`}
+              src={pieceUrl(prop.piece)}
+              alt=""
+              draggable={false}
+              data-sway={prop.sway}
+              className="stage-prop"
+              style={{
+                left: prop.x - size.w / 2,
+                top: prop.y - size.h,
+                width: size.w,
+                height: size.h,
+                // `depth` where a piece has one, otherwise its ground line. A
+                // rug lies flat: it is at the front of the room but must draw
+                // behind anybody standing on it.
+                zIndex: Math.round(prop.depth ?? prop.y),
+                transform: prop.flip ? 'scaleX(-1)' : undefined,
+              }}
+            />
+          )
+        })}
 
-          const { actor } = entry
+        {people.map((actor) => {
           const height = ACTOR_HEIGHT * depthScale(actor.y)
 
           return (
@@ -193,6 +197,7 @@ export function Stage({
               style={{
                 left: actor.x,
                 top: actor.y,
+                zIndex: Math.round(actor.y),
                 // Placed by the feet, like the props — which is what puts a
                 // player and a chair on the same ground line.
                 transform: `translate(-50%, -100%) scaleX(${actor.facing})`,

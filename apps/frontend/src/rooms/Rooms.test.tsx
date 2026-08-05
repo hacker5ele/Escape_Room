@@ -77,15 +77,46 @@ describe('the stage', () => {
     expect(container.querySelectorAll('[data-actor]')).toHaveLength(2)
   })
 
-  it('sorts people and furniture together, so you can stand behind things', () => {
-    // The whole point of the depth sort: a character further back must be
-    // painted before a prop that is further forward.
-    const { container } = render(<Stage scene="lobby" actors={[actor('back', 700)]} />)
-    const nodes = [...container.querySelectorAll('[data-actor], .stage-prop')]
-    const person = nodes.findIndex((node) => node.hasAttribute('data-actor'))
-    // The rug is pinned behind everybody; the bin at y=760 is in front.
-    expect(person).toBeGreaterThan(0)
-    expect(person).toBeLessThan(nodes.length - 1)
+  it('layers people and furniture by depth, so you can stand behind things', () => {
+    const { container } = render(<Stage scene="lobby" actors={[actor('me', 700)]} />)
+
+    const depthOf = (node: Element) => Number((node as HTMLElement).style.zIndex)
+    const person = container.querySelector('[data-actor]')!
+    const sofa = container.querySelector('img[src*="lobby-sofa"]')!
+    const bin = container.querySelector('img[src*="lobby-bin"]')!
+
+    // Standing at y=700, level with the sofa and behind the bin at y=760.
+    expect(depthOf(person)).toBe(700)
+    expect(depthOf(person)).toBeLessThan(depthOf(bin))
+    expect(depthOf(sofa)).toBeLessThanOrEqual(depthOf(person))
+  })
+
+  it('keeps the DOM order stable as people move', () => {
+    // This is the fix, not a preference. Sorting the children by position meant
+    // React reordered keyed nodes whenever a walking player crossed a prop —
+    // and moving a DOM node restarts its CSS animations, so the drop-in replayed
+    // dozens of times a minute. Nothing may be re-inserted.
+    const { container, rerender } = render(
+      <Stage scene="lobby" actors={[actor('a', 700), actor('b', 860)]} />,
+    )
+    const before = [...container.querySelectorAll('[data-actor], .stage-prop')]
+
+    // Walk them past each other and past the furniture.
+    rerender(<Stage scene="lobby" actors={[actor('a', 870), actor('b', 695)]} />)
+    const after = [...container.querySelectorAll('[data-actor], .stage-prop')]
+
+    expect(after).toHaveLength(before.length)
+    // The very same nodes, in the very same slots — moved, not recreated.
+    after.forEach((node, index) => expect(node).toBe(before[index]))
+  })
+
+  it('puts a rug behind whoever stands on it', () => {
+    // A flat piece sits at the front of the room but must draw behind feet, so
+    // it carries an explicit depth rather than using its own ground line.
+    const { container } = render(<Stage scene="lobby" actors={[actor('me', 800)]} />)
+    const rug = container.querySelector('img[src*="lobby-rug"]')! as HTMLElement
+    const person = container.querySelector('[data-actor]')! as HTMLElement
+    expect(Number(rug.style.zIndex)).toBeLessThan(Number(person.style.zIndex))
   })
 })
 

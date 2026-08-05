@@ -457,6 +457,13 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   drops you into the room. **Room 01 is deliberately empty and walkable**; rooms 02–04 are stubs
   wired to the real `attempt` and `hint` endpoints — a sub-team writes the puzzle in
   `rooms/room-0N.tsx` and touches nothing else (ADR-0007).
+  - **Depth is `z-index`, never DOM order.** Sorting the stage's children by
+    position made React reorder keyed nodes as people walked, and **moving a DOM node restarts its
+    CSS animations** — the drop-in replayed dozens of times a minute. A test pins the DOM order as
+    stable.
+  - **Anything long-lived must not depend on an inline callback.** The lobby re-renders ~60×/s while
+    somebody walks, so a `useEffect` depending on `onDone={() => …}` is torn down every frame. That
+    is why the countdown could not count. Hold the callback in a ref and depend on nothing.
   - **The stage** (`src/stage/`) is one component used by the lobby *and* every room. It is a fixed
     1600×900 space scaled once; everything is placed **by its feet** and sorted by `y`, which is what
     lets you walk behind the sofa. Flat things (a rug) need a `depth` override or they draw over
