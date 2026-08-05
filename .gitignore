@@ -91,3 +91,8 @@ scripts/characters/raw/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Scenery generation — 54 MB of raw 1024px model output. Only the printed WebP
+# under apps/frontend/public/scenery/ is committed; anything here is
+# reproducible with scripts/scenery/generate_all.py.
+scripts/scenery/raw/

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import type { EmoteName } from './emotes'
 import {
   FRAME,
   RIG,
@@ -62,10 +63,19 @@ const pct = (value: number, of: number) => `${((value / of) * 100).toFixed(4)}%`
 export function CharacterFigure({
   character,
   animated = true,
+  emote = null,
+  walking = false,
   className = '',
+  style,
 }: {
   character: Character
   animated?: boolean
+  /** The dance currently playing, or null. Drives `[data-emote]` in the CSS. */
+  emote?: EmoteName | null
+  /** Runs the walk cycle instead of the idle. */
+  walking?: boolean
+  /** Sizing from the caller — the stage sets a height and lets width follow. */
+  style?: React.CSSProperties
   /**
    * Sizing is the caller's business: the figure fills the width it is given and
    * keeps the rig's aspect ratio.
@@ -128,7 +138,9 @@ export function CharacterFigure({
   return (
     <div
       className={`character ${animated ? 'character-live' : ''} ${className}`}
-      style={{ aspectRatio: `${FRAME[0]} / ${FRAME[1]}` }}
+      data-emote={emote ?? undefined}
+      data-walking={walking ? '' : undefined}
+      style={{ aspectRatio: `${FRAME[0]} / ${FRAME[1]}`, ...style }}
       // The figure is decoration wherever it appears beside a name; the name is
       // the accessible label. Announcing "cartoon character" adds nothing.
       aria-hidden="true"
