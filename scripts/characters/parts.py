@@ -119,7 +119,10 @@ ARMS = [
     "an armband above the elbow, open hand",
     "a puffed sleeve, dainty hand",
     "a work glove with a gauntlet cuff",
-    "a striped sleeve, two fingers raised in a peace sign",
+    # Deliberately not a V sign, and not a gesture with a handedness to it. The
+    # far arm is the near arm mirrored, so a palm-forward V comes out as the
+    # back of the hand on one side — which is a rude gesture in half of Europe.
+    "a striped sleeve and an open hand waving hello",
     "bare with a friendship bracelet, loose hand",
     "a lace trimmed sleeve, delicate hand",
     "a torn ragged sleeve, grubby hand",

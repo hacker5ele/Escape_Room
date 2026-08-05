@@ -70,6 +70,16 @@ top-centre. A head turns about the *neck*, which is at the bottom of the drawing
 backwards is not subtle: a head pivoted at its crown swings like a pendulum instead of turning to
 look at you.
 
+**`neck` and `chin` are two points, thirty pixels apart.** The torso hangs from `neck` and the head
+from `chin`, so the head overlaps the torso rather than resting on it. Level with each other they
+merely abut — and since the vest has an open neck hole, the page background shows through the join
+and the head reads as detached. The head is drawn after the body, so it covers the seam.
+
+**No part may have a handedness.** The far limb is the near limb mirrored, so a gesture that means
+something specific comes out reversed on one side. The catalogue originally held a palm-forward V
+sign; mirrored it became the back of the hand, which is a rude gesture across much of Europe. It is
+now an open waving hand, which reads the same either way round.
+
 Limbs are drawn straight and vertical, and each is one drawing used twice — the second mirrored. That
 halves the catalogue and guarantees the two sides match.
 
@@ -99,9 +109,11 @@ In local development there is no Clerk, so the picture is inlined as a data URL 
 **Nothing in `packages/shared` or `apps/backend` changes.** No interface ADR, no team agreement, no
 DynamoDB migration.
 
-The square is cropped to head-and-shoulders rather than the whole figure. An avatar renders at 32
-pixels in a friend list, and a full standing figure at that size is an unreadable smudge — the head
-alone would be about nine pixels tall.
+The square is a **portrait**: the head, centred, with just enough shoulder beneath it to sit on. An
+avatar renders at 32 pixels in a friend list, and a full standing figure at that size is an
+unreadable smudge — the head alone would be about nine pixels across. The 260-pixel window is sized
+against the artwork rather than by eye: the widest head is 218 and every head is 190 tall, so the
+largest of them fits with margin.
 
 ### Everybody builds one
 
@@ -120,6 +132,15 @@ a far easier question than assembling a person from nothing, and anyone who does
 straight on. One slot at a time — twenty thumbnails is a glanceable grid, eighty is a wall — with
 arrows beside the figure so the current slot can be cycled without looking away from the character,
 and arrow keys doing the same because the grid is a radio group.
+
+**The whole catalogue is preloaded when the picker mounts.** Otherwise the first click on a
+thumbnail fetches that part's full-size image and the figure changes a beat *after* the click, which
+reads as the app being slow rather than as an image loading. The catalogue is under a megabyte, so
+the honest fix is to have all of it before it is wanted rather than to make the delay prettier.
+
+**It can be reopened.** "Change character" in the game header returns to the picker, starting from
+who you already are and with a way to back out — neither of which is true of the sign-up gate, where
+there is nothing behind the screen to go back to.
 
 ## Consequences
 

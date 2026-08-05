@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CharacterFigure } from './CharacterFigure'
 import { CharacterPicker } from './CharacterPicker'
-import { SLOTS, isCharacter, partsIn, randomCharacter, type Slot } from './parts'
+import { RIG, SLOTS, isCharacter, partsIn, randomCharacter, type Slot } from './parts'
 
 describe('the catalogue', () => {
   it('has twenty of every part', () => {
@@ -36,6 +36,23 @@ describe('the catalogue', () => {
         expect(part.pivot[1], `${part.id}`).toBe(0)
       }
     }
+  })
+})
+
+describe('the rig', () => {
+  it('hangs the head lower than the torso, so the two overlap', () => {
+    // Level with each other, the head's flat bottom stops exactly where the
+    // vest's shoulder line starts — and the vest has an open neck hole, so the
+    // page shows through the gap and the head reads as detached.
+    expect(RIG.chin[1]).toBeGreaterThan(RIG.neck[1])
+  })
+
+  it('keeps the whole figure inside the frame', () => {
+    const tallest = (slot: Slot) => Math.max(...partsIn(slot).map((part) => part.h))
+
+    // A head hangs upward from the chin; a leg hangs down from the hip.
+    expect(RIG.chin[1] - tallest('head')).toBeGreaterThanOrEqual(0)
+    expect(RIG.hipL[1] + tallest('leg')).toBeLessThanOrEqual(690)
   })
 })
 
@@ -131,6 +148,33 @@ describe('choosing a character', () => {
 
     expect(onConfirm).toHaveBeenCalledTimes(1)
     expect(isCharacter(onConfirm.mock.calls[0]?.[0])).toBe(true)
+  })
+
+  it('opens on who you already are when reopened to edit', () => {
+    const mine = randomCharacter()
+    render(<CharacterPicker onConfirm={noop} initial={mine} onCancel={() => undefined} />)
+
+    expect(screen.getByRole('heading', { name: /change your character/i })).toBeInTheDocument()
+
+    // The head grid is open, so the checked tile must be the head you had.
+    const checked = screen
+      .getAllByRole('radio')
+      .findIndex((tile) => tile.getAttribute('aria-checked') === 'true')
+    expect(partsIn('head')[checked]?.id).toBe(mine.head)
+  })
+
+  it('offers a way out only when there is something to go back to', async () => {
+    const onCancel = vi.fn()
+    const { rerender } = render(<CharacterPicker onConfirm={noop} />)
+    // At sign-up there is no game behind the picker, so cancelling would leave
+    // the player nowhere.
+    expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
+
+    rerender(
+      <CharacterPicker onConfirm={noop} initial={randomCharacter()} onCancel={onCancel} />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
   it('warns before it overwrites a picture you already had', () => {

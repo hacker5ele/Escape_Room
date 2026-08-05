@@ -32,10 +32,18 @@ MANIFEST = pathlib.Path("apps/frontend/src/character/manifest.json")
 
 FRAME = (520, 690)
 
-# The five points everything hangs from. Chosen against the target heights in
+# The points everything hangs from. Chosen against the target heights in
 # process.py, with margin at the top for the head to rotate into.
+#
+# `chin` is deliberately 30px below `neck`, and they are two points rather than
+# one for a reason. Hung at the same y, the head's flat bottom edge stops
+# exactly where the vest's shoulder line starts — and since the vest has an open
+# neck hole, the page background shows through between them and the head reads
+# as detached. Dropping the head so it overlaps closes the hole; the head is
+# drawn after the body, so it covers the join rather than being cut by it.
 RIG = {
     "neck": (260, 202),
+    "chin": (260, 232),
     "shoulderL": (188, 240),
     "shoulderR": (332, 240),
     "hipL": (224, 428),

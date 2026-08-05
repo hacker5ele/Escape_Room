@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CharacterFigure } from './CharacterFigure'
 import {
   SLOTS,
@@ -7,6 +7,7 @@ import {
   type Slot,
   partUrl,
   partsIn,
+  preloadParts,
   randomCharacter,
 } from './parts'
 
@@ -28,17 +29,30 @@ import {
  */
 export function CharacterPicker({
   onConfirm,
+  onCancel,
+  initial,
   replacesExistingPhoto = false,
 }: {
   onConfirm: (character: Character) => Promise<void>
+  /** Offered only when there is something to go back to — i.e. when editing. */
+  onCancel?: () => void
+  /** The character to open on. Omitted at sign-up, where a random one is right. */
+  initial?: Character
   /** Whether confirming will overwrite a picture the player already had. */
   replacesExistingPhoto?: boolean
 }) {
-  const [character, setCharacter] = useState<Character>(randomCharacter)
+  const [character, setCharacter] = useState<Character>(() => initial ?? randomCharacter())
   const [slot, setSlot] = useState<Slot>('head')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const gridRef = useRef<HTMLDivElement | null>(null)
+
+  // Every part, fetched before anybody clicks anything. The catalogue is under
+  // a megabyte and the alternative is the figure changing a beat after the
+  // click, which reads as the app being slow rather than an image loading.
+  useEffect(() => {
+    void preloadParts()
+  }, [])
 
   const options = partsIn(slot)
   const index = options.findIndex((part) => part.id === character[slot])
@@ -88,7 +102,7 @@ export function CharacterPicker({
   return (
     <section className="pane p-5 sm:p-6">
       <h2 className="font-display text-3xl font-bold tracking-[-0.03em] text-stock-900">
-        Make yourself
+        {initial ? 'Change your character' : 'Make yourself'}
       </h2>
       <p className="prose mt-2 max-w-[52ch] text-sm text-stock-600">
         This is you, everywhere in the game. Change anything you like — or press{' '}
@@ -186,6 +200,11 @@ export function CharacterPicker({
         <button type="button" onClick={() => void confirm()} disabled={saving} className="btn">
           {saving ? 'Saving…' : 'This is me'}
         </button>
+        {onCancel && (
+          <button type="button" onClick={onCancel} disabled={saving} className="btn btn-ghost">
+            Cancel
+          </button>
+        )}
         {replacesExistingPhoto && (
           <span className="text-xs text-stock-600">
             This replaces your current profile picture.

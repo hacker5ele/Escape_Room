@@ -29,7 +29,7 @@ export const SLOT_LABELS: Record<Slot, string> = {
   leg: 'Legs',
 }
 
-export type RigPoint = 'neck' | 'shoulderL' | 'shoulderR' | 'hipL' | 'hipR'
+export type RigPoint = 'neck' | 'chin' | 'shoulderL' | 'shoulderR' | 'hipL' | 'hipR'
 
 /**
  * Everything below is asserted through `unknown`.
@@ -77,6 +77,41 @@ export function randomCharacter(): Character {
   }
 
   return { head: pick('head'), body: pick('body'), arm: pick('arm'), leg: pick('leg') }
+}
+
+/**
+ * Pull every part into the browser cache, ahead of anybody clicking anything.
+ *
+ * Without this the first click on a thumbnail fetches that part's full-size
+ * image, so the figure changes a beat *after* the click — which reads as the
+ * app being slow rather than as an image loading. The whole catalogue is under
+ * a megabyte, so the honest fix is to have all of it before it is needed.
+ *
+ * Runs once per page: the browser cache does the real work, and the promise is
+ * kept so a second caller waits on the first rather than starting again.
+ */
+let preloading: Promise<void> | null = null
+
+export function preloadParts(): Promise<void> {
+  if (preloading) return preloading
+
+  preloading = Promise.all(
+    SLOTS.flatMap((slot) =>
+      CATALOGUE[slot].map(
+        (part) =>
+          new Promise<void>((resolve) => {
+            const image = new Image()
+            // Resolve either way. A part that fails to load is a broken picture
+            // later, not a reason to leave the picker waiting for ever.
+            image.onload = () => resolve()
+            image.onerror = () => resolve()
+            image.src = partUrl(slot, part.id)
+          }),
+      ),
+    ),
+  ).then(() => undefined)
+
+  return preloading
 }
 
 /**
