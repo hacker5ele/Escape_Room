@@ -343,6 +343,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0043](docs/adr/0043-hints-are-per-room.md) | Hints are counted per room, derived from the activity log | Accepted |
 | 2026-08-05 | [0042](docs/adr/0042-party-invites.md) | Invite a friend into your game, or a link that befriends and joins in one step | Accepted |
 | 2026-08-05 | [0041](docs/adr/0041-stable-callbacks-in-effects.md) | An effect may not depend on a callback prop — wrap it in `useEvent()` | Accepted |
 | 2026-08-05 | [0040](docs/adr/0040-path-routing.md) | Real paths, no hash; reload recovers the room, the tab and the outfit | Accepted |
@@ -391,6 +392,11 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
 ### Where the code stands
 
 - **`packages/shared`** — complete. The contract, the room ids, and `isRoomUnlocked()`.
+- **Hints are per room** ([ADR-0043](docs/adr/0043-hints-are-per-room.md)) — a room's hints are
+  indexed by hints taken *in that room*, counted from the activity log, which has recorded
+  `hint_taken` with a `roomId` since ADR-0020. `session.hintsUsed` stays a whole-game total because
+  that is what the leaderboard ranks on. `hintsAvailable` on the wire means *how many you can still
+  take here*, not how many the room has.
 - **`apps/backend`** — complete for the scaffold. All seven endpoints, the 403 room gate, four
   **placeholder** puzzles, rate limiting, and 54 tests. The placeholder puzzles exist to prove the
   architecture and to serve as templates; the room sub-teams replace them.

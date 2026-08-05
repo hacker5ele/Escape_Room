@@ -52,6 +52,15 @@ export function RoomView({
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [hints, setHints] = useState<string[]>([])
+  /**
+   * How many are left, as the server last said.
+   *
+   * Seeded from the room payload and updated from each hint response, rather
+   * than counted locally from zero. Counting locally is what produced *"no more
+   * hints for this room"* sitting next to *"Take a hint (3 left)"*: a reload
+   * reset the local count while the server remembered.
+   */
+  const [remaining, setRemaining] = useState<number | null>(null)
   const [solved, setSolved] = useState(false)
   const [emote, setEmote] = useState<EmoteName | null>(null)
 
@@ -91,6 +100,7 @@ export function RoomView({
         const room = await enterRoom(roomId, await authRef.current())
         if (cancelled) return
         setState({ kind: 'ready', room })
+        setRemaining(room.hintsAvailable)
         play('whoosh')
       } catch (error) {
         if (cancelled) return
@@ -155,6 +165,7 @@ export function RoomView({
       const result = await takeHint(roomId, await authRef.current())
       play('pop')
       setHints((current) => [...current, result.hint])
+      setRemaining(result.hintsRemaining)
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'No more hints.')
     } finally {
@@ -246,12 +257,10 @@ export function RoomView({
               <button
                 type="button"
                 onClick={() => void hint()}
-                disabled={busy || hints.length >= state.room.hintsAvailable}
+                disabled={busy || remaining === 0}
                 className="btn btn-ghost btn-sm"
               >
-                {hints.length >= state.room.hintsAvailable
-                  ? 'No hints left'
-                  : `Take a hint (${state.room.hintsAvailable - hints.length} left)`}
+                {remaining === 0 ? 'No hints left' : `Take a hint (${remaining ?? '…'} left)`}
               </button>
             </div>
             {hints.length > 0 && (
