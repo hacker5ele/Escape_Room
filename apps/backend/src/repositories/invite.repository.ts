@@ -17,6 +17,15 @@ export interface InviteRecord {
   expiresAtEpoch?: number
   revokedAt: string | null
   useCount: number
+  /**
+   * Whose party this link joins, or absent for a plain friend link.
+   *
+   * The inviter's own id, always — a link cannot invite somebody into a party
+   * that is not the minter's to share. Stored rather than derived because the
+   * inviter may have left their own game by the time the link is followed, and
+   * the link should then simply be a friend link rather than an error.
+   */
+  partyHostUserId?: string
 }
 
 export interface InviteRepository {

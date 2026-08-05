@@ -54,6 +54,16 @@ export const inviteSchema = z.object({
   expiresAt: z.string().nullable(),
   /** How many people have joined through it. */
   useCount: z.number().int().nonnegative(),
+  /**
+   * True for a link minted from the lobby.
+   *
+   * Following one befriends you *and* puts you in the party, so it is a "come
+   * and play now" link rather than a "let us be friends" link. Kept as a flag
+   * on the same record rather than a second kind of token: the expiry, the
+   * revocation and the public preview all already work, and none of that is
+   * worth building twice.
+   */
+  forParty: z.boolean(),
 })
 
 export type Invite = z.infer<typeof inviteSchema>
@@ -67,9 +77,31 @@ export type Invite = z.infer<typeof inviteSchema>
  */
 export const invitePreviewSchema = z.object({
   inviter: publicProfileSchema,
+  /**
+   * Set when the link came from a lobby, so the page can say *"Alice wants you
+   * to play"* rather than *"Alice wants to be your friend"* — which is a
+   * different question and deserves a different button.
+   *
+   * Deliberately just a count. Who else is in the party is not something a
+   * stranger holding a link needs before deciding.
+   */
+  party: z
+    .object({
+      /** People already in it, host included. */
+      size: z.number().int().positive(),
+      full: z.boolean(),
+    })
+    .nullable(),
 })
 
 export type InvitePreview = z.infer<typeof invitePreviewSchema>
+
+/** `forParty` mints a link that also puts the visitor in your game. */
+export const createInviteRequestSchema = z.object({
+  forParty: z.boolean().optional(),
+})
+
+export type CreateInviteRequest = z.infer<typeof createInviteRequestSchema>
 
 export const inviteListResponseSchema = z.object({ invites: z.array(inviteSchema) })
 export type InviteListResponse = z.infer<typeof inviteListResponseSchema>

@@ -54,7 +54,7 @@ afterEach(() => {
 
 describe('the invite landing page', () => {
   it('shows who is inviting you before asking you to sign in', async () => {
-    const fetchSpy = mockFetch(() => json({ inviter: INVITER }))
+    const fetchSpy = mockFetch(() => json({ inviter: INVITER, party: null }))
 
     render(
       <LocalAuthProvider>
@@ -73,7 +73,7 @@ describe('the invite landing page', () => {
   })
 
   it('offers a way to sign in rather than an accept button when signed out', async () => {
-    mockFetch(() => json({ inviter: INVITER }))
+    mockFetch(() => json({ inviter: INVITER, party: null }))
 
     render(
       <LocalAuthProvider>
@@ -106,7 +106,7 @@ describe('the invite landing page', () => {
 
   it('does not render the inviter name as markup', async () => {
     mockFetch(() =>
-      json({ inviter: { ...INVITER, displayName: '<img src=x onerror=alert(1)>' } }),
+      json({ inviter: { ...INVITER, displayName: '<img src=x onerror=alert(1)>' }, party: null }),
     )
 
     const { container } = render(

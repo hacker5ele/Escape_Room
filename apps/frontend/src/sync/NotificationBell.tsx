@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Notification } from '@escape-room/shared'
 import { Avatar } from '../social/Avatar'
+import { joinGame } from '../api/party'
+import { useAppAuth } from '../auth/useAppAuth'
+import { play } from '../audio/sfx'
 import { useSync } from './useSync'
 
 /**
@@ -85,6 +89,29 @@ export function NotificationBell() {
 }
 
 function Row({ notification }: { notification: Notification }) {
+  const navigate = useNavigate()
+  const [joining, setJoining] = useState(false)
+  const { authHeaders } = useAppAuth()
+
+  // An invitation into somebody's game is the one notification that is worth
+  // acting on from here. Everything else is news; this is a door.
+  const invitation =
+    notification.type === 'party_invite' && notification.actor ? notification.actor : null
+
+  async function join() {
+    if (!invitation || joining) return
+    setJoining(true)
+    try {
+      await joinGame(await authHeaders(), invitation.userId)
+      play('chime')
+      navigate('/lobby')
+    } catch {
+      // Their game may have filled up or been left since. The lobby says so
+      // better than a line in a dropdown can.
+      navigate('/lobby')
+    }
+  }
+
   return (
     <li className="flex items-start gap-3 rounded px-2 py-2 hover:bg-stock-100">
       {notification.actor ? (
@@ -97,6 +124,16 @@ function Row({ notification }: { notification: Notification }) {
             dangerouslySetInnerHTML — a display name is somebody else's input. */}
         <p className="text-sm text-stock-900">{notification.message}</p>
         <p className="font-mono text-xs text-stock-500">{relativeTime(notification.createdAt)}</p>
+        {invitation && (
+          <button
+            type="button"
+            onClick={() => void join()}
+            disabled={joining}
+            className="btn btn-sm mt-2"
+          >
+            {joining ? 'Joining…' : 'Join their game'}
+          </button>
+        )}
       </div>
       {notification.readAt === null && (
         <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-signal-500" />
