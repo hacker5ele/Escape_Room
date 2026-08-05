@@ -64,9 +64,9 @@ function wanted(node: HTMLElement): boolean {
  * `querySelectorAll` returns document order and merging three lists loses it.
  */
 export function pieces(root: HTMLElement): HTMLElement[] {
-  const found = [...root.querySelectorAll<HTMLElement>(`${PANEL}, ${CONTROL}, [data-piece]`)].filter(
-    wanted,
-  )
+  const found = [
+    ...root.querySelectorAll<HTMLElement>(`${PANEL}, ${CONTROL}, [data-piece]`),
+  ].filter(wanted)
 
   // A panel inside a panel rides with its parent — animating both would move it
   // twice as far as everything else.

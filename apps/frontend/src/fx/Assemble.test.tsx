@@ -140,14 +140,14 @@ describe('arriving', () => {
     expect(panel).not.toHaveClass('piece-arriving')
   })
 
-  it('ignores the end of the ink animation, which is not the landing', () => {
-    // `piece-ink` finishes at 200ms and `piece-land` at 560ms. Clearing on the
-    // first would snap the piece to its resting place a third of the way in.
+  it('ignores the end of the opacity switch, which is not the landing', () => {
+    // `piece-appear` is the 1ms opacity switch; `piece-land` is the 560ms flight.
+    // Clearing on the first would snap every piece home before it had moved.
     render(<Screen />)
     const panel = screen.getByTestId('panel')
 
     act(() => {
-      panel.dispatchEvent(animationEnd('piece-ink'))
+      panel.dispatchEvent(animationEnd('piece-appear'))
     })
 
     expect(panel).toHaveClass('piece-arriving')

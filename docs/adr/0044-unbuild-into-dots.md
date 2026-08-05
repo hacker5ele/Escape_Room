@@ -75,35 +75,46 @@ phone and barely anywhere on a desktop.
 together. Every other route is thrown from further out and lands with an overshoot. Two easings
 because they are two different sentences.
 
-### The dots belong to the unbuild, not to the arrival
+### The dots belong to the unbuild, and only to it
 
-A leaving panel dissolves over its full 340ms — that is the effect. An arriving one is inked back in
-over **200ms of a 560ms flight**, so it is solid for most of its travel.
+**A screen coming apart dissolves into dots. A screen arriving flies in and lands, fully inked.**
 
-The first version screened the whole arrival, and it was clearly wrong to look at: **a 1px dot grid
-destroys type long before it stops filling a rectangle**, so a panel spent half a second as an empty
-white box that only then filled in. The dots want to be long enough to be continuous with the ones
-already on screen and no longer.
+Screening the arrival as well was symmetrical, obvious, and wrong to look at. **A 1px dot grid
+destroys type long before it stops filling a rectangle** — a panel keeps reading as a pale box while
+every word inside it has already gone. So each arriving panel appeared as a blank white rectangle
+that only afterwards filled in, twenty of them staggered across a second. Shortening the screened
+phase did not fix it, because the problem is not how long it lasts; it is that the arrival is
+screened at all.
 
-The ink and the travel are two animations sharing no property — one owns `--dot-r` and `opacity`,
-the other `translate`, `rotate` and `scale`. Partly for the independent timing, and partly because a
-keyframe in the middle applies the easing to *each* interval it creates: an overshoot written once
-would overshoot three times.
+It is also not what was asked for. The request was that everything unbuilds itself, that only the
+dots are left, and that the next screen *flies in*. Only the first half of that is a dissolve.
 
-### A piece in flight loses its tint and its blur, but not its paper
+So an arriving piece has no mask on it, and its opacity is a **1ms switch rather than a fade** — it
+exists only so a piece is not sitting visible at its scattered start while it waits out its stagger.
+Two reasons it is not a real fade: "nothing fades in" is already a rule of this app's motion because
+a linear fade is the tell that reads as machine-made, and an element below `opacity: 1` is its own
+backdrop root, so a panel fading in is a panel with its glass switched off.
+
+The dissolve and the travel are two animations sharing no property — one owns `--dot-r` and
+`opacity`, the other `translate`, `rotate` and `scale`. Partly for independent timing, and partly
+because a keyframe in the middle applies the easing to *each* interval it creates: an overshoot
+written once would overshoot three times.
+
+### A piece in flight loses its tint, but not its paper
 
 **An element with a transform on it is its own stacking context, mask or no mask.** So for the length
 of the animation a `.pane` has the one thing ADR-0032 says never to give it: `.pane::after` can no
-longer reach the page to overprint against and blends against the panel instead, and the mask
-additionally makes the element its own backdrop root, leaving `.pane::before` with nothing to blur.
+longer reach the page to overprint against and blends against the panel instead. Unavoidable while a
+thing is moving, so `--pane-ink: 0` for the duration rather than left to blend wrong. Losing a 5%
+tint is very nearly nothing.
 
-Both are switched off for the duration — `--pane-ink: 0; --pane-blur: 0px` — rather than left to
-fail halfway. Losing a 5% tint and a blur of a soft halftone is very nearly nothing.
+A *leaving* piece additionally drops its blur, because a mask makes the element its own backdrop root
+and `.pane::before` has nothing left to blur. There is no glass worth preserving on something that is
+turning into dots. An arriving piece has no mask, so it keeps it.
 
 **`--pane-alpha` is deliberately not touched, and the first version of this rule got it wrong.**
-Forcing it to `1` made the paper fill opaque, and under the panel's own top-edge white sheen that
-turned every arriving panel into a flat white box — which then snapped back to glass on landing. The
-panel stays exactly as translucent as it always is.
+Forcing it to `1` made the paper fill opaque, and under the panel's own top-edge white sheen that is
+a flat white box.
 
 ### Each piece is cleaned up when it lands, not when the last one does
 

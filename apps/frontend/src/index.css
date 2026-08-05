@@ -30,9 +30,9 @@
   font-weight: 400 800;
   font-style: normal;
   font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
-    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
-    U+2212, U+2215, U+FEFF, U+FFFD;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
@@ -41,9 +41,10 @@
   font-weight: 400 800;
   font-style: normal;
   font-display: swap;
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
-    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
-    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
 }
 
 @font-face {
@@ -52,9 +53,9 @@
   font-weight: 100 800;
   font-style: normal;
   font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
-    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
-    U+2212, U+2215, U+FEFF, U+FFFD;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
@@ -63,9 +64,10 @@
   font-weight: 100 800;
   font-style: normal;
   font-display: swap;
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
-    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
-    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
 }
 
 /* --------------------------------------------------------------------------
@@ -1140,9 +1142,16 @@
   }
 
   @keyframes refuse {
-    0%, 100% { translate: 0 0; }
-    25% { translate: -4px 0; }
-    75% { translate: 4px 0; }
+    0%,
+    100% {
+      translate: 0 0;
+    }
+    25% {
+      translate: -4px 0;
+    }
+    75% {
+      translate: 4px 0;
+    }
   }
 
   /* Ready stamps rather than toggles — scale down from oversized with a
@@ -1155,9 +1164,19 @@
   }
 
   @keyframes stamp-down {
-    0% { scale: 1.4; rotate: -6deg; opacity: 0.4; }
-    60% { scale: 0.96; rotate: 1.5deg; }
-    100% { scale: 1; rotate: 0deg; }
+    0% {
+      scale: 1.4;
+      rotate: -6deg;
+      opacity: 0.4;
+    }
+    60% {
+      scale: 0.96;
+      rotate: 1.5deg;
+    }
+    100% {
+      scale: 1;
+      rotate: 0deg;
+    }
   }
 
   .play-button {
@@ -1169,8 +1188,13 @@
 
   /* The one thing on the screen that is asking to be pressed. */
   @keyframes play-breathe {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.025); }
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.025);
+    }
   }
 
   /* ---- the countdown ---- */
@@ -1197,10 +1221,24 @@
   }
 
   @keyframes count-stamp {
-    0% { scale: 3; opacity: 0; rotate: -12deg; }
-    35% { scale: 0.92; opacity: 1; rotate: 2deg; }
-    55% { scale: 1.04; rotate: 0deg; }
-    100% { scale: 1; opacity: 1; }
+    0% {
+      scale: 3;
+      opacity: 0;
+      rotate: -12deg;
+    }
+    35% {
+      scale: 0.92;
+      opacity: 1;
+      rotate: 2deg;
+    }
+    55% {
+      scale: 1.04;
+      rotate: 0deg;
+    }
+    100% {
+      scale: 1;
+      opacity: 1;
+    }
   }
 }
 
@@ -1247,17 +1285,47 @@
      ADR-0032 forbids outright, because it silently kills `backdrop-filter` on
      every pane in the app.
 
-     Doing it here and only for the ~1s of the animation costs nothing: the
-     pieces in flight have had their blur turned off anyway (see below), so
-     there is no backdrop-filter left to lose. */
+     One axis, and `clip` rather than `hidden`. `clip` is the only value that
+     lets the other axis stay `visible`, so the vertical overflow a panel needs
+     is untouched and the clipping machinery a `.pane` is sensitive to is kept
+     to the minimum that actually solves the problem. */
   .assemble.is-moving {
-    overflow: clip;
+    overflow-x: clip;
   }
 
   .piece-leaving,
   .piece-arriving {
-    /* The dots. Radius animates; pitch never does — a screen whose pitch moves
-       reads as the image scaling, not as the image dissolving. */
+    /* An element with a transform on it is its own stacking context, which is
+       the one thing the design system says never to give a `.pane`:
+       `.pane::after` can no longer reach the page to overprint against and
+       would blend against the panel instead. Unavoidable while a thing is
+       moving, so the tint is switched off rather than left to blend wrong.
+
+       `--pane-alpha` is emphatically NOT touched. Forcing it to 1 was the first
+       version of this rule and it was badly wrong — an opaque paper fill under
+       the panel's own top-edge sheen is a flat white box. */
+    --pane-ink: 0;
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+
+  /* The dots belong to the unbuild, and only to it.
+     ---------------------------------------------------------------------
+     A screen coming apart dissolves into its own halftone. A screen arriving
+     flies in and lands, **fully inked**.
+
+     Screening the arrival as well was symmetrical, obvious, and wrong to look
+     at. A 1px dot grid destroys type long before it stops filling a rectangle:
+     a panel keeps reading as a pale box while every word inside it has already
+     gone. So each arriving panel appeared as a blank white rectangle that only
+     afterwards filled in — twenty of them, staggered across a second.
+
+     It is also not what was asked for. The request was that everything unbuilds
+     itself, that only the dots are left, and that the next screen *flies in*.
+     Only the first half of that is a dissolve. */
+  .piece-leaving {
+    /* Radius animates; pitch never does — a screen whose pitch moves reads as
+       the image scaling, not as the image dissolving. */
     mask-image: radial-gradient(
       circle at center,
       #000 var(--dot-r),
@@ -1273,38 +1341,22 @@
     -webkit-mask-size: 6px 6px;
     -webkit-mask-repeat: repeat;
 
-    /* An element with a transform on it is its own stacking context — mask or
-       no mask — so for the length of the animation a `.pane` has the one thing
-       the design system says never to give it. `.pane::after` can no longer
-       reach the page to overprint against and would blend against the panel
-       instead, and the mask additionally makes the element its own backdrop
-       root, leaving `.pane::before` with nothing to blur.
-
-       Both are switched off for the duration rather than left to fail halfway.
-       Losing a 5% tint and a blur of a soft halftone is very nearly nothing.
-
-       `--pane-alpha` is deliberately NOT touched. Forcing it to 1 was the first
-       version of this rule and it was badly wrong: an opaque paper fill under
-       the top-edge sheen turned every arriving panel into a flat white box
-       whose text was still screened away, which then snapped back to glass on
-       landing. The panel stays as translucent as it always is. */
+    /* A mask makes this element its own backdrop root, so `.pane::before` has
+       an empty backdrop and nothing to blur. Off for the 340ms the panel is
+       coming apart anyway — there is no glass to preserve on something that is
+       turning into dots. */
     --pane-blur: 0px;
-    --pane-ink: 0;
-
     will-change: transform, opacity, --dot-r;
-    /* Without this the mask samples an unpainted layer on the first frame in
-       Safari and the piece flickers before it starts. */
-    backface-visibility: hidden;
   }
 
-  /* The ink and the travel are two animations rather than one, and they share
-     no property between them: one owns `--dot-r` and `opacity`, the other owns
-     `translate`, `rotate` and `scale`.
+  /* The dissolve and the travel are two animations rather than one, and they
+     share no property between them: one owns `--dot-r` and `opacity`, the other
+     owns `translate`, `rotate` and `scale`.
 
      Two reasons. A keyframe in the middle would otherwise apply the easing to
      each interval it creates, so an overshoot curve written once would overshoot
      three times. And they want genuinely different timings — how long a panel
-     spends as dots is not how long it spends flying. */
+     spends coming apart is not how long it spends flying. */
   .assemble {
     --land-ease: cubic-bezier(0.16, 1.02, 0.3, 1);
   }
@@ -1323,14 +1375,8 @@
   }
 
   .piece-arriving {
-    /* 200ms, not the whole flight. The dots belong to the *unbuild* — a piece
-       arriving is meant to fly in and land, and a panel that stays screened for
-       half a second reads as an empty white box with its text missing, because
-       a 1px dot grid destroys type long before it stops filling a rectangle.
-       Long enough to be continuous with the dots already on screen, short
-       enough that the panel is fully inked for most of its travel. */
     animation:
-      piece-ink 200ms ease-out var(--fly-delay, 0ms) both,
+      piece-appear 1ms linear var(--fly-delay, 0ms) both,
       piece-land 560ms var(--land-ease) var(--fly-delay, 0ms) both;
   }
 
@@ -1364,19 +1410,19 @@
     }
   }
 
-  @keyframes piece-ink {
-    0% {
-      --dot-r: 0.8px;
+  /* A switch, not a fade. It exists only so a piece is not sitting visible at
+     its scattered starting position while it waits out its stagger — the moment
+     its delay elapses it is simply there, and flying.
+
+     1ms rather than a real duration on purpose. "Nothing fades in" is a rule of
+     this app's motion, because a linear fade is the tell that reads as
+     machine-made; and an element at `opacity < 1` is its own backdrop root, so
+     a panel fading in is a panel with its glass switched off. */
+  @keyframes piece-appear {
+    from {
       opacity: 0;
     }
-    /* There as dots on the first frame it is visible at all, so it reads as
-       coming out of the screen the last one dissolved into. */
-    14% {
-      --dot-r: 1.1px;
-      opacity: 1;
-    }
-    100% {
-      --dot-r: 5px;
+    to {
       opacity: 1;
     }
   }
