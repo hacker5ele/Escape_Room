@@ -210,11 +210,44 @@ describe('App', () => {
       render(<App />)
       await screen.findByText(/alice42/)
 
+      // The log lives behind its own tab now. Only the open tab is mounted —
+      // friends and chat poll on a timer, so keeping every panel alive would
+      // multiply that polling across panels nobody is looking at.
+      await userEvent.click(screen.getByRole('tab', { name: /activity/i }))
+
       expect(screen.getByText(/your activity \(3\)/i)).toBeInTheDocument()
       expect(screen.getByText(/tried "nope" in room-01/i)).toBeInTheDocument()
 
       const entries = screen.getAllByRole('listitem').filter((li) => li.querySelector('time'))
       expect(entries[0]?.textContent).toMatch(/unlocked the next door/)
+    })
+
+    it('opens on the rooms tab, and keeps the game status visible across tabs', async () => {
+      render(<App />)
+      await screen.findByText(/alice42/)
+
+      expect(screen.getByRole('tab', { name: /rooms/i })).toHaveAttribute('aria-selected', 'true')
+
+      // Which room you are on is true regardless of what you are looking at,
+      // so the status strip sits outside the tabs rather than inside one.
+      await userEvent.click(screen.getByRole('tab', { name: /leaderboard/i }))
+      expect(screen.getByText(/alice42 — 1\/4 rooms solved/)).toBeInTheDocument()
+      expect(screen.queryByTestId('room-01')).not.toBeInTheDocument()
+    })
+
+    it('moves between tabs with the arrow keys', async () => {
+      render(<App />)
+      await screen.findByText(/alice42/)
+
+      // Required by the WAI-ARIA tabs pattern, and the first thing anybody
+      // navigating by keyboard will try.
+      screen.getByRole('tab', { name: /rooms/i }).focus()
+      await userEvent.keyboard('{ArrowRight}')
+
+      expect(screen.getByRole('tab', { name: /friends/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
     })
 
     it('reports a failure instead of hanging', async () => {

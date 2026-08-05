@@ -135,6 +135,7 @@ Where things belong:
 | A room's puzzle & solution | `apps/backend/src/domain/rooms/room-0N.ts` | — |
 | A room's look & interaction | — | `apps/frontend/src/rooms/room-0N/` |
 | Colours, type, panels, buttons | — | `apps/frontend/src/index.css` — the design system |
+| Shared UI primitives (tabs, …) | — | `apps/frontend/src/ui/` |
 | Shared types / API shapes | `packages/shared/src/` | same file — one source |
 | Friends, invites, avatars | `apps/backend/src/{routes,services}/` | `apps/frontend/src/social/` |
 | Notifications / polling | `apps/backend/src/routes/sync.routes.ts` | `apps/frontend/src/sync/` |
@@ -372,13 +373,19 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   issues a token, the browser sends it, the API verifies it and finds that account's game. The rooms
   themselves are the team's work.
 - **Design** — *Overprint* ([ADR-0032](docs/adr/0032-overprint-design-system.md)): two spot inks on
-  paper stock, and glass panels are a third ink rather than a floating card — `.pane` multiplies over
-  what is behind it. Syne and Martian Mono are self-hosted in `src/assets/fonts/`. Build rooms with
-  the component classes (`.pane`, `.btn`, `.field`, `.label`, `.veil`) and the `stock` / `signal` /
-  `solved` tokens; do not hardcode a colour. **A locked room is frosted** — that is `.veil`, and it is
-  cosmetic only, since the server never sends a locked room's contents at all. Two rules break the
-  design silently if ignored: never put `overflow: hidden` above a `.pane`, and never give a `.pane`
-  its own stacking context.
+  paper stock, and glass panels are a third ink rather than a floating card — a `.pane` is a paper
+  fill with a light ink tint multiplied over it. Syne and Martian Mono are self-hosted in
+  `src/assets/fonts/`. Build rooms with the component classes (`.pane`, `.btn`, `.field`, `.label`,
+  `.veil`, `.prose`) and the `stock` / `signal` / `solved` tokens; do not hardcode a colour. **A
+  locked room is frosted** — that is `.veil`, and it is cosmetic only, since the server never sends a
+  locked room's contents at all. Three rules break the design silently if ignored: never put
+  `overflow: hidden` above a `.pane`, never give a `.pane` its own stacking context, and never blend a
+  panel *fill* with `multiply` — multiply cannot lighten, so the panel stops being a readable surface
+  and the text ends up sitting on the background.
+- **The signed-in page is tabbed** — Rooms · Friends · Leaderboard · Activity, via `src/ui/Tabs.tsx`.
+  Only the open tab is mounted, because friends and chat poll on a timer. The selection lives in the
+  URL hash, so `/#friends` is linkable and a reload keeps its place. A room's own UI belongs inside
+  the Rooms tab.
 - **Accounts** — players register with Clerk before they can reach anything. Progress and an activity
   log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
 - **Friends** — add somebody by username, or send a revocable invite link that shows who is inviting
