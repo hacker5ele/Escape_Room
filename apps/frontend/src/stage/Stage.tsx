@@ -131,6 +131,12 @@ export function Stage({
   return (
     <div
       ref={frame}
+      /* One piece in the screen transition, so the stage comes apart and
+         rebuilds as a single sheet. Without this the transition would find no
+         `.pane` here and start throwing the scenery and the players around
+         individually, which reads as the room breaking rather than as the page
+         turning (ADR-0044). */
+      data-piece=""
       className="stage-frame"
       onPointerDown={(event) => {
         // Only a primary press, so a right-click or a second finger does not

@@ -29,7 +29,7 @@ import { Tabs } from './ui/Tabs'
 import { LobbyView } from './lobby/LobbyView'
 import { RoomView } from './rooms/RoomView'
 import { unlockAudio } from './audio/sfx'
-import { IrisWipe } from './fx/IrisWipe'
+import { Assemble, LEAVE_TOTAL_MS, unbuild } from './fx/Assemble'
 import { isInviteToken } from './routing'
 
 /**
@@ -159,7 +159,7 @@ interface GameOutlet {
   character: Character | null
   reload: () => Promise<void>
   setGame: (game: GameSession) => void
-  /** Navigate under the iris wipe, changing screen at full cover. */
+  /** Navigate once the screen has come apart, so the change itself is unseen. */
   travel: (to: string) => void
   saveCharacter: (character: Character) => Promise<void>
 }
@@ -184,7 +184,6 @@ type GameState =
 function RequiresGame() {
   const { isLoaded, isSignedIn, mode, storedCharacter, saveCharacter } = useAppAuth()
   const [state, setState] = useState<GameState>({ kind: 'loading' })
-  const [wipe, setWipe] = useState<null | (() => void)>(null)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -217,16 +216,30 @@ function RequiresGame() {
   }, [isSignedIn, reload])
 
   /**
-   * Navigate under the wipe.
+   * Navigate once the screen has come apart.
    *
-   * The screen changes at `onCovered` — full ink — which is what makes the
-   * change unseen rather than merely quick. Held here, above the outlet, so it
-   * survives the route change it is covering.
+   * The route changes when there is nothing left on it but dots, which is what
+   * makes the change unseen rather than merely quick — and the new screen's
+   * pieces then fly in on their own (`<Assemble>` below).
+   *
+   * The guard is not theoretical. An earlier version of this ran its animation
+   * once per render of whatever called it, and the transition played six times
+   * for one click; a second press before the first has landed is the same bug
+   * arriving by hand.
    */
+  const leaving = useRef<number | null>(null)
+
+  useEffect(() => () => window.clearTimeout(leaving.current ?? undefined), [])
+
   const travel = useCallback(
     (to: string) => {
+      if (leaving.current !== null) return
       unlockAudio()
-      setWipe(() => () => navigate(to))
+      unbuild()
+      leaving.current = window.setTimeout(() => {
+        leaving.current = null
+        navigate(to)
+      }, LEAVE_TOTAL_MS)
     },
     [navigate],
   )
@@ -259,10 +272,6 @@ function RequiresGame() {
           }
         : null,
     [loaded, character, reload, travel, confirmCharacter],
-  )
-
-  const overlay = wipe && (
-    <IrisWipe onCovered={() => wipe()} onDone={() => setWipe(null)} />
   )
 
   if (!isLoaded) return <PageShell>{<Panel>Loading…</Panel>}</PageShell>
@@ -299,11 +308,13 @@ function RequiresGame() {
     return <Navigate to="/character" replace state={{ from: location.pathname }} />
   }
 
+  // Above the outlet rather than inside a route, so it is still mounted on the
+  // other side of the navigation it is covering — that is what lets one screen
+  // come apart and the next one build itself out of the same animation.
   return (
-    <>
+    <Assemble>
       <Outlet context={context} />
-      {overlay}
-    </>
+    </Assemble>
   )
 }
 

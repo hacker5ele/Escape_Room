@@ -126,6 +126,7 @@ Escape_Room/
 ├── CLAUDE.md                   ← you are here
 ├── docs/
 │   ├── adr/                    ← Architecture Decision Records (approval required)
+│   ├── building-a-room.md      ← how to build a room, end to end — start here
 │   └── api-contract.md         ← the HTTP contract, in prose
 ├── packages/
 │   └── shared/                 ← @escape-room/shared — types, schemas, unlock rule
@@ -343,12 +344,13 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0044](docs/adr/0044-unbuild-into-dots.md) | Screens unbuild into their own halftone dots and rebuild out of them | Accepted |
 | 2026-08-05 | [0043](docs/adr/0043-hints-are-per-room.md) | Hints are counted per room, derived from the activity log | Accepted |
 | 2026-08-05 | [0042](docs/adr/0042-party-invites.md) | Invite a friend into your game, or a link that befriends and joins in one step | Accepted |
 | 2026-08-05 | [0041](docs/adr/0041-stable-callbacks-in-effects.md) | An effect may not depend on a callback prop — wrap it in `useEvent()` | Accepted |
 | 2026-08-05 | [0040](docs/adr/0040-path-routing.md) | Real paths, no hash; reload recovers the room, the tab and the outfit | Accepted |
 | 2026-08-05 | [0039](docs/adr/0039-empty-key-cursor.md) | Null is the empty cursor; in-memory stand-ins must be as strict as DynamoDB | Accepted |
-| 2026-08-05 | [0038](docs/adr/0038-presence-and-the-iris-wipe.md) | Presence in memory, polled and interpolated; the transition is an iris wipe | Accepted |
+| 2026-08-05 | [0038](docs/adr/0038-presence-and-the-iris-wipe.md) | Presence in memory, polled and interpolated; the transition is an iris wipe — *the transition half is superseded by [0044](docs/adr/0044-unbuild-into-dots.md)* | Accepted |
 | 2026-08-05 | [0037](docs/adr/0037-lobby-stage-and-rooms.md) | Start → lobby → room; one walkable stage, generated scenery, synthesised sound | Accepted |
 | 2026-08-05 | [0036](docs/adr/0036-global-board-is-a-top-ten.md) | The global board is a top ten plus your own row; games read in one batch | Accepted |
 | 2026-08-05 | [0035](docs/adr/0035-responsive.md) | Everything responsive from 320px up; never `overflow-x: hidden` on the root | Accepted |
@@ -400,6 +402,9 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
 - **`apps/backend`** — complete for the scaffold. All seven endpoints, the 403 room gate, four
   **placeholder** puzzles, rate limiting, and 54 tests. The placeholder puzzles exist to prove the
   architecture and to serve as templates; the room sub-teams replace them.
+  **[`docs/building-a-room.md`](docs/building-a-room.md) is the guide** — the two files and two
+  registry lines a room actually is, the rules the test suite already enforces for you, how to
+  generate scenery with the image model, and why the result does not look AI-generated.
 - **`apps/frontend`** — a sign-in gate and one page behind it. It proves the whole chain works: Clerk
   issues a token, the browser sends it, the API verifies it and finds that account's game. The rooms
   themselves are the team's work.
@@ -507,9 +512,13 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
     the Terraform is load-bearing now: raise it and friends will vanish for each other, because two
     instances would each hold half the room. A deploy clears every lobby and drops nobody from their
     party. The party is capped at **four**.
-  - **The transition is an iris wipe** — the circle that closes on the end of every 1950s cartoon,
-    with an overshoot, an inked rim and a wobble, because a perfect circle is what gives a machine
-    away.
+  - **Screens unbuild themselves into dots** ([ADR-0044](docs/adr/0044-unbuild-into-dots.md)). The
+    whole app is printed as a halftone, so a panel leaving does not slide or fade: an animated dot
+    mask at the page's own 6px pitch takes its ink away until only its dots are left, those fade into
+    the ground, and the next screen's pieces fly in from their own directions and land. Panels and
+    the controls a player aims at — **not** list rows. `/` gathers, everywhere else is thrown. Opt a
+    block in with `data-piece`, out with `data-piece="no"`. This replaced an iris wipe, which was
+    period-correct and generic to every cartoon ever made.
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions
