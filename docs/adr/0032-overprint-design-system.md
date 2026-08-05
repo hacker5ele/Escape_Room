@@ -37,11 +37,18 @@ We build **Overprint**: a screenprint, not a screen.
 Two spot inks — a warm red and a process cyan — laid over paper stock, going dark where they cross.
 The page background is those two ink fields plus a halftone dot screen over `--color-stock-100`.
 
-**Glass panels are a third ink, not a floating card.** The `.pane` fill sits on a pseudo-element set
-to `mix-blend-mode: multiply` with a `backdrop-filter` behind it, so a panel behaves like ink laid
-over ink rather than a pane hovering above a page. This is the part that makes it glassmorphism *and*
-makes it ours: everyone else's glass floats, and floating glass on a dark gradient is the generated
-look.
+**Glass panels are a third ink, not a floating card.** A `.pane` is two layers: a paper fill blended
+normally with the `backdrop-filter` behind it, and a light ink tint over that set to
+`mix-blend-mode: multiply`. So a panel reads as ink laid over ink rather than a pane hovering above a
+page. This is the part that makes it glassmorphism *and* makes it ours: everyone else's glass floats,
+and floating glass on a dark gradient is the generated look.
+
+The split into two layers is not fussiness, it is the correction of a real defect. The first version
+put the whole fill on `multiply`, and **multiply can only darken** — a near-white paper layer
+multiplied over the ink fields left them essentially untouched, so panels never became a surface and
+text sat directly on the loudest part of the background. It was unreadable. Dropping to a tint is also
+truer to the metaphor: a press does not print body copy over a solid ink field, it drops to a tint or
+knocks the type out.
 
 Concretely, in `apps/frontend/src/index.css`:
 
@@ -74,14 +81,39 @@ It is **cosmetic and only cosmetic**. The server refuses a locked room outright 
 contents (ADR-0006). This is that fact made visible, not the thing enforcing it. Screen readers still
 receive the room name, which is correct — the room ids were never the secret.
 
+### The signed-in page is tabbed
+
+The page had grown to five sections stacked down one 672px column — game status, rooms, leaderboard,
+friends, party and the activity log, all competing at the same level, all visible at once, and getting
+worse with every feature. It read as crushed because it was.
+
+`src/ui/Tabs.tsx` splits it into **Rooms · Friends · Leaderboard · Activity**, with the container
+widened to `max-w-5xl` and top-aligned rather than vertically centred — centring a page whose height
+grows with its content makes everything jump the moment a panel appears.
+
+Three properties of it are load-bearing:
+
+- **Only the open tab is mounted.** Friends and chat poll the API on a timer. Keeping all four alive
+  would multiply that polling across panels nobody is looking at.
+- **The selection lives in the URL hash**, so a reload keeps you where you were and `/#friends` is a
+  link somebody can send. Written with `history.replaceState`, so switching tabs does not fill the
+  back stack with entries the player then has to walk out of.
+- **Arrow keys move between tabs**, with a roving `tabindex` so the strip is one tab stop rather than
+  four. This is the WAI-ARIA tabs pattern, and it is the first thing anyone on a keyboard tries.
+
+The game status strip stays *outside* the tabs: which room you are on is true regardless of which tab
+you are looking at.
+
 ### Rules that ship with the system
 
 These are binding, not stylistic preference. Each one is a defect if broken:
 
 1. **Never put `overflow: hidden` on an ancestor of `.pane`.** It disables `backdrop-filter` on every
    descendant, silently, with no error. This is the single most common way glassmorphism breaks.
-2. **`--pane-alpha` stays above 0.7.** Below that, text contrast over the ink fields drops under the
-   WCAG floor depending on what happens to be behind it.
+2. **`--pane-alpha` stays above 0.8, and the panel fill is never `multiply`.** Both of these are the
+   readability of every word in the app. Multiply cannot lighten, so a panel blended that way is not a
+   surface; and below about 0.8 alpha the ink fields show through strongly enough to eat the contrast
+   of body text.
 3. **Ink A means "you can act on this" and nothing else.** Used decoratively it stops meaning
    anything.
 4. **`prefers-reduced-transparency` flattens every pane**, and `prefers-reduced-motion` removes the
