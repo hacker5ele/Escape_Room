@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SignInButton, SignUpButton, UserButton } from '@clerk/react'
 import type { GameSession } from '@escape-room/shared'
-import { isRoomUnlocked, ROOM_IDS } from '@escape-room/shared'
+import { currentRoomId, isRoomUnlocked, ROOM_IDS } from '@escape-room/shared'
 import { ApiRequestError, startOrResumeGame } from './api/game'
 import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
@@ -14,6 +14,7 @@ import { NotificationBell } from './sync/NotificationBell'
 import { LocalSignIn } from './auth/LocalSignIn'
 import { useAppAuth } from './auth/useAppAuth'
 import { Tabs } from './ui/Tabs'
+import { CurrentRoom } from './rooms/CurrentRoom'
 
 /**
  * The scaffold page, behind a sign-in gate.
@@ -76,19 +77,13 @@ function LockedDoor() {
 
       <div className="mt-5 flex flex-wrap gap-3">
         <SignUpButton mode="modal">
-          <button
-            type="button"
-            className="btn"
-          >
+          <button type="button" className="btn">
             Register
           </button>
         </SignUpButton>
 
         <SignInButton mode="modal">
-          <button
-            type="button"
-            className="btn btn-ghost"
-          >
+          <button type="button" className="btn btn-ghost">
             I already have an account
           </button>
         </SignInButton>
@@ -106,6 +101,9 @@ type GameState =
 function GamePanel() {
   const { authHeaders, mode, signOut, profile } = useAppAuth()
   const [state, setState] = useState<GameState>({ kind: 'loading' })
+  // Whether the player is inside a room right now. Entering hides the tabbed
+  // shell entirely — see `CurrentRoom`, which takes over the whole viewport.
+  const [entered, setEntered] = useState(false)
 
   // Held in a ref, and the effect runs on mount only.
   //
@@ -143,8 +141,22 @@ function GamePanel() {
     return <ProfileForm onSaved={() => void open()} />
   }
 
-
   const game = state.kind === 'ready' ? state.game : null
+  const openRoomId = game ? currentRoomId(game) : null
+
+  if (entered && game && openRoomId) {
+    return (
+      <CurrentRoom
+        roomId={openRoomId}
+        onExit={() => setEntered(false)}
+        onGameChanged={(updated) => {
+          setState({ kind: 'ready', game: updated })
+          // The room just solved was the last one — nothing left to play.
+          if (currentRoomId(updated) === null) setEntered(false)
+        }}
+      />
+    )
+  }
 
   return (
     <>
@@ -196,7 +208,11 @@ function GamePanel() {
       <Tabs
         label="Your game"
         tabs={[
-          { id: 'rooms', label: 'Rooms', render: () => <RoomsTab game={game} /> },
+          {
+            id: 'rooms',
+            label: 'Rooms',
+            render: () => <RoomsTab game={game} onEnterRoom={() => setEntered(true)} />,
+          },
           ...(game
             ? [
                 {
@@ -228,7 +244,9 @@ function GamePanel() {
  * The rooms — the only tab that is the game itself rather than something
  * arranged around it, which is why it comes first and opens by default.
  */
-function RoomsTab({ game }: { game: GameSession | null }) {
+function RoomsTab({ game, onEnterRoom }: { game: GameSession | null; onEnterRoom: () => void }) {
+  const openRoomId = game ? currentRoomId(game) : null
+
   return (
     <section className="pane p-5">
       <h2 className="label">Rooms</h2>
@@ -273,6 +291,12 @@ function RoomsTab({ game }: { game: GameSession | null }) {
         The rooms themselves are the team&apos;s work — this panel only proves the account and the
         API agree about whose game this is.
       </p>
+
+      {openRoomId && (
+        <button type="button" onClick={onEnterRoom} className="btn mt-5">
+          Start escape room
+        </button>
+      )}
     </section>
   )
 }
