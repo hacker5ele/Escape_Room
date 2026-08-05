@@ -18,6 +18,12 @@ let clerkFirstName: string | null = 'Alice'
 let clerkLastName: string | null = 'Example'
 const updateUser = vi.fn().mockResolvedValue(undefined)
 
+// What the identity provider is holding as this player's character. Null means
+// somebody who has never built one — new sign-up or long-standing account, the
+// gate cannot tell them apart and deliberately does not try.
+let playerCharacter: unknown = null
+const saveCharacter = vi.fn().mockResolvedValue(undefined)
+
 // Clerk is still mocked because App imports its button components directly,
 // but identity now comes through the shared auth interface — so these tests
 // exercise the same path whether the app is running on Clerk or the local mode.
@@ -25,6 +31,13 @@ vi.mock('@clerk/react', () => ({
   SignInButton: ({ children }: { children: ReactNode }) => <>{children}</>,
   SignUpButton: ({ children }: { children: ReactNode }) => <>{children}</>,
   UserButton: () => <div data-testid="user-button" />,
+}))
+
+// jsdom has no canvas and never fires `onload` for an <img>, so the real
+// compose step cannot run here. These tests are about the gate and the save
+// wiring; drawing is covered in Character.test.tsx against a stubbed canvas.
+vi.mock('./character/compose', () => ({
+  composeCharacter: vi.fn().mockResolvedValue(new Blob(['png'], { type: 'image/png' })),
 }))
 
 vi.mock('./auth/useAppAuth', () => ({
@@ -37,11 +50,14 @@ vi.mock('./auth/useAppAuth', () => ({
       : null,
     authHeaders: () => Promise.resolve({ Authorization: 'Bearer test-token' }),
     updateProfile: updateUser,
+    storedCharacter: playerCharacter,
+    saveCharacter,
     signOut: () => {},
   }),
 }))
 
 const { App } = await import('./App')
+const { randomCharacter } = await import('./character/parts')
 
 function gameResponse(solvedRooms: string[] = ['room-01']) {
   return new Response(
@@ -148,8 +164,11 @@ afterEach(() => {
   clerkUsername = 'alice42'
   clerkFirstName = 'Alice'
   clerkLastName = 'Example'
+  playerCharacter = null
   updateUser.mockClear()
   updateUser.mockResolvedValue(undefined)
+  saveCharacter.mockClear()
+  saveCharacter.mockResolvedValue(undefined)
 })
 
 describe('App', () => {
@@ -179,6 +198,9 @@ describe('App', () => {
   describe('signed in with a complete profile', () => {
     beforeEach(() => {
       signedIn = true
+      // Built from the real catalogue rather than hand-written ids, so these
+      // tests cannot pass against a character the app would reject.
+      playerCharacter = randomCharacter()
     })
 
     it('shows the username and progress', async () => {
@@ -257,7 +279,71 @@ describe('App', () => {
     })
   })
 
+  describe('signed in without a character', () => {
+    beforeEach(() => {
+      signedIn = true
+      playerCharacter = null
+    })
+
+    it('asks you to build one before it opens the game', async () => {
+      render(<App />)
+
+      expect(await screen.findByRole('heading', { name: /make yourself/i })).toBeInTheDocument()
+      expect(screen.queryByTestId('room-01')).not.toBeInTheDocument()
+    })
+
+    it('catches long-standing accounts too, not only new sign-ups', async () => {
+      // The gate reads what is stored rather than when the account was made,
+      // so somebody who registered before characters existed meets the same
+      // screen and no backfill is needed.
+      clerkUsername = 'someone-from-before'
+      render(<App />)
+
+      expect(await screen.findByRole('heading', { name: /make yourself/i })).toBeInTheDocument()
+    })
+
+    it('opens on a complete character rather than an empty outline', async () => {
+      render(<App />)
+      await screen.findByRole('heading', { name: /make yourself/i })
+
+      // One selected tile per slot, chosen at random on mount.
+      const selected = document.querySelectorAll('[role="radio"][aria-checked="true"]')
+      expect(selected.length).toBe(1) // only the open slot's grid is rendered
+      expect(screen.getByRole('button', { name: /this is me/i })).toBeEnabled()
+    })
+
+    it('saves the character and the picture together', async () => {
+      render(<App />)
+      await screen.findByRole('heading', { name: /make yourself/i })
+
+      await userEvent.click(screen.getByRole('button', { name: /this is me/i }))
+
+      await waitFor(() => expect(saveCharacter).toHaveBeenCalledTimes(1))
+      const [character, picture] = saveCharacter.mock.calls[0] as [unknown, Blob]
+      expect(Object.keys(character as object).sort()).toEqual(['arm', 'body', 'head', 'leg'])
+      expect(picture).toBeInstanceOf(Blob)
+    })
+
+    it('says so when the character cannot be saved, instead of hanging', async () => {
+      saveCharacter.mockRejectedValueOnce(new Error('Clerk said no.'))
+      render(<App />)
+      await screen.findByRole('heading', { name: /make yourself/i })
+
+      await userEvent.click(screen.getByRole('button', { name: /this is me/i }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/clerk said no/i)
+      expect(screen.getByRole('button', { name: /this is me/i })).toBeEnabled()
+    })
+  })
+
   describe('signed in without a username', () => {
+    // These tests are about the profile form, and the character gate sits
+    // directly behind it — without a character they would stop at the picker
+    // rather than reaching the game.
+    beforeEach(() => {
+      playerCharacter = randomCharacter()
+    })
+
     beforeEach(() => {
       signedIn = true
       clerkUsername = null

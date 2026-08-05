@@ -13,6 +13,9 @@ import { inviteTokenFromPath } from './routing'
 import { NotificationBell } from './sync/NotificationBell'
 import { LocalSignIn } from './auth/LocalSignIn'
 import { useAppAuth } from './auth/useAppAuth'
+import { CharacterPicker } from './character/CharacterPicker'
+import { composeCharacter } from './character/compose'
+import { isCharacter, type Character } from './character/parts'
 import { Tabs } from './ui/Tabs'
 
 /**
@@ -104,8 +107,19 @@ type GameState =
   | { kind: 'error'; message: string }
 
 function GamePanel() {
-  const { authHeaders, mode, signOut, profile } = useAppAuth()
+  const { authHeaders, mode, signOut, profile, storedCharacter, saveCharacter } = useAppAuth()
   const [state, setState] = useState<GameState>({ kind: 'loading' })
+
+  // Draw the character, then hand the picture and the part ids over together.
+  // Composing here rather than inside the picker keeps the picker a pure
+  // chooser — it knows nothing about canvases or identity providers.
+  const confirmCharacter = useCallback(
+    async (character: Character) => {
+      const picture = await composeCharacter(character)
+      await saveCharacter(character, picture)
+    },
+    [saveCharacter],
+  )
 
   // Held in a ref, and the effect runs on mount only.
   //
@@ -141,6 +155,23 @@ function GamePanel() {
 
   if (state.kind === 'needs-profile') {
     return <ProfileForm onSaved={() => void open()} />
+  }
+
+  // Everybody builds a character, not only new sign-ups. Checking what is
+  // stored rather than when the account was created means players who
+  // registered before this existed meet the same screen, and no separate
+  // backfill is needed (ADR-0033).
+  //
+  // A UX gate, not a security boundary: it runs in the browser and reads
+  // client-writable metadata. That is the right standing for something purely
+  // cosmetic — the same as the frontend room guard.
+  if (state.kind !== 'loading' && !isCharacter(storedCharacter)) {
+    return (
+      <CharacterPicker
+        onConfirm={confirmCharacter}
+        replacesExistingPhoto={profile?.imageUrl != null}
+      />
+    )
   }
 
 

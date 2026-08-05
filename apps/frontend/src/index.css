@@ -456,6 +456,127 @@
     letter-spacing: 0;
   }
 
+  /* ---- the character (ADR-0033) ----------------------------------
+     Six layers hung on a rig. Positions, sizes and transform origins are all
+     written as inline styles by CharacterFigure, because they are computed
+     from the manifest — the only thing that belongs here is the motion. */
+
+  .character {
+    position: relative;
+    flex: none;
+  }
+
+  .character > span {
+    position: absolute;
+    display: block;
+    /* Promote each limb once, rather than letting the compositor decide part
+       way through an animation and flicker on the first frame. */
+    will-change: transform;
+  }
+
+  .character img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* Nearest-neighbour would alias the halftone into moiré at odd scales. */
+    image-rendering: auto;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  /* Deliberately mismatched periods. Equal ones land back on themselves every
+     cycle and the figure starts reading as a mechanism. */
+  @keyframes limb-swing {
+    0%,
+    100% {
+      transform: rotate(6deg);
+    }
+    50% {
+      transform: rotate(-6deg);
+    }
+  }
+
+  @keyframes limb-step {
+    0%,
+    100% {
+      transform: rotate(-4.5deg);
+    }
+    50% {
+      transform: rotate(4.5deg);
+    }
+  }
+
+  @keyframes torso-bob {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+
+  .character-live [data-motion='arm'] {
+    animation: limb-swing 2.9s ease-in-out infinite;
+  }
+
+  .character-live [data-motion='leg'] {
+    animation: limb-step 3.3s ease-in-out infinite;
+  }
+
+  .character-live [data-motion='body'] {
+    animation: torso-bob 2.5s ease-in-out infinite;
+  }
+
+  /* The far arm and far leg run the same keyframes backwards, which is what
+     makes it a walk instead of a march. */
+  .character-live [data-motion][data-mirror] {
+    animation-direction: reverse;
+  }
+
+  /* The head is driven from JavaScript by the pointer, not by a keyframe. The
+     easing is what makes it feel like it noticed you rather than snapped. */
+  .character [data-part='head'] {
+    transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  /* ---- the picker ---- */
+
+  .part-tile {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    padding: 0.35rem;
+    border: 1px solid rgb(24 22 15 / 0.28);
+    background: rgb(247 243 232 / 0.5);
+    cursor: pointer;
+    transition:
+      background-color 0.14s ease,
+      border-color 0.14s ease,
+      transform 0.14s cubic-bezier(0.16, 0.84, 0.24, 1);
+  }
+
+  .part-tile img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .part-tile:hover {
+    border-color: var(--color-stock-900);
+    transform: translateY(-1px);
+  }
+
+  /* Selected is a full key border plus a shadow — the same "printed solid"
+     logic the tabs use, so selection means one thing across the whole app. */
+  .part-tile[data-selected='true'] {
+    border-color: var(--color-stock-900);
+    background: rgb(255 255 255 / 0.85);
+    box-shadow: var(--shadow-print-sm);
+  }
+
   /* Prose. Syne 400 for the few places that hold an actual sentence. Martian
      Mono is for data and labels; a paragraph set in it is hard work, and the
      app should never ask for that. */

@@ -12,6 +12,8 @@ vi.mock('../auth/useAppAuth', () => ({
     profile: signedIn ? { username: 'alice', firstName: 'Alice', lastName: 'Example' } : null,
     authHeaders: () => Promise.resolve({ 'X-Dev-User': 'user_alice' }),
     updateProfile: vi.fn(),
+    storedCharacter: { head: 'head-01', body: 'body-01', arm: 'arm-01', leg: 'leg-01' },
+    saveCharacter: vi.fn(),
     signOut: vi.fn(),
   }),
 }))
