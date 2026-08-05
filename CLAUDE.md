@@ -230,6 +230,9 @@ The social layer, added by ADRs 0023–0029:
 | `GET` | `/api/leaderboard/friends` | — | `{ entries }` — you and your friends |
 | `GET` | `/api/leaderboard/global` | — | `{ entries }` — everybody who has started |
 | `GET` | `/api/party` | — | `{ party }` — host, members, `isHost` |
+| `POST` | `/api/stage/heartbeat` | position, emote, ready | `{ peers, phase, isHost }` — 2 Hz |
+| `POST` | `/api/stage/phase` | `{ kind, roomId? }` | `204` — host only; moves the whole party |
+| `DELETE` | `/api/stage` | — | `204` — take me off the stage |
 | `POST` | `/api/party/invite/:userId` | — | `204` — notifies, moves nobody |
 | `POST` | `/api/party/join/:userId` | — | `{ party }` |
 | `DELETE` | `/api/party` | — | back to your own game |
@@ -340,6 +343,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0038](docs/adr/0038-presence-and-the-iris-wipe.md) | Presence in memory, polled and interpolated; the transition is an iris wipe | Accepted |
 | 2026-08-05 | [0037](docs/adr/0037-lobby-stage-and-rooms.md) | Start → lobby → room; one walkable stage, generated scenery, synthesised sound | Accepted |
 | 2026-08-05 | [0036](docs/adr/0036-global-board-is-a-top-ten.md) | The global board is a top ten plus your own row; games read in one batch | Accepted |
 | 2026-08-05 | [0035](docs/adr/0035-responsive.md) | Everything responsive from 320px up; never `overflow-x: hidden` on the root | Accepted |
@@ -459,7 +463,17 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
     context made any earlier is refused by Safari.
   - **Motion is cartoon**: squash, stretch, overshoot. **Nothing fades in** — a linear fade is the
     tell that reads as machine-made.
-  - **Not yet multiplayer.** You walk alone; the presence heartbeat is the next phase.
+  - **Multiplayer** ([ADR-0038](docs/adr/0038-presence-and-the-iris-wipe.md)) — friends stand in
+    the same lobby and the same room, walk about and emote at each other. Presence is polled at
+    500 ms and **interpolated**, which is the one technique that turns a twice-a-second update into
+    somebody walking. The host holds PLAY; guests follow on their next beat.
+  - **Presence is in memory, and that pins the API to one instance.** `min_size = max_size = 1` in
+    the Terraform is load-bearing now: raise it and friends will vanish for each other, because two
+    instances would each hold half the room. A deploy clears every lobby and drops nobody from their
+    party. The party is capped at **four**.
+  - **The transition is an iris wipe** — the circle that closes on the end of every 1950s cartoon,
+    with an overshoot, an inked rim and a wobble, because a perfect circle is what gives a machine
+    away.
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions

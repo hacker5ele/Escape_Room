@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GameSession, RoomId } from '@escape-room/shared'
 import { ROOM_IDS, isRoomUnlocked } from '@escape-room/shared'
 import { useAppAuth } from '../auth/useAppAuth'
 import { play, type SoundName } from '../audio/sfx'
 import { Stage, type Actor } from '../stage/Stage'
 import { useMovement } from '../stage/useMovement'
+import { usePresence, toActor } from '../stage/usePresence'
+import { setPhase, useRegisterStageAuth } from '../api/stage'
 import { spawnPoint } from '../stage/scenes'
 import { EmoteBar } from './EmoteBar'
 import { Countdown } from './Countdown'
@@ -38,11 +40,24 @@ export function LobbyView({
   onLeave: () => void
 }) {
   const { profile } = useAppAuth()
+  useRegisterStageAuth()
   const [emote, setEmote] = useState<EmoteName | null>(null)
   const [ready, setReady] = useState(false)
   const [counting, setCounting] = useState(false)
 
-  const { position, walkTo, stopWalking } = useMovement(spawnPoint(0, 1))
+  const { position, walkTo, stopWalking, current } = useMovement(spawnPoint(0, 1))
+  const { actors, phase, isHost, sendEmote } = usePresence({
+    position: current,
+    character,
+    ready,
+  })
+
+  // A guest follows the host in. The host's own PLAY sets the phase and then
+  // navigates; this is what carries the same move to everybody else, on their
+  // next beat, with no push and no socket.
+  useEffect(() => {
+    if (phase.kind === 'room' && !counting) onEnterRoom(phase.roomId)
+  }, [phase, counting, onEnterRoom])
 
   /** The first room you have not finished — the one PLAY means by default. */
   const suggested = useMemo<RoomId>(
@@ -51,11 +66,17 @@ export function LobbyView({
   )
   const [selected, setSelected] = useState<RoomId>(suggested)
 
-  const fire = useCallback((name: EmoteName) => {
-    setEmote(name)
-    play(emoteSound(name) as SoundName)
-    window.setTimeout(() => setEmote(null), emoteDuration(name))
-  }, [])
+  const fire = useCallback(
+    (name: EmoteName) => {
+      setEmote(name)
+      // Sent as well as shown: locally so it is instant for you, on the wire so
+      // it reaches everybody else on the next beat.
+      sendEmote(name)
+      play(emoteSound(name) as SoundName)
+      window.setTimeout(() => setEmote(null), emoteDuration(name))
+    },
+    [sendEmote],
+  )
 
   const me: Actor = {
     userId: game.userId,
@@ -71,7 +92,7 @@ export function LobbyView({
   }
 
   function start() {
-    if (counting) return
+    if (counting || !isHost) return
     // Re-checked at the moment of starting rather than only when picked: the
     // selection could have been made before a room was solved. The server
     // refuses a locked room anyway (ADR-0006) — this only avoids walking the
@@ -79,6 +100,9 @@ export function LobbyView({
     const target = isRoomUnlocked(game, selected) ? selected : ROOM_IDS[0]
     setSelected(target)
     setCounting(true)
+    // Told to the server before the countdown, so the party's guests start the
+    // same three seconds rather than arriving late.
+    void setPhase({ kind: 'room', roomId: target })
   }
 
   return (
@@ -97,7 +121,7 @@ export function LobbyView({
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
         <div className="flex flex-col gap-3">
-          <Stage scene="lobby" actors={[me]} onWalkTo={walkTo} onWalkEnd={stopWalking} />
+          <Stage scene="lobby" actors={[me, ...actors.map(toActor)]} onWalkTo={walkTo} onWalkEnd={stopWalking} />
           <EmoteBar onEmote={fire} disabled={counting} />
           <p className="prose text-xs text-stock-500">
             Arrow keys or WASD to walk — or just drag on the stage.
@@ -138,18 +162,41 @@ export function LobbyView({
           <section className="pane p-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="label">Party</h2>
-              <span className="text-xs text-stock-500">1 / 4</span>
+              <span className="text-xs text-stock-500">{actors.length + 1} / 4</span>
             </div>
             <ul className="mt-3 space-y-1">
               <li className="pane-inset flex items-center justify-between gap-2 px-3 py-2 text-sm">
                 <span className="truncate">
-                  <span aria-hidden="true">♛ </span>
+                  {isHost && <span aria-hidden="true">♛ </span>}
                   {profile?.username ?? 'you'}
                 </span>
                 <span className={ready ? 'text-solved-600' : 'text-stock-500'}>
                   {ready ? 'READY' : '…'}
                 </span>
               </li>
+              {actors.map((peer) => (
+                <li
+                  key={peer.userId}
+                  className="pane-inset flex items-center justify-between gap-2 px-3 py-2 text-sm"
+                  data-away={peer.away ? '' : undefined}
+                >
+                  <span className="truncate">
+                    {peer.isHost && <span aria-hidden="true">♛ </span>}
+                    {peer.name}
+                  </span>
+                  <span className="text-stock-500">{peer.away ? 'away' : '…'}</span>
+                </li>
+              ))}
+              {/* Empty seats, so a party of one reads as room for three more
+                  rather than as a list that happens to be short. */}
+              {Array.from({ length: Math.max(0, 3 - actors.length) }, (_, index) => (
+                <li
+                  key={`seat-${index}`}
+                  className="px-3 py-2 text-sm text-stock-400"
+                >
+                  + invite a friend
+                </li>
+              ))}
             </ul>
           </section>
 
@@ -166,9 +213,18 @@ export function LobbyView({
               {ready ? "I'm ready" : 'Ready?'}
             </button>
 
-            <button type="button" onClick={start} disabled={counting} className="btn play-button">
-              {counting ? 'Going in…' : 'PLAY ▶'}
-            </button>
+            {/* Only the host starts. A guest is told what is happening rather
+                than shown a button that would refuse them — and follows in on
+                their next heartbeat when the host does press it. */}
+            {isHost ? (
+              <button type="button" onClick={start} disabled={counting} className="btn play-button">
+                {counting ? 'Going in…' : 'PLAY ▶'}
+              </button>
+            ) : (
+              <p className="pane-inset px-3 py-3 text-center text-xs text-stock-600">
+                Waiting for the host to start.
+              </p>
+            )}
           </div>
         </aside>
       </div>

@@ -57,6 +57,8 @@ import { createSyncRoutes } from './routes/sync.routes.js'
 import { createChatRoutes } from './routes/chat.routes.js'
 import { createLeaderboardRoutes } from './routes/leaderboard.routes.js'
 import { createPartyRoutes } from './routes/party.routes.js'
+import { createPresenceRoutes } from './routes/presence.routes.js'
+import { PresenceService } from './services/presence.service.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
 import {
   createAttemptRateLimiter,
@@ -166,6 +168,11 @@ export function createApp(options: AppOptions = {}): Express {
     profileService,
     notificationService,
   )
+
+  // In memory, deliberately: a position is meaningless a second later and a
+  // lobby does not outlive the process. Sound only because App Runner is pinned
+  // to one instance — see ADR-0038.
+  const presenceService = new PresenceService(partyService, profileService)
   const chatService = new ChatService(
     messageRepository,
     friendService,
@@ -229,6 +236,21 @@ export function createApp(options: AppOptions = {}): Express {
   app.use(
     '/api/party',
     createPartyRoutes(partyService, authenticator, socialWriteLimiter),
+  )
+
+  app.use(
+    '/api/stage',
+    createPresenceRoutes(
+      presenceService,
+      partyService,
+      gameService,
+      authenticator,
+      // Its own limiter, generous because this is polled twice a second while
+      // somebody is on the stage: 240/minute is two per second with headroom,
+      // and it is deliberately not shared with `/api/sync`, which is polled
+      // twenty times more slowly and would be starved by the same budget.
+      createRateLimiter({ limit: 240, authenticator, message: 'Slow down.' }),
+    ),
   )
 
   app.use(
