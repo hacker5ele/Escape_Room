@@ -1213,11 +1213,155 @@
   }
 }
 
+/* --------------------------------------------------------------------------
+   Unbuilding into dots — the screen transition (ADR-0044)
+   --------------------------------------------------------------------------
+
+   The whole app is printed as a halftone: a 1px dot on a 6px grid, set on
+   `body` above. This animation is that screen coming apart and going back
+   together, so a panel leaving the page does not slide or fade — it loses its
+   ink until only its dots are left, and those dots are the same size and pitch
+   as the page's own. They fade into the ground rather than off it.
+
+   Everything below is transform, opacity and one mask. No layout property is
+   touched, so nothing here can reflow the page it is animating. */
+
+/* The mask's dot radius has to interpolate, and only a registered property
+   does. Unregistered, a custom property jumps at each keyframe instead — which
+   is exactly the fallback on a browser without `@property`: three visible steps
+   rather than a dissolve, with the travel and the fade intact. Degrades, does
+   not break. */
+@property --dot-r {
+  syntax: '<length>';
+  inherits: false;
+  /* Larger than the 4.25px half-diagonal of a 6px cell, so at rest the dots
+     overlap completely and the mask is solid — an un-animated element is not
+     screened at all. */
+  initial-value: 5px;
+}
+
 @layer components {
-  .iris-wipe {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    pointer-events: none;
+  /* Clipped only while something is in flight. A piece thrown in from off the
+     right of a 375px phone would otherwise widen the document and flash a
+     horizontal scrollbar — and `overflow-x: hidden` on `html` is the one thing
+     ADR-0032 forbids outright, because it silently kills `backdrop-filter` on
+     every pane in the app.
+
+     Doing it here and only for the ~1s of the animation costs nothing: the
+     pieces in flight have had their blur turned off anyway (see below), so
+     there is no backdrop-filter left to lose. */
+  .assemble.is-moving {
+    overflow: clip;
+  }
+
+  .piece-leaving,
+  .piece-arriving {
+    /* The dots. Radius animates; pitch never does — a screen whose pitch moves
+       reads as the image scaling, not as the image dissolving. */
+    mask-image: radial-gradient(
+      circle at center,
+      #000 var(--dot-r),
+      transparent calc(var(--dot-r) + 0.6px)
+    );
+    mask-size: 6px 6px;
+    mask-repeat: repeat;
+    -webkit-mask-image: radial-gradient(
+      circle at center,
+      #000 var(--dot-r),
+      transparent calc(var(--dot-r) + 0.6px)
+    );
+    -webkit-mask-size: 6px 6px;
+    -webkit-mask-repeat: repeat;
+
+    /* A mask makes this element its own backdrop root, which leaves
+       `.pane::before` with an empty backdrop and nothing to blur. Rather than
+       let the glass fail halfway through, it is put out deliberately: a piece
+       in flight is flat paper. These two tokens exist for exactly this kind of
+       flattening, and the swap is invisible under the motion that starts on the
+       same frame. */
+    --pane-blur: 0px;
+    --pane-alpha: 1;
+
+    will-change: transform, opacity, --dot-r;
+    /* Without this the mask samples an unpainted layer on the first frame in
+       Safari and the piece flickers before it starts. */
+    backface-visibility: hidden;
+  }
+
+  .piece-leaving {
+    animation: piece-unbuild 340ms cubic-bezier(0.55, 0, 0.85, 0.35) var(--fly-delay, 0ms) both;
+  }
+
+  /* Two easings, because they are two different sentences. `fly` lands with an
+     overshoot — a thing thrown into place. `gather` settles without one, which
+     is what coming home should feel like. */
+  .piece-arriving {
+    animation: piece-build 620ms cubic-bezier(0.16, 1.02, 0.3, 1) var(--fly-delay, 0ms) both;
+  }
+
+  [data-assemble-mode='fly'] .piece-arriving {
+    animation-timing-function: cubic-bezier(0.22, 1.35, 0.36, 1);
+  }
+
+  @keyframes piece-unbuild {
+    0% {
+      --dot-r: 5px;
+      opacity: 1;
+      translate: 0 0;
+      rotate: 0deg;
+      scale: 1;
+    }
+    /* Ink gone, dots left. The panel is still legibly where it was — this is
+       the moment it stops being a surface and becomes a screen. */
+    62% {
+      --dot-r: 1px;
+      opacity: 1;
+    }
+    100% {
+      --dot-r: 0.8px;
+      opacity: 0;
+      translate: var(--fly-x, 0) var(--fly-y, 0);
+      rotate: var(--fly-spin, 0deg);
+      scale: 0.96;
+    }
+  }
+
+  @keyframes piece-build {
+    0% {
+      --dot-r: 0.8px;
+      opacity: 0;
+      translate: var(--fly-x, 0) var(--fly-y, 0);
+      rotate: var(--fly-spin, 0deg);
+      scale: 0.94;
+    }
+    /* Visible as dots first, and already travelling. The piece arrives as a
+       screen and gains its ink on the way in, which is the leave played
+       backwards — the same idea read in the other direction. */
+    22% {
+      --dot-r: 1px;
+      opacity: 1;
+    }
+    100% {
+      --dot-r: 5px;
+      opacity: 1;
+      translate: 0 0;
+      rotate: 0deg;
+      scale: 1;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The JS refuses to mark anything in the first place, so these classes never
+     appear. Belt and braces for a preference changed mid-flight. */
+  .piece-leaving,
+  .piece-arriving {
+    animation: none !important;
+    mask-image: none !important;
+    -webkit-mask-image: none !important;
+    opacity: 1 !important;
+    translate: none !important;
+    rotate: none !important;
+    scale: none !important;
   }
 }
