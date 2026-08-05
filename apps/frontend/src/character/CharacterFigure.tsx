@@ -56,20 +56,30 @@ function layersFor(character: Character): Layer[] {
   ]
 }
 
+/** Percent of the frame, to four decimals — enough that nothing visibly drifts. */
+const pct = (value: number, of: number) => `${((value / of) * 100).toFixed(4)}%`
+
 export function CharacterFigure({
   character,
-  height,
   animated = true,
   className = '',
 }: {
   character: Character
-  /** Rendered height in pixels; everything scales from this. */
-  height: number
   animated?: boolean
+  /**
+   * Sizing is the caller's business: the figure fills the width it is given and
+   * keeps the rig's aspect ratio.
+   *
+   * Every layer is positioned as a *percentage* of the frame rather than in
+   * pixels, which is what lets this be pure CSS. The first version measured its
+   * container with a ResizeObserver and set a pixel height — and that fed a
+   * loop: switching slot changed the page height, which toggled the scrollbar,
+   * which changed the width, which resized the figure, which changed the page
+   * height again. It read as the whole window flinching on every click.
+   */
   className?: string
 }) {
   const headRef = useRef<HTMLSpanElement | null>(null)
-  const scale = height / FRAME[1]
   const layers = layersFor(character)
 
   // The head follows the pointer, written straight to the node.
@@ -96,9 +106,11 @@ export function CharacterFigure({
       // Clamped hard. Past about twelve degrees a flat cut-out stops reading as
       // a turned head and starts reading as a mistake.
       const angle = Math.max(-12, Math.min(12, dx / 22))
-      const shiftX = Math.max(-5, Math.min(5, dx / 60)) * scale
-      const shiftY = Math.max(-4, Math.min(4, dy / 90)) * scale
-      node.style.transform = `translate(${shiftX}px, ${shiftY}px) rotate(${angle}deg)`
+      // Shifted as a fraction of the head's own width, so the movement stays
+      // proportional at any size without the figure knowing its scale.
+      const shiftX = Math.max(-3, Math.min(3, dx / 90))
+      const shiftY = Math.max(-2.5, Math.min(2.5, dy / 130))
+      node.style.transform = `translate(${shiftX}%, ${shiftY}%) rotate(${angle}deg)`
     }
 
     const onMove = (event: PointerEvent) => {
@@ -111,12 +123,12 @@ export function CharacterFigure({
       window.removeEventListener('pointermove', onMove)
       if (frame) cancelAnimationFrame(frame)
     }
-  }, [animated, scale])
+  }, [animated])
 
   return (
     <div
       className={`character ${animated ? 'character-live' : ''} ${className}`}
-      style={{ width: FRAME[0] * scale, height: FRAME[1] * scale }}
+      style={{ aspectRatio: `${FRAME[0]} / ${FRAME[1]}` }}
       // The figure is decoration wherever it appears beside a name; the name is
       // the accessible label. Announcing "cartoon character" adds nothing.
       aria-hidden="true"
@@ -148,11 +160,14 @@ export function CharacterFigure({
             // side's keyframes backwards instead.
             data-mirror={mirror ? '' : undefined}
             style={{
-              left: (ax - pivotX) * scale,
-              top: (ay - py) * scale,
-              width: part.w * scale,
-              height: part.h * scale,
-              transformOrigin: `${pivotX * scale}px ${py * scale}px`,
+              left: pct(ax - pivotX, FRAME[0]),
+              top: pct(ay - py, FRAME[1]),
+              width: pct(part.w, FRAME[0]),
+              height: pct(part.h, FRAME[1]),
+              // Percentages here are of the layer's own box, not the frame —
+              // which is exactly what keeps a limb turning about its shoulder
+              // however large the figure is drawn.
+              transformOrigin: `${pct(pivotX, part.w)} ${pct(py, part.h)}`,
             }}
           >
             <img

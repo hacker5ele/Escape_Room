@@ -10,10 +10,23 @@ import type { ProfileService } from './profile.service.js'
  * There is nothing to keep in step, and a player's row cannot disagree with
  * their own progress screen.
  *
- * Scoped to friends on purpose. A global leaderboard in a class is a way to
- * make the slowest person feel bad in public; among people who chose each
- * other it is a reason to keep playing.
+ * Two boards, and they answer different questions. "Friends" is how you are
+ * doing among people who chose each other, which is a reason to keep playing.
+ * "Global" is where the room as a whole has got to. See ADR-0034 — the friends
+ * board was originally the only one, on the grounds that a class-wide ranking
+ * is a way to make the slowest person feel bad in public, and that concern has
+ * not gone away; it is why Friends stays the default view.
  */
+
+/**
+ * How many players the global board will look at.
+ *
+ * There is no index of "all players", so this is a table scan — the only one in
+ * the app — and the cap is what stops it growing without limit. Comfortably
+ * above a school's worth of accounts, and the board shows fewer than this.
+ */
+export const GLOBAL_LEADERBOARD_LIMIT = 200
+
 export class LeaderboardService {
   constructor(
     private readonly games: GameRepository,
@@ -41,6 +54,31 @@ export class LeaderboardService {
     )
 
     return entries.sort(compare)
+  }
+
+  /**
+   * Everybody who has a profile, best first.
+   *
+   * Built from the same parts as the friends board and sorted by the same rule,
+   * so a player cannot be above someone on one board and below them on the
+   * other.
+   *
+   * Only players who have actually started a game appear. Somebody who
+   * registered and never opened a room is not "last" — they are not playing,
+   * and listing them at the bottom of a public ranking says something untrue
+   * about them.
+   */
+  async global(userId: string): Promise<LeaderboardEntry[]> {
+    const profiles = await this.profiles.listAll(GLOBAL_LEADERBOARD_LIMIT)
+
+    const entries = await Promise.all(
+      profiles.map(async (profile) => {
+        const game = await this.games.findByUserId(profile.userId)
+        return game ? toEntry(profile, game, profile.userId === userId) : null
+      }),
+    )
+
+    return entries.filter((entry): entry is LeaderboardEntry => entry !== null).sort(compare)
   }
 }
 
