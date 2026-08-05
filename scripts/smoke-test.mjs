@@ -70,11 +70,24 @@ await check('serves the built app', async () => {
 
 await check('SPA deep links fall back to index.html', async () => {
   // A CloudFront Function rewrites extensionless paths. If this breaks,
-  // reloading inside a room shows an S3 XML error instead of the app.
-  const response = await fetch(`${baseUrl}/room/room-02`, { redirect: 'follow' })
-  assert(response.status === 200, `expected 200, got ${response.status}`)
-  const html = await response.text()
-  assert(html.includes('<div id="root">'), 'deep link did not return the app shell')
+  // reloading anywhere but the front page shows an S3 XML error instead of the
+  // app — which is the whole promise of path routing (ADR-0040).
+  const paths = [
+    '/room/room-02',
+    '/lobby',
+    '/friends',
+    '/leaderboard',
+    '/activity',
+    '/character?head=head-01&body=body-01',
+    '/invite/abc123',
+  ]
+
+  for (const path of paths) {
+    const response = await fetch(`${baseUrl}${path}`, { redirect: 'follow' })
+    assert(response.status === 200, `${path} returned ${response.status}, expected 200`)
+    const html = await response.text()
+    assert(html.includes('<div id="root">'), `${path} did not return the app shell`)
+  }
 })
 
 await check('a missing asset still 404s', async () => {

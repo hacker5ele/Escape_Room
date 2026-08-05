@@ -57,7 +57,24 @@ export function RoomView({
   const definition = roomDefinition(roomId)
   const { position, walkTo, stopWalking, current } = useMovement(spawnPoint(0, 1))
   useRegisterStageAuth()
-  const { actors, sendEmote } = usePresence({ position: current, character, ready: false })
+  const { actors, phase, isHost, sendEmote } = usePresence({
+    position: current,
+    character,
+    ready: false,
+  })
+
+  // The host being here is what puts the party here — so a reload straight into
+  // a room, or a guest arriving later, finds the party already in it.
+  useEffect(() => {
+    if (isHost) void setPhase({ kind: 'room', roomId })
+  }, [isHost, roomId])
+
+  // A guest follows the host out, or into a different room.
+  useEffect(() => {
+    if (isHost) return
+    if (phase.kind === 'lobby') onLeave()
+    else if (phase.roomId !== roomId) onLeave()
+  }, [isHost, phase, roomId, onLeave])
 
   // Held in a ref, and the effect runs on mount only: depending on the function
   // itself would re-enter the room on every render.
@@ -166,13 +183,7 @@ export function RoomView({
         </div>
         <button
           type="button"
-          onClick={() => {
-            // Puts the party back in the lobby as well as yourself. A host who
-            // walks out while guests are still in the room would otherwise
-            // leave them there with nobody to start anything.
-            void setPhase({ kind: 'lobby' })
-            onLeave()
-          }}
+          onClick={onLeave}
           className="btn btn-ghost btn-sm"
         >
           Leave the room

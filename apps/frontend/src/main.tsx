@@ -1,5 +1,6 @@
 import { StrictMode, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import { ClerkProvider } from '@clerk/react'
 import './index.css'
 import { App } from './App'
@@ -47,7 +48,13 @@ createRoot(container).render(
       {/* Inside the auth provider: the poll needs an identity, and stops
           entirely when there is not one. */}
       <SyncProvider>
-        <App />
+        {/* Paths, never a hash. Every environment already rewrites unknown
+            paths to index.html — CloudFront in the deployed ones, `try_files`
+            in the docker nginx, Vite's own fallback in development — so a deep
+            link like /room/room-02 loads the app rather than 404ing. */}
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
       </SyncProvider>
     </AuthProvider>
   </StrictMode>,

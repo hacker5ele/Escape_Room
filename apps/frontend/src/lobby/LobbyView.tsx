@@ -52,12 +52,24 @@ export function LobbyView({
     ready,
   })
 
-  // A guest follows the host in. The host's own PLAY sets the phase and then
-  // navigates; this is what carries the same move to everybody else, on their
-  // next beat, with no push and no socket.
+  /**
+   * Who decides where the party is.
+   *
+   * **The host's location is the party's location; a guest follows it.** So
+   * arriving in the lobby as host puts the party in the lobby — which is what
+   * makes the back button out of a room work, rather than the server yanking
+   * you straight back in because it still thinks you are there.
+   */
   useEffect(() => {
-    if (phase.kind === 'room' && !counting) onEnterRoom(phase.roomId)
-  }, [phase, counting, onEnterRoom])
+    if (isHost) void setPhase({ kind: 'lobby' })
+  }, [isHost])
+
+  // And a guest goes wherever the party went, including on the first beat after
+  // a reload — landing in the lobby while everybody else is in a room is worse
+  // than being taken to them.
+  useEffect(() => {
+    if (!isHost && phase.kind === 'room' && !counting) onEnterRoom(phase.roomId)
+  }, [isHost, phase, counting, onEnterRoom])
 
   /** The first room you have not finished — the one PLAY means by default. */
   const suggested = useMemo<RoomId>(
@@ -88,7 +100,7 @@ export function LobbyView({
     walking: position.walking,
     emote,
     isMe: true,
-    isHost: true,
+    isHost,
   }
 
   function start() {

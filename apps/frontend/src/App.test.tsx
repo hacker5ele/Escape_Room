@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { ROOM_IDS } from '@escape-room/shared'
 
 /**
@@ -57,6 +58,20 @@ vi.mock('./auth/useAppAuth', () => ({
 }))
 
 const { App } = await import('./App')
+
+/**
+ * Renders the app at a path.
+ *
+ * Every screen is a route now, so a test that wants the lobby or a room simply
+ * starts there — which is also how deep-link recovery is tested (ADR-0040).
+ */
+function open(url = '/') {
+  return render(
+    <MemoryRouter initialEntries={[url]}>
+      <App />
+    </MemoryRouter>,
+  )
+}
 const { randomCharacter } = await import('./character/parts')
 
 function gameResponse(solvedRooms: string[] = ['room-01']) {
@@ -161,12 +176,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
 
-  // The tab strip keeps its selection in the URL hash, which is deliberate —
-  // it survives a reload and makes /#friends linkable. It also survives the end
-  // of a test, so a test that opened the Activity tab would leave the next one
-  // opening there too.
-  window.history.replaceState(null, '', window.location.pathname)
-
   signedIn = false
   clerkUsername = 'alice42'
   clerkFirstName = 'Alice'
@@ -180,24 +189,24 @@ afterEach(() => {
 
 describe('App', () => {
   it('always shows the title', () => {
-    render(<App />)
+    open()
     expect(screen.getByRole('heading', { name: /digitale escape room/i })).toBeInTheDocument()
   })
 
   describe('signed out', () => {
     it('shows the locked door and offers registration', () => {
-      render(<App />)
+      open()
       expect(screen.getByText(/the door is locked/i)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /register/i })).toBeInTheDocument()
     })
 
     it('does not reveal the rooms', () => {
-      render(<App />)
+      open()
       expect(screen.queryByTestId('room-01')).not.toBeInTheDocument()
     })
 
     it('does not call the API', () => {
-      render(<App />)
+      open()
       expect(fetch).not.toHaveBeenCalled()
     })
   })
@@ -211,12 +220,12 @@ describe('App', () => {
     })
 
     it('shows the username and progress', async () => {
-      render(<App />)
+      open()
       expect(await screen.findByText(/alice42 — 1\/4 rooms solved/)).toBeInTheDocument()
     })
 
     it('sends the Clerk token to the API', async () => {
-      render(<App />)
+      open()
       await screen.findByText(/alice42/)
 
       const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
@@ -225,7 +234,7 @@ describe('App', () => {
     })
 
     it('marks solved rooms and leaves the rest locked', async () => {
-      render(<App />)
+      open()
       await screen.findByText(/alice42/)
 
       for (const roomId of ROOM_IDS) {
@@ -236,7 +245,7 @@ describe('App', () => {
     })
 
     it('shows the activity log, newest first', async () => {
-      render(<App />)
+      open()
       await screen.findByText(/alice42/)
 
       // The log lives behind its own tab now. Only the open tab is mounted —
@@ -252,7 +261,7 @@ describe('App', () => {
     })
 
     it('opens on the rooms tab, and keeps the game status visible across tabs', async () => {
-      render(<App />)
+      open()
       await screen.findByText(/alice42/)
 
       expect(screen.getByRole('tab', { name: /rooms/i })).toHaveAttribute('aria-selected', 'true')
@@ -265,7 +274,7 @@ describe('App', () => {
     })
 
     it('lets you change your character afterwards, and back out of it', async () => {
-      render(<App />)
+      open()
       await screen.findByText(/alice42/)
 
       await userEvent.click(screen.getByRole('button', { name: /change character/i }))
@@ -280,7 +289,7 @@ describe('App', () => {
     })
 
     it('moves between tabs with the arrow keys', async () => {
-      render(<App />)
+      open()
       await screen.findByText(/alice42/)
 
       // Required by the WAI-ARIA tabs pattern, and the first thing anybody
@@ -296,7 +305,7 @@ describe('App', () => {
 
     it('reports a failure instead of hanging', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 500 })))
-      render(<App />)
+      open()
       expect(await screen.findByText(/could not load your game/i)).toBeInTheDocument()
     })
   })
@@ -308,7 +317,7 @@ describe('App', () => {
     })
 
     it('asks you to build one before it opens the game', async () => {
-      render(<App />)
+      open()
 
       expect(await screen.findByRole('heading', { name: /make yourself/i })).toBeInTheDocument()
       expect(screen.queryByTestId('room-01')).not.toBeInTheDocument()
@@ -319,13 +328,13 @@ describe('App', () => {
       // so somebody who registered before characters existed meets the same
       // screen and no backfill is needed.
       clerkUsername = 'someone-from-before'
-      render(<App />)
+      open()
 
       expect(await screen.findByRole('heading', { name: /make yourself/i })).toBeInTheDocument()
     })
 
     it('opens on a complete character rather than an empty outline', async () => {
-      render(<App />)
+      open()
       await screen.findByRole('heading', { name: /make yourself/i })
 
       // One selected tile per slot, chosen at random on mount.
@@ -335,7 +344,7 @@ describe('App', () => {
     })
 
     it('saves the character and the picture together', async () => {
-      render(<App />)
+      open()
       await screen.findByRole('heading', { name: /make yourself/i })
 
       await userEvent.click(screen.getByRole('button', { name: /this is me/i }))
@@ -348,7 +357,7 @@ describe('App', () => {
 
     it('says so when the character cannot be saved, instead of hanging', async () => {
       saveCharacter.mockRejectedValueOnce(new Error('Clerk said no.'))
-      render(<App />)
+      open()
       await screen.findByRole('heading', { name: /make yourself/i })
 
       await userEvent.click(screen.getByRole('button', { name: /this is me/i }))
@@ -382,13 +391,13 @@ describe('App', () => {
     })
 
     it('shows the profile form when the API says the profile is incomplete', async () => {
-      render(<App />)
+      open()
       expect(await screen.findByText(/before you go in/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/username/i)).toBeInTheDocument()
     })
 
     it('refuses to submit with a field left blank', async () => {
-      render(<App />)
+      open()
       await screen.findByText(/before you go in/i)
 
       await userEvent.type(screen.getByLabelText(/username/i), 'nepo')
@@ -398,7 +407,7 @@ describe('App', () => {
     })
 
     it('saves the profile to Clerk and then opens the game', async () => {
-      render(<App />)
+      open()
       await screen.findByText(/before you go in/i)
 
       await userEvent.type(screen.getByLabelText(/username/i), 'nepo')
@@ -423,7 +432,7 @@ describe('App', () => {
       // "unchanged value" validation.
       clerkUsername = 'already_taken_by_me'
 
-      render(<App />)
+      open()
       await screen.findByText(/before you go in/i)
 
       expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument()
@@ -443,7 +452,7 @@ describe('App', () => {
       // Clerk's shape for a duplicate identifier.
       updateUser.mockRejectedValueOnce({ errors: [{ code: 'form_identifier_exists' }] })
 
-      render(<App />)
+      open()
       await screen.findByText(/before you go in/i)
 
       await userEvent.type(screen.getByLabelText(/username/i), 'taken')
@@ -455,5 +464,102 @@ describe('App', () => {
       // Still on the form, so the player can pick another.
       expect(screen.getByLabelText(/username/i)).toBeInTheDocument()
     })
+  })
+})
+
+/**
+ * What paths buy: reload lands you where you were, and no `#` anywhere.
+ *
+ * Every one of these is a fresh mount at a URL — which is exactly what a reload
+ * is, so these are the reload-recovery tests (ADR-0040).
+ */
+describe('real URLs', () => {
+  beforeEach(() => {
+    signedIn = true
+    playerCharacter = randomCharacter()
+  })
+
+  it('opens a tab directly', async () => {
+    open('/leaderboard')
+    await screen.findByText(/alice42/)
+
+    expect(screen.getByRole('tab', { name: /leaderboard/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    // The panel the path chose, not the default one.
+    expect(screen.queryByTestId('room-01')).not.toBeInTheDocument()
+  })
+
+  it('opens the lobby directly', async () => {
+    open('/lobby')
+    expect(await screen.findByRole('heading', { name: /ready when you are/i })).toBeInTheDocument()
+  })
+
+  it('opens a room directly — this is what reloading inside one does', async () => {
+    open('/room/room-01')
+    expect(await screen.findByRole('button', { name: /leave the room/i })).toBeInTheDocument()
+  })
+
+  it('sends an unknown path home rather than showing an error', async () => {
+    open('/somewhere-that-never-existed')
+    await screen.findByText(/alice42/)
+    expect(screen.getByTestId('room-01')).toBeInTheDocument()
+  })
+
+  it('sends a room that is not a room back to the lobby', async () => {
+    open('/room/room-99')
+    expect(await screen.findByRole('heading', { name: /ready when you are/i })).toBeInTheDocument()
+  })
+
+  it('restores the outfit from the query string', async () => {
+    const mine = randomCharacter()
+    open(`/character?head=${mine.head}&body=${mine.body}&arm=${mine.arm}&leg=${mine.leg}`)
+
+    await screen.findByRole('heading', { name: /change your character/i })
+    const checked = screen
+      .getAllByRole('radio')
+      .findIndex((tile) => tile.getAttribute('aria-checked') === 'true')
+    const { partsIn } = await import('./character/parts')
+    expect(partsIn('head')[checked]?.id).toBe(mine.head)
+  })
+
+  it('falls back rather than breaking on a part that no longer exists', async () => {
+    // Query parameters can say anything, and a catalogue can change under a
+    // shared link. A stale id should quietly become a valid one.
+    open('/character?head=head-999')
+    await screen.findByRole('heading', { name: /change your character/i })
+    expect(screen.getAllByRole('radio').some((t) => t.getAttribute('aria-checked') === 'true')).toBe(
+      true,
+    )
+  })
+
+  it('opens the picker at its own address, not as a takeover', async () => {
+    open()
+    await screen.findByText(/alice42/)
+    await userEvent.click(screen.getByRole('button', { name: /change character/i }))
+    expect(await screen.findByRole('heading', { name: /change your character/i })).toBeInTheDocument()
+  })
+})
+
+describe('the character gate', () => {
+  it('redirects somebody with no character to /character, and does not loop', async () => {
+    signedIn = true
+    playerCharacter = null
+
+    open('/friends')
+
+    // Sent to the picker rather than shown the friends panel — and once there,
+    // the gate must not redirect again or nothing would ever render.
+    expect(await screen.findByRole('heading', { name: /make yourself/i })).toBeInTheDocument()
+  })
+
+  it('offers no way out at the gate, because there is nothing behind it', async () => {
+    signedIn = true
+    playerCharacter = null
+
+    open('/lobby')
+    await screen.findByRole('heading', { name: /make yourself/i })
+    expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
   })
 })
