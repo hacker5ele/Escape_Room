@@ -33,7 +33,18 @@ export interface NotificationRecord {
 export interface NotificationRepository {
   add(record: NotificationRecord): Promise<void>
   /** Everything newer than `afterSk`, oldest first. Pass '' for everything. */
-  listSince(userId: string, afterSk: string, limit: number): Promise<NotificationRecord[]>
+  /**
+   * Everything after `afterSk`, or the whole list when it is null.
+   *
+   * Null is the only way to say "from the beginning". An empty string is not —
+   * DynamoDB rejects it as a key value, and the in-memory implementation below
+   * refuses it too so that the two behave alike where it matters.
+   */
+  listSince(
+    userId: string,
+    afterSk: string | null,
+    limit: number,
+  ): Promise<NotificationRecord[]>
   countUnread(userId: string): Promise<number>
   /**
    * Is there already an unread one of this kind from this person?
@@ -55,9 +66,15 @@ export class InMemoryNotificationRepository implements NotificationRepository {
     this.#byUser.set(record.userId, list)
   }
 
-  async listSince(userId: string, afterSk: string, limit: number): Promise<NotificationRecord[]> {
-    return (this.#byUser.get(userId) ?? [])
-      .filter((record) => record.sk > afterSk)
+  async listSince(
+    userId: string,
+    afterSk: string | null,
+    limit: number,
+  ): Promise<NotificationRecord[]> {
+    assertUsableKey(afterSk)
+    const all = this.#byUser.get(userId) ?? []
+    return all
+      .filter((record) => afterSk === null || record.sk > afterSk)
       .slice(0, limit)
       .map((record) => structuredClone(record))
   }
@@ -99,12 +116,23 @@ export class DynamoNotificationRepository implements NotificationRepository {
     await this.#client.send(new PutCommand({ TableName: this.#tableName, Item: record }))
   }
 
-  async listSince(userId: string, afterSk: string, limit: number): Promise<NotificationRecord[]> {
+  async listSince(
+    userId: string,
+    afterSk: string | null,
+    limit: number,
+  ): Promise<NotificationRecord[]> {
+    assertUsableKey(afterSk)
+    // The condition is *omitted* rather than widened when there is no cursor.
+    // There is no key value meaning "before everything" — an empty string is
+    // rejected outright — so the only correct unbounded query is one that does
+    // not mention the sort key at all.
     const result = await this.#client.send(
       new QueryCommand({
         TableName: this.#tableName,
-        KeyConditionExpression: 'userId = :u AND sk > :after',
-        ExpressionAttributeValues: { ':u': userId, ':after': afterSk },
+        KeyConditionExpression:
+          afterSk === null ? 'userId = :u' : 'userId = :u AND sk > :after',
+        ExpressionAttributeValues:
+          afterSk === null ? { ':u': userId } : { ':u': userId, ':after': afterSk },
         Limit: limit,
         // Strongly consistent: a poll immediately after an action that caused a
         // notification should see it, and an eventually-consistent read here
@@ -211,5 +239,25 @@ export class DynamoNotificationRepository implements NotificationRepository {
 
       startKey = result.LastEvaluatedKey
     } while (startKey)
+  }
+}
+
+/**
+ * Refuses a key value DynamoDB would refuse.
+ *
+ * This is the guard that would have caught the bug it exists because of. The
+ * empty-string cursor crashed every first sync poll in production for days
+ * while all 227 tests passed — because the in-memory repository compared
+ * against `''` quite happily and DynamoDB does not.
+ *
+ * **An in-memory stand-in must be at least as strict as the real thing.** Where
+ * it is more permissive it does not simulate the database, it hides it, and the
+ * difference is only ever discovered in production.
+ */
+export function assertUsableKey(value: string | null): void {
+  if (value === '') {
+    throw new Error(
+      'A sort key cursor may not be an empty string — DynamoDB rejects it. Use null for "from the beginning".',
+    )
   }
 }

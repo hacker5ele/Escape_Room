@@ -343,6 +343,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0039](docs/adr/0039-empty-key-cursor.md) | Null is the empty cursor; in-memory stand-ins must be as strict as DynamoDB | Accepted |
 | 2026-08-05 | [0038](docs/adr/0038-presence-and-the-iris-wipe.md) | Presence in memory, polled and interpolated; the transition is an iris wipe | Accepted |
 | 2026-08-05 | [0037](docs/adr/0037-lobby-stage-and-rooms.md) | Start → lobby → room; one walkable stage, generated scenery, synthesised sound | Accepted |
 | 2026-08-05 | [0036](docs/adr/0036-global-board-is-a-top-ten.md) | The global board is a top ten plus your own row; games read in one batch | Accepted |
@@ -424,7 +425,11 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)). Following a link makes the two of you
   friends straight away — the link was the consent
   ([ADR-0029](docs/adr/0029-rate-limits-per-account-and-invite-acceptance.md)).
-- **Notifications** — a bell with an unread badge, fed by a single polled `/api/sync`. App Runner
+- **Notifications** — a bell with an unread badge, fed by a single polled `/api/sync`. The cursor is
+  `null` for "from the beginning", **never an empty string** — DynamoDB rejects an empty string as a
+  key value, so `sk > ''` is a 500 rather than an unbounded query. The in-memory repositories now
+  refuse it too: a stand-in that is *more permissive* than the real database does not simulate it, it
+  hides it, and that is how this shipped ([ADR-0039](docs/adr/0039-empty-key-cursor.md)). App Runner
   supports neither WebSockets nor long-lived streams, so polling is the only option; it stops
   entirely while the tab is hidden ([ADR-0025](docs/adr/0025-notifications-by-polling.md)). Chat and
   co-op will add fields to the same response rather than endpoints of their own.
