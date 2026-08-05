@@ -336,6 +336,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0036](docs/adr/0036-global-board-is-a-top-ten.md) | The global board is a top ten plus your own row; games read in one batch | Accepted |
 | 2026-08-05 | [0035](docs/adr/0035-responsive.md) | Everything responsive from 320px up; never `overflow-x: hidden` on the root | Accepted |
 | 2026-08-05 | [0034](docs/adr/0034-global-leaderboard.md) | A global leaderboard beside the friends one; Friends stays the default | Accepted |
 | 2026-08-05 | [0033](docs/adr/0033-modular-characters.md) | Build-your-own character at sign-up; generated parts printed in the two inks | Accepted |
@@ -427,7 +428,10 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   ([ADR-0027](docs/adr/0027-friends-leaderboard.md)). Two scopes: **Friends**, which is the default,
   and **Everyone** ([ADR-0034](docs/adr/0034-global-leaderboard.md)). The global board shows only
   players who have actually started, and is the one **table scan** in the app — capped at 200, and
-  the reason the instance role needs `dynamodb:Scan`.
+  the reason the instance role needs `dynamodb:Scan`. It returns a **top ten plus your own row** if
+  you are outside it, so nobody is missing from their own board
+  ([ADR-0036](docs/adr/0036-global-board-is-a-top-ten.md)). Position comes from `rank` on the wire,
+  never from the array index — the eleventh row may be the player in twenty-third place.
 - **Co-op play** — invite a friend into your game, or join theirs. Both see the same progress and
   either can solve; the log says who did what. A player points at the *host's* user id rather than a
   synthetic game id, so the games table never had to be re-keyed and no progress was thrown away,
