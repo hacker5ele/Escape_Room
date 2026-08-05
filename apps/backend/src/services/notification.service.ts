@@ -133,11 +133,21 @@ export class NotificationService {
  * falls back to "everything", which is a slow first poll rather than a silent
  * gap in what the player sees.
  */
-function cursorFor(since: string | undefined): string {
-  if (!since) return ''
+/**
+ * The sort key to read after, or null for "from the beginning".
+ *
+ * Null rather than an empty string, and that is the whole bug this replaces.
+ * DynamoDB refuses an empty string as a key value outright — *"The
+ * AttributeValue for a key attribute cannot contain an empty string value"* —
+ * so `sk > ''` is not an unbounded query, it is a 500. Every first poll of
+ * every session hit it in production, and no test did, because the in-memory
+ * repository happily compared against `''`.
+ */
+function cursorFor(since: string | undefined): string | null {
+  if (!since) return null
 
   const parsed = Date.parse(since)
-  if (Number.isNaN(parsed)) return ''
+  if (Number.isNaN(parsed)) return null
 
   return sortKeyFor(new Date(parsed - OVERLAP_MS).toISOString(), '')
 }

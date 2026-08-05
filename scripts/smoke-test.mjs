@@ -113,6 +113,35 @@ await check('the rooms are closed to anyone not signed in', async () => {
   }
 })
 
+await check('every signed-in endpoint answers 401, and never 500', async () => {
+  // The gap this closes: every other check here is anonymous, so a deploy could
+  // go green while the whole signed-in half of the app was broken — which is
+  // exactly what happened when `/api/sync` 500ed on its first poll for days.
+  //
+  // A smoke test cannot hold a Clerk token, so it cannot prove those endpoints
+  // *work*. It can prove they are mounted and that the handler reaches its auth
+  // check without falling over on the way, which is the difference between a
+  // 401 and a 500 — and a 500 here means something is wrong before anybody has
+  // even signed in.
+  const guarded = [
+    ['GET', '/api/sync'],
+    ['GET', '/api/friends'],
+    ['GET', '/api/party'],
+    ['GET', '/api/leaderboard/friends'],
+    ['GET', '/api/leaderboard/global'],
+    ['GET', '/api/profiles/me'],
+    ['POST', '/api/stage/heartbeat'],
+  ]
+
+  for (const [method, path] of guarded) {
+    const response = await api(path, method === 'POST' ? { method, body: {} } : undefined)
+    assert(
+      response.status === 401,
+      `${method} ${path} returned ${response.status}, expected 401 — a 5xx here means the route is broken, not protected`,
+    )
+  }
+})
+
 await check('a room cannot be solved without signing in', async () => {
   const response = await api('/api/rooms/room-01/attempt', { method: 'POST', body: { answer: 90 } })
   assert(response.status === 401, `expected 401, got ${response.status}`)
