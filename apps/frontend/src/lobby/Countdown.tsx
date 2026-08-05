@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useEvent } from '../ui/useEvent'
 import { play } from '../audio/sfx'
 
 /**
@@ -15,16 +16,11 @@ import { play } from '../audio/sfx'
 export function Countdown({ onDone }: { onDone: () => void }) {
   const [n, setN] = useState(3)
 
-  // Held in a ref, and the effect depends on nothing.
-  //
-  // This is the whole bug it replaces. `onDone` is written inline at the call
-  // site, so it is a new function on every render — and the lobby re-renders
-  // about sixty times a second while anybody is walking. With `onDone` in the
-  // dependency array the interval was torn down and recreated every frame, so
-  // it never survived long enough to reach 700ms. The countdown could not
-  // count.
-  const done = useRef(onDone)
-  done.current = onDone
+  // Identity-stable, so the interval below is created once. `onDone` is written
+  // inline at the call site and the lobby re-renders about sixty times a second
+  // while anybody is walking — with it as a dependency the interval was rebuilt
+  // every frame and never survived to its first 700ms tick.
+  const done = useEvent(onDone)
 
   useEffect(() => {
     play('countdown')
@@ -49,14 +45,14 @@ export function Countdown({ onDone }: { onDone: () => void }) {
       play('fanfare')
       // Held briefly so the fanfare is heard as the door opening rather than as
       // something that happened on the previous screen.
-      finish = window.setTimeout(() => done.current(), 620)
+      finish = window.setTimeout(done, 620)
     }, 700)
 
     return () => {
       window.clearInterval(timer)
       window.clearTimeout(finish)
     }
-  }, [])
+  }, [done])
 
   return (
     <div className="countdown" role="status" aria-live="assertive">

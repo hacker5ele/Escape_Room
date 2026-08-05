@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useEvent } from '../ui/useEvent'
 import { play } from '../audio/sfx'
 
 /**
@@ -51,6 +52,13 @@ function easeOpen(t: number): number {
 export function IrisWipe({ onCovered, onDone }: { onCovered?: () => void; onDone: () => void }) {
   const canvas = useRef<HTMLCanvasElement | null>(null)
 
+  // Both are written inline at the call site, so without this the effect below
+  // is torn down and restarted on every render of the parent — and the
+  // navigation this is covering causes exactly that. The wipe replayed several
+  // times per journey.
+  const covered = useEvent(() => onCovered?.())
+  const done = useEvent(onDone)
+
   useEffect(() => {
     const node = canvas.current
     if (!node) return
@@ -58,8 +66,8 @@ export function IrisWipe({ onCovered, onDone }: { onCovered?: () => void; onDone
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       // The scene change is what matters; the flourish is not. Handed over at
       // the same two moments so the caller needs no special case.
-      onCovered?.()
-      const timer = window.setTimeout(onDone, 120)
+      covered()
+      const timer = window.setTimeout(done, 120)
       return () => window.clearTimeout(timer)
     }
 
@@ -75,8 +83,8 @@ export function IrisWipe({ onCovered, onDone }: { onCovered?: () => void; onDone
 
     const ctx = node.getContext('2d')
     if (!ctx) {
-      onCovered?.()
-      onDone()
+      covered()
+      done()
       return
     }
     ctx.scale(dpr, dpr)
@@ -88,7 +96,7 @@ export function IrisWipe({ onCovered, onDone }: { onCovered?: () => void; onDone
     const full = Math.hypot(width, height) / 2
 
     let frame = 0
-    let covered = false
+    let hasCovered = false
     let whistled = false
     const started = performance.now()
 
@@ -176,9 +184,9 @@ export function IrisWipe({ onCovered, onDone }: { onCovered?: () => void; onDone
       ctx.restore()
 
       // The scene swaps at full black, so the change is never seen.
-      if (!covered && elapsed >= CLOSE_MS) {
-        covered = true
-        onCovered?.()
+      if (!hasCovered && elapsed >= CLOSE_MS) {
+        hasCovered = true
+        covered()
       }
       // And the whistle rises again as the new scene is revealed.
       if (!whistled && elapsed >= CLOSE_MS + HOLD_MS) {
@@ -187,7 +195,7 @@ export function IrisWipe({ onCovered, onDone }: { onCovered?: () => void; onDone
       }
 
       if (elapsed >= TOTAL_MS) {
-        onDone()
+        done()
         return
       }
       frame = requestAnimationFrame(draw)
@@ -195,7 +203,9 @@ export function IrisWipe({ onCovered, onDone }: { onCovered?: () => void; onDone
 
     frame = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(frame)
-  }, [onCovered, onDone])
+    // Deliberately empty: the callbacks above are identity-stable, so this
+    // animation is started once and runs to the end.
+  }, [covered, done])
 
   return <canvas ref={canvas} className="iris-wipe" aria-hidden="true" />
 }

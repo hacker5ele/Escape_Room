@@ -343,6 +343,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0041](docs/adr/0041-stable-callbacks-in-effects.md) | An effect may not depend on a callback prop — wrap it in `useEvent()` | Accepted |
 | 2026-08-05 | [0040](docs/adr/0040-path-routing.md) | Real paths, no hash; reload recovers the room, the tab and the outfit | Accepted |
 | 2026-08-05 | [0039](docs/adr/0039-empty-key-cursor.md) | Null is the empty cursor; in-memory stand-ins must be as strict as DynamoDB | Accepted |
 | 2026-08-05 | [0038](docs/adr/0038-presence-and-the-iris-wipe.md) | Presence in memory, polled and interpolated; the transition is an iris wipe | Accepted |
@@ -470,9 +471,11 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
     position made React reorder keyed nodes as people walked, and **moving a DOM node restarts its
     CSS animations** — the drop-in replayed dozens of times a minute. A test pins the DOM order as
     stable.
-  - **Anything long-lived must not depend on an inline callback.** The lobby re-renders ~60×/s while
-    somebody walks, so a `useEffect` depending on `onDone={() => …}` is torn down every frame. That
-    is why the countdown could not count. Hold the callback in a ref and depend on nothing.
+  - **An effect may not depend on a callback prop** — wrap it in `useEvent()` first
+    ([ADR-0041](docs/adr/0041-stable-callbacks-in-effects.md)). An inline `onDone={() => …}` is a new
+    function every render, so the effect is rebuilt every render: the countdown never counted and the
+    iris wipe played six times. `react-hooks/exhaustive-deps` does **not** catch this — it checks
+    that deps are complete, not that they are stable.
   - **The stage** (`src/stage/`) is one component used by the lobby *and* every room. It is a fixed
     1600×900 space scaled once; everything is placed **by its feet** and sorted by `y`, which is what
     lets you walk behind the sofa. Flat things (a rug) need a `depth` override or they draw over
