@@ -122,7 +122,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
         )}
 
         {error && (
-          <p role="alert" className="font-mono text-sm text-alarm-400">
+          <p role="alert" className="font-mono text-sm text-signal-600">
             {error}
           </p>
         )}

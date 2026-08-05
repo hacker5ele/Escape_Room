@@ -33,6 +33,37 @@ export function ClerkAuthProvider({ children }: { children: ReactNode }) {
     [user],
   )
 
+  /**
+   * Hand the character to Clerk, picture first.
+   *
+   * The picture goes up as the account's profile image, which is the whole
+   * trick: `profile.service.ts` already caches `identity.imageUrl`, so friend
+   * lists, chat, the leaderboard, notifications and Clerk's own account menu
+   * all show the character without any of them being told it exists.
+   *
+   * The part ids follow in `unsafeMetadata` so the picker can be reopened.
+   * `unsafeMetadata` rather than `publicMetadata` because only the former is
+   * writable from a browser; nothing here is trusted, and the character is
+   * cosmetic, so that is the right trade.
+   *
+   * Order matters. If the upload fails we have not yet claimed to have saved
+   * anything, and the player is asked again — the reverse would leave a stored
+   * character with no picture to match it.
+   */
+  const saveCharacter = useCallback(
+    async (character: unknown, picture: Blob) => {
+      if (!user) throw new Error('You are not signed in.')
+
+      await user.setProfileImage({
+        file: new File([picture], 'character.png', { type: 'image/png' }),
+      })
+      await user.update({
+        unsafeMetadata: { ...user.unsafeMetadata, character },
+      })
+    },
+    [user],
+  )
+
   const signOut = useCallback(() => {
     void clerk.signOut()
   }, [clerk])
@@ -58,9 +89,21 @@ export function ClerkAuthProvider({ children }: { children: ReactNode }) {
       profile,
       authHeaders,
       updateProfile,
+      storedCharacter: user?.unsafeMetadata?.character ?? null,
+      saveCharacter,
       signOut,
     }),
-    [authLoaded, userLoaded, isSignedIn, profile, authHeaders, updateProfile, signOut],
+    [
+      authLoaded,
+      userLoaded,
+      isSignedIn,
+      profile,
+      authHeaders,
+      updateProfile,
+      user?.unsafeMetadata?.character,
+      saveCharacter,
+      signOut,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

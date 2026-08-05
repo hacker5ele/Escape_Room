@@ -136,6 +136,7 @@ Where things belong:
 | A room's look & interaction | — | `apps/frontend/src/rooms/room-0N/` |
 | Colours, type, panels, buttons | — | `apps/frontend/src/index.css` — the design system |
 | Shared UI primitives (tabs, …) | — | `apps/frontend/src/ui/` |
+| Character parts & the picker | `scripts/characters/` — generation | `apps/frontend/src/character/` |
 | Shared types / API shapes | `packages/shared/src/` | same file — one source |
 | Friends, invites, avatars | `apps/backend/src/{routes,services}/` | `apps/frontend/src/social/` |
 | Notifications / polling | `apps/backend/src/routes/sync.routes.ts` | `apps/frontend/src/sync/` |
@@ -328,6 +329,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0033](docs/adr/0033-modular-characters.md) | Build-your-own character at sign-up; generated parts printed in the two inks | Accepted |
 | 2026-08-05 | [0032](docs/adr/0032-overprint-design-system.md) | Overprint: a design system of two spot inks on paper; glass panels are a third ink | Accepted |
 | 2026-08-04 | [0031](docs/adr/0031-drop-project-week-branding.md) | Drop the project-week branding; the assignment quotation stays verbatim | Accepted |
 | 2026-08-04 | [0030](docs/adr/0030-tests-own-one-server-per-app.md) | Tests start one HTTP server per app instead of one per request | Accepted |
@@ -382,6 +384,12 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   `overflow: hidden` above a `.pane`, never give a `.pane` its own stacking context, and never blend a
   panel *fill* with `multiply` — multiply cannot lighten, so the panel stops being a readable surface
   and the text ends up sitting on the background.
+- **Characters** — every player builds one at sign-up: head, body, arms and legs, twenty of each
+  ([ADR-0033](docs/adr/0033-modular-characters.md)). The parts are generated with `gpt-image-1` and
+  then *printed* — posterised to the four Overprint inks with a halftone screen, which is what stops
+  eighty separately generated images looking generated. `scripts/characters/generate_all.py` is
+  resumable; run it again for anything that failed. The composed still is uploaded to Clerk, so every
+  avatar surface in the app shows it **without any change to `packages/shared` or the backend**.
 - **The signed-in page is tabbed** — Rooms · Friends · Leaderboard · Activity, via `src/ui/Tabs.tsx`.
   Only the open tab is mounted, because friends and chat poll on a timer. The selection lives in the
   URL hash, so `/#friends` is linkable and a reload keeps its place. A room's own UI belongs inside

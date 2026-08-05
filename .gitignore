@@ -82,3 +82,12 @@ terraform.tfvars
 .cache/
 .temp/
 .tmp/
+
+# Character generation — the raw model output, ~118 MB of 1024px PNGs.
+# Only the printed WebP parts under apps/frontend/public/characters/ are
+# committed; anything here can be recreated with scripts/characters/generate_all.py.
+scripts/characters/raw/
+
+# Python bytecode
+__pycache__/
+*.pyc

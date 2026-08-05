@@ -154,7 +154,7 @@ export function ChatWindow({
       </div>
 
       {error && (
-        <p role="alert" className="border-t border-red-900 bg-red-950/40 p-2 text-sm text-red-200">
+        <p role="alert" className="border-t border-signal-500 bg-signal-100/70 p-2 text-sm text-signal-700">
           {error}
         </p>
       )}
