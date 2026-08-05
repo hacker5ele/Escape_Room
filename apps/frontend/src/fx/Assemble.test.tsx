@@ -13,6 +13,13 @@ function markup(html: string): HTMLElement {
   return root
 }
 
+/** jsdom implements no animations and so has no `AnimationEvent` to construct. */
+function animationEnd(animationName: string): Event {
+  const event = new Event('animationend', { bubbles: true })
+  Object.defineProperty(event, 'animationName', { value: animationName })
+  return event
+}
+
 describe('choosing what moves', () => {
   it('takes the outermost panel of a nest, not both', () => {
     const root = markup(`
@@ -116,6 +123,34 @@ describe('arriving', () => {
     // the character rig is transform-driven end to end.
     expect(panel).not.toHaveClass('piece-arriving')
     expect(panel.style.getPropertyValue('--fly-x')).toBe('')
+  })
+
+  it('clears each piece as it lands, not when the last one does', () => {
+    // A piece in flight has a transform, so it is its own stacking context and
+    // its `.pane` layers cannot blend against the page. On one shared timer the
+    // first panel kept that flattened look for the whole stagger — most of a
+    // second after it had visibly settled — and then popped back.
+    render(<Screen />)
+    const panel = screen.getByTestId('panel')
+
+    act(() => {
+      panel.dispatchEvent(animationEnd('piece-land'))
+    })
+
+    expect(panel).not.toHaveClass('piece-arriving')
+  })
+
+  it('ignores the end of the ink animation, which is not the landing', () => {
+    // `piece-ink` finishes at 200ms and `piece-land` at 560ms. Clearing on the
+    // first would snap the piece to its resting place a third of the way in.
+    render(<Screen />)
+    const panel = screen.getByTestId('panel')
+
+    act(() => {
+      panel.dispatchEvent(animationEnd('piece-ink'))
+    })
+
+    expect(panel).toHaveClass('piece-arriving')
   })
 
   it('does not re-scatter on a re-render', async () => {

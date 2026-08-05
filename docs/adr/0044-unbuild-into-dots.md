@@ -75,13 +75,43 @@ phone and barely anywhere on a desktop.
 together. Every other route is thrown from further out and lands with an overshoot. Two easings
 because they are two different sentences.
 
-### A piece in flight is flat paper, on purpose
+### The dots belong to the unbuild, not to the arrival
 
-A mask makes an element its own backdrop root, which leaves `.pane::before` with an empty backdrop
-and nothing to blur. Rather than let the glass fail halfway through the animation, it is put out
-deliberately: `--pane-blur: 0px; --pane-alpha: 1` for the duration. Those two tokens exist for
-exactly this kind of flattening, and the swap is invisible under motion that starts on the same
-frame.
+A leaving panel dissolves over its full 340ms — that is the effect. An arriving one is inked back in
+over **200ms of a 560ms flight**, so it is solid for most of its travel.
+
+The first version screened the whole arrival, and it was clearly wrong to look at: **a 1px dot grid
+destroys type long before it stops filling a rectangle**, so a panel spent half a second as an empty
+white box that only then filled in. The dots want to be long enough to be continuous with the ones
+already on screen and no longer.
+
+The ink and the travel are two animations sharing no property — one owns `--dot-r` and `opacity`,
+the other `translate`, `rotate` and `scale`. Partly for the independent timing, and partly because a
+keyframe in the middle applies the easing to *each* interval it creates: an overshoot written once
+would overshoot three times.
+
+### A piece in flight loses its tint and its blur, but not its paper
+
+**An element with a transform on it is its own stacking context, mask or no mask.** So for the length
+of the animation a `.pane` has the one thing ADR-0032 says never to give it: `.pane::after` can no
+longer reach the page to overprint against and blends against the panel instead, and the mask
+additionally makes the element its own backdrop root, leaving `.pane::before` with nothing to blur.
+
+Both are switched off for the duration — `--pane-ink: 0; --pane-blur: 0px` — rather than left to
+fail halfway. Losing a 5% tint and a blur of a soft halftone is very nearly nothing.
+
+**`--pane-alpha` is deliberately not touched, and the first version of this rule got it wrong.**
+Forcing it to `1` made the paper fill opaque, and under the panel's own top-edge white sheen that
+turned every arriving panel into a flat white box — which then snapped back to glass on landing. The
+panel stays exactly as translucent as it always is.
+
+### Each piece is cleaned up when it lands, not when the last one does
+
+Same bug, second cause. On one shared timer the first panel kept its flattened look for the whole
+stagger — most of a second after it had visibly settled — and then popped. An `animationend`
+listener filtered to the travel animation corrects each piece on the frame it finishes, and there is
+nothing left to see. The timer stays as a floor sweep, because `animationend` never fires for an
+element that did not get to animate.
 
 ### Clipping, for about one second
 
