@@ -219,7 +219,7 @@ The social layer, added by ADRs 0023–0029:
 | `DELETE` | `/api/friends/:userId` | — | reject and unfriend are one operation |
 | `POST` | `/api/friends/:userId/block` · `/unblock` | — | the updated lists |
 | `GET` | `/api/invites/:token` | — | `{ inviter }` — **open, no account needed** |
-| `POST` | `/api/invites` | — | `{ invite }` — mints a link |
+| `POST` | `/api/invites` | `{ forParty? }` | `{ invite }` — mints a link; `forParty` also joins the party |
 | `GET` | `/api/invites` | — | `{ invites }` — your own, to share or revoke |
 | `DELETE` | `/api/invites/:token` | — | `204` — revoke |
 | `POST` | `/api/invites/:token/accept` | — | friends immediately; the link was the consent |
@@ -343,6 +343,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0042](docs/adr/0042-party-invites.md) | Invite a friend into your game, or a link that befriends and joins in one step | Accepted |
 | 2026-08-05 | [0041](docs/adr/0041-stable-callbacks-in-effects.md) | An effect may not depend on a callback prop — wrap it in `useEvent()` | Accepted |
 | 2026-08-05 | [0040](docs/adr/0040-path-routing.md) | Real paths, no hash; reload recovers the room, the tab and the outfit | Accepted |
 | 2026-08-05 | [0039](docs/adr/0039-empty-key-cursor.md) | Null is the empty cursor; in-memory stand-ins must be as strict as DynamoDB | Accepted |
@@ -430,6 +431,11 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
     `index.html`, and the smoke test now checks seven routes rather than one.
 - **Accounts** — players register with Clerk before they can reach anything. Progress and an activity
   log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
+- **Invites** ([ADR-0042](docs/adr/0042-party-invites.md)) — from the lobby, the host can invite a
+  friend (they get a notification with a **Join their game** button) or mint a **party link**.
+  Following a party link makes you friends *and* puts you in the game in one step. The join is
+  best-effort and the friendship is not: if the party filled up or the host left, the friendship
+  still stands and you land in your own lobby. The preview says how many are in the party, never who.
 - **Friends** — add somebody by username, or send a revocable invite link that shows who is inviting
   before the recipient has an account. Accept, reject, unfriend and block all work
   ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)). Following a link makes the two of you

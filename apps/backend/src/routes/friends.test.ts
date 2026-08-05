@@ -209,8 +209,12 @@ describe('blocking', () => {
 })
 
 describe('invite links', () => {
-  async function mint(app: Express, user: string): Promise<string> {
-    const response = await as(app, user).post('/api/invites').send({})
+  async function mint(
+    app: Express,
+    user: string,
+    body: { forParty?: boolean } = {},
+  ): Promise<string> {
+    const response = await as(app, user).post('/api/invites').send(body)
     expect(response.status).toBe(201)
     return response.body.invite.token as string
   }
@@ -240,9 +244,72 @@ describe('invite links', () => {
     const token = await mint(app, ALICE)
 
     const preview = await request(app).get(`/api/invites/${token}`)
-    expect(Object.keys(preview.body)).toEqual(['inviter'])
+    expect(Object.keys(preview.body).sort()).toEqual(['inviter', 'party'])
     // Not who else joined, not when it was made, not how many times used.
     expect(JSON.stringify(preview.body)).not.toMatch(/useCount|createdAt|expiresAt/)
+    // A plain friend link is not a party link, and says so.
+    expect(preview.body.party).toBeNull()
+  })
+
+  it('following a party link makes you friends and puts you in the game', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE, BOB)
+    const token = await mint(app, ALICE, { forParty: true })
+
+    expect((await as(app, BOB).post(`/api/invites/${token}/accept`)).status).toBe(201)
+
+    // Both halves, from one click: a friend link would only have done the first.
+    const friends = (await as(app, BOB).get('/api/friends')).body.friends
+    expect(friends.map((f: { profile: { userId: string } }) => f.profile.userId)).toEqual([ALICE])
+
+    const party = (await as(app, BOB).get('/api/party')).body.party
+    expect(party.host.userId).toBe(ALICE)
+    expect(party.isHost).toBe(false)
+  })
+
+  it('a plain friend link leaves you in your own game', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE, BOB)
+    const token = await mint(app, ALICE)
+
+    await as(app, BOB).post(`/api/invites/${token}/accept`)
+
+    expect((await as(app, BOB).get('/api/party')).body.party.isHost).toBe(true)
+  })
+
+  it('still makes the friendship when the party cannot be joined', async () => {
+    // The host left their own game between sending the link and it being
+    // followed. Undoing a friendship that was just made would be a worse answer
+    // than landing in your own lobby.
+    const app = buildApp()
+    await signIn(app, ALICE, BOB, CAROL)
+    const token = await mint(app, ALICE, { forParty: true })
+
+    // Alice joins Carol, so she is no longer hosting anything to be joined.
+    await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(CAROL) })
+    await as(app, CAROL).post(`/api/friends/${ALICE}/accept`)
+    await as(app, ALICE).post(`/api/party/join/${CAROL}`)
+
+    expect((await as(app, BOB).post(`/api/invites/${token}/accept`)).status).toBe(201)
+
+    const friends = (await as(app, BOB).get('/api/friends')).body.friends
+    expect(friends).toHaveLength(1)
+    expect((await as(app, BOB).get('/api/party')).body.party.isHost).toBe(true)
+  })
+
+  it('a party link says how big the party is and nothing about who is in it', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE, BOB)
+    await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(BOB) })
+    await as(app, BOB).post(`/api/friends/${ALICE}/accept`)
+    await as(app, BOB).post(`/api/party/join/${ALICE}`)
+
+    const token = await mint(app, ALICE, { forParty: true })
+    const preview = await request(app).get(`/api/invites/${token}`)
+
+    expect(preview.body.party).toEqual({ size: 2, full: false })
+    // A stranger holding a link does not need to know who Bob is.
+    expect(JSON.stringify(preview.body.party)).not.toMatch(/user_|handle_/)
   })
 
   it('makes the two people friends immediately, with nothing left to approve', async () => {

@@ -64,10 +64,15 @@ export async function listInvites(auth: Headers): Promise<Invite[]> {
   return body.invites
 }
 
-export async function createInvite(auth: Headers): Promise<Invite> {
-  const response = await request('/invites', auth, { method: 'POST', body: '{}' })
-  const body = (await response.json()) as { invite: unknown }
-  return inviteSchema.parse(body.invite)
+export async function createInvite(
+  auth: Headers,
+  options: { forParty?: boolean } = {},
+): Promise<Invite> {
+  const response = await request('/invites', auth, {
+    method: 'POST',
+    body: JSON.stringify(options),
+  })
+  return inviteSchema.parse(((await response.json()) as { invite: unknown }).invite)
 }
 
 export async function revokeInvite(auth: Headers, token: string): Promise<void> {

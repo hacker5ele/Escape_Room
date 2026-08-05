@@ -7,11 +7,14 @@ import { useAppAuth } from '../auth/useAppAuth'
 import { LocalSignIn } from '../auth/LocalSignIn'
 import { Avatar } from './Avatar'
 
+/** Set when the link came from a lobby: they want you to play, now. */
+type PartyPreview = { size: number; full: boolean } | null
+
 type State =
   | { kind: 'loading' }
   | { kind: 'invalid'; message: string }
-  | { kind: 'ready'; inviter: PublicProfile }
-  | { kind: 'accepted'; inviter: PublicProfile }
+  | { kind: 'ready'; inviter: PublicProfile; party: PartyPreview }
+  | { kind: 'accepted'; inviter: PublicProfile; party: PartyPreview }
 
 /**
  * What somebody sees when they open an invite link.
@@ -34,7 +37,7 @@ export function InvitePage({ token }: { token: string }) {
 
     previewInvite(token)
       .then((preview) => {
-        if (!cancelled) setState({ kind: 'ready', inviter: preview.inviter })
+        if (!cancelled) setState({ kind: 'ready', inviter: preview.inviter, party: preview.party })
       })
       .catch((error: unknown) => {
         if (cancelled) return
@@ -57,7 +60,9 @@ export function InvitePage({ token }: { token: string }) {
     try {
       await acceptInvite(await authRef.current(), token)
       setState((current) =>
-        current.kind === 'ready' ? { kind: 'accepted', inviter: current.inviter } : current,
+        current.kind === 'ready'
+          ? { kind: 'accepted', inviter: current.inviter, party: current.party }
+          : current,
       )
     } catch (error) {
       setState({
@@ -88,7 +93,7 @@ export function InvitePage({ token }: { token: string }) {
 
       {state.kind === 'accepted' && (
         <>
-          <Inviter profile={state.inviter} />
+          <Inviter profile={state.inviter} party={state.party} />
           <p className="mt-4 text-sm text-stock-700">
             Done — {state.inviter.displayName} has been asked to confirm. You will see them in your
             friend list once they do.
@@ -104,7 +109,7 @@ export function InvitePage({ token }: { token: string }) {
 
       {state.kind === 'ready' && (
         <>
-          <Inviter profile={state.inviter} />
+          <Inviter profile={state.inviter} party={state.party} />
 
           {!isLoaded && <p className="mt-5 font-mono text-sm text-stock-700">Loading…</p>}
 
@@ -116,7 +121,7 @@ export function InvitePage({ token }: { token: string }) {
                 onClick={() => void accept()}
                 className="btn"
               >
-                Accept
+                {state.party && !state.party.full ? 'Join their game' : 'Accept'}
               </button>
               <a
                 href="/"
@@ -160,14 +165,22 @@ export function InvitePage({ token }: { token: string }) {
   )
 }
 
-function Inviter({ profile }: { profile: PublicProfile }) {
+function Inviter({ profile, party }: { profile: PublicProfile; party: PartyPreview }) {
   return (
     <div className="flex items-center gap-4">
       <Avatar subject={profile} size={64} />
       <div className="min-w-0">
         <p className="font-mono text-lg text-stock-900">{profile.displayName}</p>
         <p className="font-mono text-sm text-stock-600">@{profile.username}</p>
-        <p className="mt-1 text-sm text-stock-700">wants to be your friend.</p>
+        {/* A party link asks a different question from a friend link, so it
+            gets a different sentence — and a different button below. */}
+        <p className="mt-1 text-sm text-stock-700">
+          {party
+            ? party.full
+              ? 'wants you to play — but their game is full right now.'
+              : `wants you to play. ${party.size} already in.`
+            : 'wants to be your friend.'}
+        </p>
       </div>
     </div>
   )
