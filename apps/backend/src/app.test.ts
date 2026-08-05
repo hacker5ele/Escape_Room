@@ -330,6 +330,59 @@ describe('hints', () => {
     expect(second.body.hint).not.toBe(first.body.hint)
   })
 
+  it('counts hints per room, not across the whole game', async () => {
+    // The bug this replaces: a per-room hints array was indexed by
+    // `session.hintsUsed`, which counts the whole game. Spend a room's worth of
+    // hints anywhere and every other room reported none left — while still
+    // offering three. See ADR-0043.
+    const app = buildApp()
+    await startGame(app, ALICE)
+
+    // Empty room one's hints, then open room two.
+    let taken = 0
+    for (;;) {
+      const response = await as(app, ALICE).post('/api/rooms/room-01/hint').send({})
+      if (response.status !== 200) break
+      taken += 1
+      if (taken > 20) throw new Error('room-01 has suspiciously many hints')
+    }
+    expect(taken).toBeGreaterThan(0)
+
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
+
+    // Room two starts with its own hints, untouched by what room one cost.
+    const fresh = await as(app, ALICE).post('/api/rooms/room-02/hint').send({})
+    expect(fresh.status).toBe(200)
+    expect(fresh.body.hint).toBeTruthy()
+  })
+
+  it('tells you how many are left in this room, not how many it has', async () => {
+    const app = buildApp()
+    await startGame(app, ALICE)
+
+    const before = (await as(app, ALICE).get('/api/rooms/room-01')).body.room.hintsAvailable
+    expect(before).toBeGreaterThan(0)
+
+    await as(app, ALICE).post('/api/rooms/room-01/hint').send({})
+
+    // The count the player sees has to fall — this is the number that used to
+    // stay at three while the server refused to give any more.
+    const after = (await as(app, ALICE).get('/api/rooms/room-01')).body.room.hintsAvailable
+    expect(after).toBe(before - 1)
+  })
+
+  it('agrees with itself about what is left', async () => {
+    const app = buildApp()
+    await startGame(app, ALICE)
+
+    const taken = await as(app, ALICE).post('/api/rooms/room-01/hint').send({})
+    const room = await as(app, ALICE).get('/api/rooms/room-01')
+
+    // Two endpoints, one truth. They disagreed before, which is exactly what
+    // the player saw.
+    expect(room.body.room.hintsAvailable).toBe(taken.body.hintsRemaining)
+  })
+
   it('refuses hints for a locked room', async () => {
     const app = buildApp()
     await startGame(app, ALICE)
