@@ -34,8 +34,10 @@ const LEAVE_MS = 340
 const HOLD_MS = 120
 export const LEAVE_TOTAL_MS = LEAVE_MS + HOLD_MS
 
-const ARRIVE_MS = 620
+const ARRIVE_MS = 560
 const STAGGER_MS = 42
+/** The travel half of the arrival — the one whose end means a piece has landed. */
+const LANDED = 'piece-land'
 
 /** Outermost only — a panel nested in a panel rides with its parent. */
 const PANEL = '.pane'
@@ -167,11 +169,32 @@ export function Assemble({ children }: { children: React.ReactNode }) {
       node.classList.add('piece-arriving')
     })
 
-    // Cleared once it has landed, so nothing is left holding a transform that
-    // would fight whatever animates it next — the character rig in particular
-    // is transform-driven from end to end. Clearing `is-moving` also returns
-    // `overflow` to `visible`, which every `.pane` needs to get its
-    // backdrop-filter back (ADR-0032).
+    /**
+     * Each piece is cleaned up the moment *it* lands, not when the last one
+     * does.
+     *
+     * A piece in flight has a transform, so it is its own stacking context and
+     * its `.pane` layers cannot blend against the page (see `index.css`). On
+     * one shared timer the first panel therefore kept its flattened look for
+     * the entire stagger — most of a second after it had visibly settled —
+     * and then popped. Per-piece, the correction happens on the frame the
+     * animation ends and there is nothing to see.
+     *
+     * Clearing also matters for what comes after: a leftover transform fights
+     * whatever animates the element next, and the character rig is
+     * transform-driven from end to end.
+     */
+    const onEnd = (event: AnimationEvent) => {
+      if (event.animationName !== LANDED) return
+      // Animations on descendants bubble to here too.
+      if (event.target instanceof HTMLElement && moving.includes(event.target)) clear(event.target)
+    }
+    root.addEventListener('animationend', onEnd)
+
+    // `animationend` does not fire for an element that never got to animate —
+    // a display change, a piece removed mid-flight. This is the floor sweep,
+    // and it owns `is-moving`, which cannot be lifted per piece: it is what
+    // stops a piece flying in from off a narrow screen widening the document.
     const settled = window.setTimeout(
       () => {
         root.classList.remove('is-moving')
@@ -182,6 +205,7 @@ export function Assemble({ children }: { children: React.ReactNode }) {
     )
 
     return () => {
+      root.removeEventListener('animationend', onEnd)
       window.clearTimeout(settled)
       root.classList.remove('is-moving')
       for (const node of moving) clear(node)
