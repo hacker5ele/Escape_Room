@@ -343,6 +343,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0040](docs/adr/0040-path-routing.md) | Real paths, no hash; reload recovers the room, the tab and the outfit | Accepted |
 | 2026-08-05 | [0039](docs/adr/0039-empty-key-cursor.md) | Null is the empty cursor; in-memory stand-ins must be as strict as DynamoDB | Accepted |
 | 2026-08-05 | [0038](docs/adr/0038-presence-and-the-iris-wipe.md) | Presence in memory, polled and interpolated; the transition is an iris wipe | Accepted |
 | 2026-08-05 | [0037](docs/adr/0037-lobby-stage-and-rooms.md) | Start → lobby → room; one walkable stage, generated scenery, synthesised sound | Accepted |
@@ -414,10 +415,18 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   limb mirrored, so **no part may have a handedness** (a V sign becomes a rude gesture reversed), and
   the head hangs from `chin` rather than `neck` so it overlaps the torso instead of resting on it.
   "Change character" in the game header reopens the picker.
-- **The signed-in page is tabbed** — Rooms · Friends · Leaderboard · Activity, via `src/ui/Tabs.tsx`.
-  Only the open tab is mounted, because friends and chat poll on a timer. The selection lives in the
-  URL hash, so `/#friends` is linkable and a reload keeps its place. A room's own UI belongs inside
-  the Rooms tab.
+- **Every screen is a real path** ([ADR-0040](docs/adr/0040-path-routing.md)) — `/`, `/friends`,
+  `/leaderboard`, `/activity`, `/character`, `/lobby`, `/room/:roomId`, `/invite/:token`. **No hash
+  anywhere.** Reloading returns you to where you were, and the character picker keeps the outfit in
+  the query string (`?head=…&body=…`), validated against the catalogue rather than trusted.
+  - The gates are one layout route, `RequiresGame` — loading, signed out, no profile, no character.
+    Everything below can assume a signed-in player with a game.
+  - **The host's location is the party's location; a guest follows it.** That is what makes the back
+    button out of a room work instead of the server pulling you straight back in.
+  - `isInviteToken()` in `src/routing.ts` still guards the invite path: the router hands over whatever
+    was in the segment and it goes into a request URL.
+  - No infrastructure was needed — CloudFront, nginx and Vite already rewrote unknown paths to
+    `index.html`, and the smoke test now checks seven routes rather than one.
 - **Accounts** — players register with Clerk before they can reach anything. Progress and an activity
   log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
 - **Friends** — add somebody by username, or send a revocable invite link that shows who is inviting
