@@ -1,5 +1,11 @@
 import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, DeleteCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
+import {
+  BatchGetCommand,
+  DynamoDBDocumentClient,
+  DeleteCommand,
+  GetCommand,
+  PutCommand,
+} from '@aws-sdk/lib-dynamodb'
 import { gameSessionSchema, type GameSession } from '@escape-room/shared'
 
 /**
@@ -14,6 +20,16 @@ import { gameSessionSchema, type GameSession } from '@escape-room/shared'
  */
 export interface GameRepository {
   findByUserId(userId: string): Promise<GameSession | null>
+  /**
+   * Several games in one round trip, for the leaderboards.
+   *
+   * The board needs everybody's progress at once, and asking for it one key at
+   * a time meant up to two hundred separate reads for a single page — which is
+   * exactly as slow as it sounds. Missing games are simply absent from the
+   * result rather than null entries: somebody who has not started is not a gap
+   * in a list, they are not in it.
+   */
+  findManyByUserId(userIds: string[]): Promise<GameSession[]>
   /**
    * Writes the game, refusing if somebody else has written it since it was read.
    *
@@ -46,6 +62,11 @@ export class InMemoryGameRepository implements GameRepository {
     // versioning existed has no `version`, and it reads back as zero.
     const clone = structuredClone(game)
     return { ...clone, version: clone.version ?? 0 }
+  }
+
+  async findManyByUserId(userIds: string[]): Promise<GameSession[]> {
+    const found = await Promise.all(userIds.map((userId) => this.findByUserId(userId)))
+    return found.filter((game): game is GameSession => game !== null)
   }
 
   /**
@@ -110,6 +131,42 @@ export class DynamoGameRepository implements GameRepository {
     // should fail loudly here, not halfway through a room.
     const parsed = gameSessionSchema.safeParse(result.Item)
     return parsed.success ? parsed.data : null
+  }
+
+  async findManyByUserId(userIds: string[]): Promise<GameSession[]> {
+    if (userIds.length === 0) return []
+
+    // BatchGetItem takes at most 100 keys and rejects duplicates outright — a
+    // repeated id would fail the whole request rather than just that entry.
+    const unique = [...new Set(userIds)]
+    const batches: string[][] = []
+    for (let i = 0; i < unique.length; i += 100) {
+      batches.push(unique.slice(i, i + 100))
+    }
+
+    const results = await Promise.all(
+      batches.map(async (batch) => {
+        const result = await this.#client.send(
+          new BatchGetCommand({
+            RequestItems: {
+              // Deliberately not a consistent read, unlike `findByUserId`.
+              // That one guards what a player may enter, so a stale read could
+              // re-lock a room they just solved; this only feeds a leaderboard,
+              // where a row a second out of date costs nothing and a consistent
+              // batch costs twice as much.
+              [this.#tableName]: { Keys: batch.map((userId) => ({ userId })) },
+            },
+          }),
+        )
+        return result.Responses?.[this.#tableName] ?? []
+      }),
+    )
+
+    return results
+      .flat()
+      .map((item) => gameSessionSchema.safeParse(item))
+      .filter((parsed) => parsed.success)
+      .map((parsed) => parsed.data)
   }
 
   async save(game: GameSession): Promise<GameSession> {

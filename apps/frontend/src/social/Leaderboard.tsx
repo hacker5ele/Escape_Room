@@ -98,12 +98,17 @@ export function Leaderboard({ solvedCount }: { solvedCount: number }) {
           {entries.map((entry, index) => (
             <li
               key={entry.profile.userId}
-              className={`flex items-center gap-3 rounded px-3 py-2 ${
+              // A break before a row that is not next in sequence — the global
+              // board appends your own row when you are outside the top ten, so
+              // this is where the jump from 10th to 23rd is made visible rather
+              // than left to be misread as a mistake.
+              data-gap={index > 0 && entry.rank > (entries[index - 1]?.rank ?? 0) + 1}
+              className={`flex items-center gap-3 px-3 py-2 data-[gap=true]:mt-2 data-[gap=true]:border-t data-[gap=true]:border-dashed data-[gap=true]:border-stock-900/30 data-[gap=true]:pt-3 ${
                 entry.isMe ? 'bg-stock-200/60' : ''
               }`}
             >
-              <span className="w-5 shrink-0 text-right font-mono text-sm text-stock-600">
-                {index + 1}
+              <span className="w-7 shrink-0 text-right font-mono text-sm tabular-nums text-stock-600">
+                {entry.rank}
               </span>
               <Avatar subject={entry.profile} size={32} />
               <div className="min-w-0 flex-1">

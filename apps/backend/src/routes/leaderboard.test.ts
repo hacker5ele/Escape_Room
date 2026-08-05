@@ -315,3 +315,59 @@ describe('the global leaderboard', () => {
     }
   })
 })
+
+describe('the global board is a top ten', () => {
+  /** Signs in `count` players and gives each strictly worse progress than the last. */
+  async function crowd(app: Server, repository: InMemoryGameRepository, count: number) {
+    const users = Array.from({ length: count }, (_, index) => `user_p${String(index).padStart(2, '0')}`)
+    await signIn(app, ...users)
+    for (const [index, user] of users.entries()) {
+      // Same room count, increasing hints — so the order is fully determined.
+      await setProgress(repository, user, { solved: 2, hints: index })
+    }
+    return users
+  }
+
+  it('returns ten rows when the leader is asking', async () => {
+    const { app, gameRepository } = buildApp()
+    const users = await crowd(app, gameRepository, 25)
+
+    const entries = await globalBoard(app, users[0]!)
+    expect(entries).toHaveLength(10)
+    expect(entries.map((entry) => entry.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  })
+
+  it('appends your own row when you are outside the ten', async () => {
+    const { app, gameRepository } = buildApp()
+    const users = await crowd(app, gameRepository, 25)
+
+    // Twentieth-best, so nowhere near the top.
+    const entries = await globalBoard(app, users[19]!)
+
+    expect(entries).toHaveLength(11)
+    expect(entries[10]?.isMe).toBe(true)
+    expect(entries[10]?.profile.userId).toBe(users[19])
+    // The real position, not the array index — showing "11" here would be a
+    // confident, wrong number next to somebody's name.
+    expect(entries[10]?.rank).toBe(20)
+  })
+
+  it('does not append twice when you are already in the ten', async () => {
+    const { app, gameRepository } = buildApp()
+    const users = await crowd(app, gameRepository, 25)
+
+    const entries = await globalBoard(app, users[3]!)
+    expect(entries).toHaveLength(10)
+    expect(entries.filter((entry) => entry.isMe)).toHaveLength(1)
+  })
+
+  it('numbers the friends board too, from one', async () => {
+    const { app, gameRepository } = buildApp()
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+    await setProgress(gameRepository, ALICE, { solved: 1 })
+    await setProgress(gameRepository, BOB, { solved: 3 })
+
+    expect((await board(app, ALICE)).map((entry) => entry.rank)).toEqual([1, 2])
+  })
+})

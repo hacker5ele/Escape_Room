@@ -10,6 +10,15 @@ import { publicProfileSchema } from './profiles.js'
  */
 export const leaderboardEntrySchema = z.object({
   profile: publicProfileSchema,
+  /**
+   * Position on the board, counting from one.
+   *
+   * Sent rather than inferred from the array index, because on the global board
+   * the two are not the same: it returns the top ten *plus your own row*, so an
+   * eleventh entry may be the player in twenty-third place. Counting positions
+   * client-side would put a confident, wrong number next to their name.
+   */
+  rank: z.number().int().positive(),
   solvedRooms: z.number().int().nonnegative(),
   hintsUsed: z.number().int().nonnegative(),
   /** Milliseconds from starting to finishing, or null while still playing. */
