@@ -1,4 +1,4 @@
-import { FRAME, RIG, type Character, type Part, type RigPoint, type Slot, findPart, partUrl } from './parts'
+import { RIG, type Character, type Part, type RigPoint, type Slot, findPart, partUrl } from './parts'
 
 /**
  * Flatten the character into one square image, for use as a profile picture.
@@ -13,16 +13,18 @@ import { FRAME, RIG, type Character, type Part, type RigPoint, type Slot, findPa
 const SIZE = 512
 
 /**
- * How much of the figure goes in the square.
+ * The square is a portrait: the head, and just enough shoulder to sit on.
  *
- * Head and shoulders rather than the whole body. An avatar is rendered at 32
- * pixels in a friend list, and a full standing figure at that size is an
- * unreadable smudge — the head alone would be about nine pixels tall. Cropping
- * to the top of the frame keeps the face legible and still shows the body and
- * arms; only the legs are lost, and they are visible everywhere the character
- * is shown at a size where legs can be seen at all.
+ * An avatar renders at 32 pixels in a friend list. A whole standing figure at
+ * that size is an unreadable smudge — the head alone would be about nine pixels
+ * across — so the thing that identifies a player has to be the face.
+ *
+ * 260 is picked against the artwork rather than by eye: the widest head in the
+ * catalogue is 218px and every head is 190 tall, so a 260 box holds the largest
+ * of them with room to spare, and the torso arriving at the bottom edge gives
+ * the head something to stand on instead of floating.
  */
-const CROP = FRAME[0]
+const CROP = 260
 
 interface Placement {
   slot: Slot
@@ -43,7 +45,7 @@ function placements(character: Character): Placement[] | null {
     { slot: 'leg', part: leg, anchor: 'hipL', mirror: false },
     { slot: 'arm', part: arm, anchor: 'shoulderR', mirror: true },
     { slot: 'body', part: body, anchor: 'neck', mirror: false },
-    { slot: 'head', part: head, anchor: 'neck', mirror: false },
+    { slot: 'head', part: head, anchor: 'chin', mirror: false },
     { slot: 'arm', part: arm, anchor: 'shoulderL', mirror: false },
   ]
 }
@@ -78,6 +80,14 @@ export async function composeCharacter(character: Character): Promise<Blob> {
   const scale = SIZE / CROP
   context.imageSmoothingQuality = 'high'
 
+  // The window on the rig that the square shows. Centred horizontally on the
+  // head, and vertically on the middle of the head rather than on the chin, so
+  // the face lands in the middle of the circle every avatar is cropped to.
+  const [chinX, chinY] = RIG.chin
+  const headHeight = layers.find((layer) => layer.slot === 'head')?.part.h ?? CROP
+  const offsetX = chinX - CROP / 2
+  const offsetY = chinY - headHeight / 2 - CROP / 2
+
   layers.forEach((layer, position) => {
     const image = images[position]
     if (!image) return
@@ -86,8 +96,8 @@ export async function composeCharacter(character: Character): Promise<Blob> {
     const [px, py] = layer.part.pivot
     const pivotX = layer.mirror ? layer.part.w - px : px
 
-    const x = (ax - pivotX) * scale
-    const y = (ay - py) * scale
+    const x = (ax - pivotX - offsetX) * scale
+    const y = (ay - py - offsetY) * scale
     const w = layer.part.w * scale
     const h = layer.part.h * scale
 

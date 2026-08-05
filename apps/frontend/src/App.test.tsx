@@ -160,6 +160,13 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+
+  // The tab strip keeps its selection in the URL hash, which is deliberate —
+  // it survives a reload and makes /#friends linkable. It also survives the end
+  // of a test, so a test that opened the Activity tab would leave the next one
+  // opening there too.
+  window.history.replaceState(null, '', window.location.pathname)
+
   signedIn = false
   clerkUsername = 'alice42'
   clerkFirstName = 'Alice'
@@ -255,6 +262,21 @@ describe('App', () => {
       await userEvent.click(screen.getByRole('tab', { name: /leaderboard/i }))
       expect(screen.getByText(/alice42 — 1\/4 rooms solved/)).toBeInTheDocument()
       expect(screen.queryByTestId('room-01')).not.toBeInTheDocument()
+    })
+
+    it('lets you change your character afterwards, and back out of it', async () => {
+      render(<App />)
+      await screen.findByText(/alice42/)
+
+      await userEvent.click(screen.getByRole('button', { name: /change character/i }))
+      expect(
+        await screen.findByRole('heading', { name: /change your character/i }),
+      ).toBeInTheDocument()
+
+      // Backing out returns you to the game rather than to the sign-up gate.
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      expect(await screen.findByTestId('room-01')).toBeInTheDocument()
+      expect(saveCharacter).not.toHaveBeenCalled()
     })
 
     it('moves between tabs with the arrow keys', async () => {

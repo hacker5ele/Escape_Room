@@ -48,7 +48,10 @@ function layersFor(character: Character): Layer[] {
     { key: 'legA', slot: 'leg', part: leg, anchor: 'hipL', mirror: false, motion: 'leg' },
     { key: 'armB', slot: 'arm', part: arm, anchor: 'shoulderR', mirror: true, motion: 'arm' },
     { key: 'body', slot: 'body', part: body, anchor: 'neck', mirror: false, motion: 'body' },
-    { key: 'head', slot: 'head', part: head, anchor: 'neck', mirror: false, motion: null },
+    // `chin`, not `neck` — the head hangs lower than the torso's top so it
+    // overlaps and covers the vest's open neck hole. Hung at `neck` the two
+    // merely abut, and the background shows through between them.
+    { key: 'head', slot: 'head', part: head, anchor: 'chin', mirror: false, motion: null },
     { key: 'armA', slot: 'arm', part: arm, anchor: 'shoulderL', mirror: false, motion: 'arm' },
   ]
 }

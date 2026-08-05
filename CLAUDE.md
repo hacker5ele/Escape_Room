@@ -388,8 +388,12 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   ([ADR-0033](docs/adr/0033-modular-characters.md)). The parts are generated with `gpt-image-1` and
   then *printed* — posterised to the four Overprint inks with a halftone screen, which is what stops
   eighty separately generated images looking generated. `scripts/characters/generate_all.py` is
-  resumable; run it again for anything that failed. The composed still is uploaded to Clerk, so every
-  avatar surface in the app shows it **without any change to `packages/shared` or the backend**.
+  resumable; run it again for anything that failed. The composed still is a **head-and-shoulders
+  portrait** uploaded to Clerk, so every avatar surface in the app shows it **without any change to
+  `packages/shared` or the backend**. Two rules the catalogue depends on: the far limb is the near
+  limb mirrored, so **no part may have a handedness** (a V sign becomes a rude gesture reversed), and
+  the head hangs from `chin` rather than `neck` so it overlaps the torso instead of resting on it.
+  "Change character" in the game header reopens the picker.
 - **The signed-in page is tabbed** — Rooms · Friends · Leaderboard · Activity, via `src/ui/Tabs.tsx`.
   Only the open tab is mounted, because friends and chat poll on a timer. The selection lives in the
   URL hash, so `/#friends` is linkable and a reload keeps its place. A room's own UI belongs inside

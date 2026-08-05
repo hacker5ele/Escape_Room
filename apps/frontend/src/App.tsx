@@ -113,10 +113,13 @@ function GamePanel() {
   // Draw the character, then hand the picture and the part ids over together.
   // Composing here rather than inside the picker keeps the picker a pure
   // chooser — it knows nothing about canvases or identity providers.
+  const [editingCharacter, setEditingCharacter] = useState(false)
+
   const confirmCharacter = useCallback(
     async (character: Character) => {
       const picture = await composeCharacter(character)
       await saveCharacter(character, picture)
+      setEditingCharacter(false)
     },
     [saveCharacter],
   )
@@ -174,6 +177,18 @@ function GamePanel() {
     )
   }
 
+  // Reopened deliberately, so it starts from who you already are and can be
+  // backed out of — neither of which is true of the gate above.
+  if (editingCharacter && isCharacter(storedCharacter)) {
+    return (
+      <CharacterPicker
+        onConfirm={confirmCharacter}
+        onCancel={() => setEditingCharacter(false)}
+        initial={storedCharacter}
+      />
+    )
+  }
+
 
   const game = state.kind === 'ready' ? state.game : null
 
@@ -207,6 +222,13 @@ function GamePanel() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setEditingCharacter(true)}
+            className="btn btn-ghost btn-sm"
+          >
+            Change character
+          </button>
           <NotificationBell />
           {mode === 'clerk' ? (
             <UserButton />
