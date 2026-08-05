@@ -37,6 +37,12 @@ These rules are not suggestions. They apply to every team member and to Claude.
    assignment itself.
 7. **Interface changes need agreement first.** Any change to the API surface or the data model
    requires an ADR *and* prior agreement with the whole team, before the code is written.
+8. **Everything new is fully responsive.** Every screen, panel and room works from a 320px phone up,
+   and "works" means usable rather than merely not broken: nothing overflows sideways, nothing is
+   clipped, controls are big enough to hit with a thumb, and text stays readable without zooming.
+   This is a condition of the work being finished, not a pass somebody makes afterwards — a room
+   that only works on a laptop is not done. Details and the specific traps are in
+   [ADR-0035](docs/adr/0035-responsive.md).
 
 ### The approval flow in practice
 
@@ -218,6 +224,7 @@ The social layer, added by ADRs 0023–0029:
 | `GET` | `/api/chat/:userId/messages?since=` | — | `{ messages }` |
 | `POST` | `/api/chat/:userId/messages` | `{ body }` | `{ message }` |
 | `GET` | `/api/leaderboard/friends` | — | `{ entries }` — you and your friends |
+| `GET` | `/api/leaderboard/global` | — | `{ entries }` — everybody who has started |
 | `GET` | `/api/party` | — | `{ party }` — host, members, `isHost` |
 | `POST` | `/api/party/invite/:userId` | — | `204` — notifies, moves nobody |
 | `POST` | `/api/party/join/:userId` | — | `{ party }` |
@@ -329,6 +336,8 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0035](docs/adr/0035-responsive.md) | Everything responsive from 320px up; never `overflow-x: hidden` on the root | Accepted |
+| 2026-08-05 | [0034](docs/adr/0034-global-leaderboard.md) | A global leaderboard beside the friends one; Friends stays the default | Accepted |
 | 2026-08-05 | [0033](docs/adr/0033-modular-characters.md) | Build-your-own character at sign-up; generated parts printed in the two inks | Accepted |
 | 2026-08-05 | [0032](docs/adr/0032-overprint-design-system.md) | Overprint: a design system of two spot inks on paper; glass panels are a third ink | Accepted |
 | 2026-08-04 | [0031](docs/adr/0031-drop-project-week-branding.md) | Drop the project-week branding; the assignment quotation stays verbatim | Accepted |
@@ -413,9 +422,12 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   ids server-side and never accepted from a client, so no request can name a conversation the caller
   is not part of; friendship is re-checked on every read and write, so blocking closes an open
   window ([ADR-0026](docs/adr/0026-chat.md)).
-- **Leaderboard** — you and your friends, ranked by rooms solved, then finishing time, then hints.
-  Derived from what the game already records rather than a separate score table, and scoped to
-  friends — there is no global board ([ADR-0027](docs/adr/0027-friends-leaderboard.md)).
+- **Leaderboard** — ranked by rooms solved, then finishing time, then hints, and derived from what
+  the game already records rather than a separate score table
+  ([ADR-0027](docs/adr/0027-friends-leaderboard.md)). Two scopes: **Friends**, which is the default,
+  and **Everyone** ([ADR-0034](docs/adr/0034-global-leaderboard.md)). The global board shows only
+  players who have actually started, and is the one **table scan** in the app — capped at 200, and
+  the reason the instance role needs `dynamodb:Scan`.
 - **Co-op play** — invite a friend into your game, or join theirs. Both see the same progress and
   either can solve; the log says who did what. A player points at the *host's* user id rather than a
   synthetic game id, so the games table never had to be re-keyed and no progress was thrown away,

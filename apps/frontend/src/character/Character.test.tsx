@@ -85,14 +85,14 @@ describe('validating what came back from storage', () => {
 
 describe('the figure', () => {
   it('draws six layers — two legs and two arms from one drawing each', () => {
-    const { container } = render(<CharacterFigure character={randomCharacter()} height={300} />)
+    const { container } = render(<CharacterFigure character={randomCharacter()} />)
     expect(container.querySelectorAll('[data-part]')).toHaveLength(6)
     expect(container.querySelectorAll('[data-mirror]')).toHaveLength(2)
   })
 
   it('can be rendered still, for places that should not animate', () => {
     const { container } = render(
-      <CharacterFigure character={randomCharacter()} height={64} animated={false} />,
+      <CharacterFigure character={randomCharacter()} animated={false} />,
     )
     expect(container.querySelector('.character-live')).toBeNull()
   })

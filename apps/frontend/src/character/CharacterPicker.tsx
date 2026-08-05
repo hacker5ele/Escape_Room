@@ -109,11 +109,16 @@ export function CharacterPicker({
         <span className="text-stock-900">Surprise me</span> until something looks right.
       </p>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+      {/* Side by side from `md` rather than `lg`. Stacked, the figure pushes
+          the catalogue below the fold, so on a tablet you were choosing parts
+          without being able to see what they did. */}
+      <div className="mt-6 grid gap-6 md:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
         {/* ---- the character, and the fastest way to change it ---- */}
         <div className="flex flex-col gap-3">
-          <div className="pane-inset relative flex items-end justify-center px-4 pt-4 pb-2">
-            <CharacterFigure character={character} height={330} />
+          {/* The figure sizes itself from this box, in CSS. Capped so it does
+              not tower over a wide column, and centred when it is narrower. */}
+          <div className="pane-inset flex justify-center p-4">
+            <CharacterFigure character={character} className="w-full max-w-[260px]" />
           </div>
 
           <div className="flex items-center gap-2">

@@ -55,4 +55,16 @@ export class ProfileService {
     const profiles = await this.repository.findManyByUserId(userIds)
     return new Map(profiles.map((profile) => [profile.userId, profile]))
   }
+
+  /**
+   * Every player, up to `limit`, for the global leaderboard.
+   *
+   * The only caller that wants everybody rather than a named few. Kept behind
+   * the service like every other read so the leaderboard never touches a
+   * repository directly, and so there is one place to look when asking what in
+   * this app scans the whole table.
+   */
+  async listAll(limit: number): Promise<PublicProfile[]> {
+    return this.repository.listAll(limit)
+  }
 }

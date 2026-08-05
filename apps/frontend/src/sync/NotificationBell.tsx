@@ -65,7 +65,10 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-10 mt-2 w-80 pane p-2">
+        // Never wider than the screen it drops onto: at a fixed 20rem this ran
+        // off the left edge of a small phone, since it is anchored to the bell
+        // on the right.
+        <div className="pane absolute right-0 z-10 mt-2 w-[min(20rem,calc(100vw-2.5rem))] p-2">
           {notifications.length === 0 ? (
             <p className="p-3 text-sm text-stock-600">Nothing yet.</p>
           ) : (

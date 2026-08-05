@@ -5,28 +5,40 @@ import { request } from '../api/client'
 import { useAppAuth } from '../auth/useAppAuth'
 import { Avatar } from './Avatar'
 
-async function fetchLeaderboard(auth: Record<string, string>): Promise<LeaderboardEntry[]> {
-  const response = await request('/leaderboard/friends', auth)
+const SCOPES = [
+  { id: 'friends', label: 'Friends' },
+  { id: 'global', label: 'Everyone' },
+] as const
+
+type Scope = (typeof SCOPES)[number]['id']
+
+async function fetchLeaderboard(
+  scope: Scope,
+  auth: Record<string, string>,
+): Promise<LeaderboardEntry[]> {
+  const response = await request(`/leaderboard/${scope}`, auth)
   return leaderboardResponseSchema.parse(await response.json()).entries
 }
 
 /**
- * How you and your friends are getting on.
+ * How you are getting on — among your friends, or among everybody.
  *
- * Friends only, never the whole class — among people who chose each other a
- * board is a reason to keep playing, and in public it is a way to make the
- * slowest person feel bad.
+ * Friends is the default view, and that is a decision rather than an accident
+ * of ordering: a whole-class ranking is a way to make the slowest person feel
+ * bad in public, so the board somebody sees first is the one scoped to people
+ * who chose each other. See ADR-0034.
  */
 export function Leaderboard({ solvedCount }: { solvedCount: number }) {
   const { authHeaders } = useAppAuth()
+  const [scope, setScope] = useState<Scope>('friends')
   const [entries, setEntries] = useState<LeaderboardEntry[] | null>(null)
 
   const authRef = useRef(authHeaders)
   authRef.current = authHeaders
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (which: Scope) => {
     try {
-      setEntries(await fetchLeaderboard(await authRef.current()))
+      setEntries(await fetchLeaderboard(which, await authRef.current()))
     } catch {
       // Left as-is rather than replaced with an error: a board that fails to
       // refresh should keep showing the last one it had.
@@ -34,26 +46,54 @@ export function Leaderboard({ solvedCount }: { solvedCount: number }) {
   }, [])
 
   // Reloaded when the player's own progress changes, so solving a room moves
-  // your row without a refresh.
+  // your row without a refresh — and when the scope changes, because that is a
+  // different question entirely.
   useEffect(() => {
-    void load()
-  }, [load, solvedCount])
+    void load(scope)
+  }, [load, scope, solvedCount])
 
   return (
     <section className="pane p-5">
-      <h2 className="label">
-        You and your friends
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="label">{scope === 'friends' ? 'You and your friends' : 'Everyone playing'}</h2>
+
+        <div role="tablist" aria-label="Who to compare with" className="tabs shrink-0 border-b-0">
+          {SCOPES.map((candidate) => (
+            <button
+              key={candidate.id}
+              type="button"
+              role="tab"
+              aria-selected={candidate.id === scope}
+              tabIndex={candidate.id === scope ? 0 : -1}
+              onClick={() => {
+                // Cleared rather than kept, so the old scope's rows are not
+                // shown for a moment under the new scope's heading.
+                if (candidate.id !== scope) setEntries(null)
+                setScope(candidate.id)
+              }}
+              className="tab"
+            >
+              {candidate.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {entries === null && <p className="mt-3 text-sm text-stock-600">Loading…</p>}
 
-      {entries !== null && entries.length <= 1 && (
+      {entries !== null && scope === 'friends' && entries.length <= 1 && (
         <p className="mt-3 text-sm text-stock-600">
-          Add a friend to see how you compare.
+          Add a friend to see how you compare — or switch to Everyone.
         </p>
       )}
 
-      {entries !== null && entries.length > 1 && (
+      {entries !== null && scope === 'global' && entries.length === 0 && (
+        <p className="mt-3 text-sm text-stock-600">Nobody has started a room yet.</p>
+      )}
+
+      {/* One row is a board when it is everybody, and is not when it is only
+          you and no friends — hence the different thresholds. */}
+      {entries !== null && entries.length > (scope === 'friends' ? 1 : 0) && (
         <ol className="mt-3 space-y-1">
           {entries.map((entry, index) => (
             <li

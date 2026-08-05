@@ -46,7 +46,11 @@ export function App() {
             the one place the display face gets to be a poster. Deliberately
             not uppercase: German capitalises its nouns already, and setting
             it in caps loses that and shouts. */}
-        <h1 className="font-display text-5xl font-extrabold tracking-[-0.045em] text-stock-900 sm:text-6xl">
+        {/* Fluid rather than two fixed steps. "Der digitale Escape Room" set in
+            Syne extrabold is wide, and at a fixed 48px it ran off a 320px
+            phone; clamping to the viewport keeps it one confident block at
+            every width instead of breaking into ragged lines. */}
+        <h1 className="font-display text-[clamp(2rem,8.5vw,3.75rem)] leading-[0.98] font-extrabold tracking-[-0.045em] text-stock-900">
           Der digitale Escape Room
         </h1>
       </header>
