@@ -14,6 +14,7 @@ import { type EmoteName, emoteDuration, emoteSound } from '../character/emotes'
 import type { SoundName } from '../audio/sfx'
 import { isCharacter, type Character } from '../character/parts'
 import { roomDefinition } from './registry'
+import { useEvent } from '../ui/useEvent'
 
 /**
  * A room, played.
@@ -55,6 +56,7 @@ export function RoomView({
   const [emote, setEmote] = useState<EmoteName | null>(null)
 
   const definition = roomDefinition(roomId)
+  const leave = useEvent(onLeave)
   const { position, walkTo, stopWalking, current } = useMovement(spawnPoint(0, 1))
   useRegisterStageAuth()
   const { actors, phase, isHost, sendEmote } = usePresence({
@@ -72,9 +74,9 @@ export function RoomView({
   // A guest follows the host out, or into a different room.
   useEffect(() => {
     if (isHost) return
-    if (phase.kind === 'lobby') onLeave()
-    else if (phase.roomId !== roomId) onLeave()
-  }, [isHost, phase, roomId, onLeave])
+    if (phase.kind === 'lobby') leave()
+    else if (phase.roomId !== roomId) leave()
+  }, [isHost, phase, roomId, leave])
 
   // Held in a ref, and the effect runs on mount only: depending on the function
   // itself would re-enter the room on every render.

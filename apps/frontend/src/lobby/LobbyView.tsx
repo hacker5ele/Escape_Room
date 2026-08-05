@@ -12,6 +12,7 @@ import { EmoteBar } from './EmoteBar'
 import { Countdown } from './Countdown'
 import { type EmoteName, emoteDuration, emoteSound } from '../character/emotes'
 import { roomDefinition } from '../rooms/registry'
+import { useEvent } from '../ui/useEvent'
 import type { Character } from '../character/parts'
 
 /**
@@ -41,6 +42,9 @@ export function LobbyView({
 }) {
   const { profile } = useAppAuth()
   useRegisterStageAuth()
+
+  // Stable, so the follow-the-host effect is not rebuilt on every render.
+  const enterRoom = useEvent(onEnterRoom)
   const [emote, setEmote] = useState<EmoteName | null>(null)
   const [ready, setReady] = useState(false)
   const [counting, setCounting] = useState(false)
@@ -68,8 +72,8 @@ export function LobbyView({
   // a reload — landing in the lobby while everybody else is in a room is worse
   // than being taken to them.
   useEffect(() => {
-    if (!isHost && phase.kind === 'room' && !counting) onEnterRoom(phase.roomId)
-  }, [isHost, phase, counting, onEnterRoom])
+    if (!isHost && phase.kind === 'room' && !counting) enterRoom(phase.roomId)
+  }, [isHost, phase, counting, enterRoom])
 
   /** The first room you have not finished — the one PLAY means by default. */
   const suggested = useMemo<RoomId>(
