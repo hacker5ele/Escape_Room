@@ -143,6 +143,10 @@ Where things belong:
 | Colours, type, panels, buttons | — | `apps/frontend/src/index.css` — the design system |
 | Shared UI primitives (tabs, …) | — | `apps/frontend/src/ui/` |
 | Character parts & the picker | `scripts/characters/` — generation | `apps/frontend/src/character/` |
+| Scenery, props, backdrops | `scripts/scenery/` — generation | `apps/frontend/src/stage/scenes.ts` |
+| A room's puzzle UI | — | `apps/frontend/src/rooms/room-0N.tsx` |
+| The lobby | — | `apps/frontend/src/lobby/` |
+| Sound effects | — | `apps/frontend/src/audio/sfx.ts` |
 | Shared types / API shapes | `packages/shared/src/` | same file — one source |
 | Friends, invites, avatars | `apps/backend/src/{routes,services}/` | `apps/frontend/src/social/` |
 | Notifications / polling | `apps/backend/src/routes/sync.routes.ts` | `apps/frontend/src/sync/` |
@@ -336,6 +340,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0037](docs/adr/0037-lobby-stage-and-rooms.md) | Start → lobby → room; one walkable stage, generated scenery, synthesised sound | Accepted |
 | 2026-08-05 | [0036](docs/adr/0036-global-board-is-a-top-ten.md) | The global board is a top ten plus your own row; games read in one batch | Accepted |
 | 2026-08-05 | [0035](docs/adr/0035-responsive.md) | Everything responsive from 320px up; never `overflow-x: hidden` on the root | Accepted |
 | 2026-08-05 | [0034](docs/adr/0034-global-leaderboard.md) | A global leaderboard beside the friends one; Friends stays the default | Accepted |
@@ -437,6 +442,24 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   synthetic game id, so the games table never had to be re-keyed and no progress was thrown away,
   and every write is conditional on a version so two simultaneous solves cannot lose an update
   ([ADR-0028](docs/adr/0028-co-op-play.md)).
+- **The game** — **Start** on the Rooms tab runs an ink-flood transition into the **lobby**: a
+  printed 1950s room your character stands in the middle of and walks around, with an emote bar, a
+  room picker and PLAY ([ADR-0037](docs/adr/0037-lobby-stage-and-rooms.md)). PLAY counts down and
+  drops you into the room. **Room 01 is deliberately empty and walkable**; rooms 02–04 are stubs
+  wired to the real `attempt` and `hint` endpoints — a sub-team writes the puzzle in
+  `rooms/room-0N.tsx` and touches nothing else (ADR-0007).
+  - **The stage** (`src/stage/`) is one component used by the lobby *and* every room. It is a fixed
+    1600×900 space scaled once; everything is placed **by its feet** and sorted by `y`, which is what
+    lets you walk behind the sofa. Flat things (a rug) need a `depth` override or they draw over
+    people's feet.
+  - **Scenery** is 35 generated pieces put through the *character* pipeline unchanged, which is why
+    a potted palm and a player's head match. `scripts/scenery/generate_all.py` is resumable.
+  - **Sound** is synthesised in `audio/sfx.ts` — no files, nothing to license. The `AudioContext` is
+    built on the Start click and nowhere else, because that is the first gesture in the flow and a
+    context made any earlier is refused by Safari.
+  - **Motion is cartoon**: squash, stretch, overshoot. **Nothing fades in** — a linear fade is the
+    tell that reads as machine-made.
+  - **Not yet multiplayer.** You walk alone; the presence heartbeat is the next phase.
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions

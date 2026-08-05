@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SignInButton, SignUpButton, UserButton } from '@clerk/react'
-import type { GameSession } from '@escape-room/shared'
+import type { GameSession, RoomId } from '@escape-room/shared'
 import { isRoomUnlocked, ROOM_IDS } from '@escape-room/shared'
 import { ApiRequestError, startOrResumeGame } from './api/game'
 import { ProfileForm } from './account/ProfileForm'
@@ -17,6 +17,10 @@ import { CharacterPicker } from './character/CharacterPicker'
 import { composeCharacter } from './character/compose'
 import { isCharacter, type Character } from './character/parts'
 import { Tabs } from './ui/Tabs'
+import { LobbyView } from './lobby/LobbyView'
+import { RoomView } from './rooms/RoomView'
+import { unlockAudio } from './audio/sfx'
+import { InkFlood } from './fx/InkFlood'
 
 /**
  * The scaffold page, behind a sign-in gate.
@@ -119,6 +123,35 @@ function GamePanel() {
   // chooser — it knows nothing about canvases or identity providers.
   const [editingCharacter, setEditingCharacter] = useState(false)
 
+  /**
+   * Where the player is: the tabbed page, the lobby, or inside a room.
+   *
+   * Held in state rather than the URL hash, unlike the tabs. The hash already
+   * belongs to the tab strip, and a lobby is somewhere you *are* rather than
+   * somewhere you link to — a bookmark to a countdown is not a useful thing to
+   * be able to make.
+   */
+  const [place, setPlace] = useState<{ kind: 'page' } | { kind: 'lobby' } | { kind: 'room'; roomId: RoomId }>({
+    kind: 'page',
+  })
+
+  // The Start button is the first gesture in the flow by construction, which
+  // makes it the only place an AudioContext can be built without the browser
+  // refusing it. Every later sound depends on this one click.
+  const [flooding, setFlooding] = useState<null | (() => void)>(null)
+
+  /** Runs the ink flood, and changes the screen at the moment it is covered. */
+  const travel = useCallback((to: () => void) => {
+    setFlooding(() => to)
+  }, [])
+
+  const enterLobby = useCallback(() => {
+    // The first gesture in the flow by construction, which makes it the only
+    // place an AudioContext can be built without the browser refusing it.
+    unlockAudio()
+    travel(() => setPlace({ kind: 'lobby' }))
+  }, [travel])
+
   const confirmCharacter = useCallback(
     async (character: Character) => {
       const picture = await composeCharacter(character)
@@ -160,8 +193,28 @@ function GamePanel() {
     void open()
   }, [open])
 
+  /**
+   * Wraps whichever screen is current with the transition overlay.
+   *
+   * The panel has several early returns and the flood has to sit above all of
+   * them, so it is applied here rather than repeated. The screen swap happens
+   * at `onCovered` — full ink — which is what makes the change unseen rather
+   * than merely quick.
+   */
+  const withFlood = (content: React.ReactNode) => (
+    <>
+      {content}
+      {flooding && (
+        <InkFlood
+          onCovered={() => flooding()}
+          onDone={() => setFlooding(null)}
+        />
+      )}
+    </>
+  )
+
   if (state.kind === 'needs-profile') {
-    return <ProfileForm onSaved={() => void open()} />
+    return withFlood(<ProfileForm onSaved={() => void open()} />)
   }
 
   // Everybody builds a character, not only new sign-ups. Checking what is
@@ -173,30 +226,56 @@ function GamePanel() {
   // client-writable metadata. That is the right standing for something purely
   // cosmetic — the same as the frontend room guard.
   if (state.kind !== 'loading' && !isCharacter(storedCharacter)) {
-    return (
+    return withFlood(
       <CharacterPicker
         onConfirm={confirmCharacter}
         replacesExistingPhoto={profile?.imageUrl != null}
-      />
+      />,
+    )
+  }
+
+  // The lobby and the rooms take the whole screen, so they replace the page
+  // rather than sitting inside it — which is also what lets the stage have the
+  // room it needs.
+  if (state.kind === 'ready' && isCharacter(storedCharacter) && place.kind === 'lobby') {
+    return withFlood(
+      <LobbyView
+        game={state.game}
+        character={storedCharacter}
+        onEnterRoom={(roomId) => travel(() => setPlace({ kind: 'room', roomId }))}
+        onLeave={() => travel(() => setPlace({ kind: 'page' }))}
+      />,
+    )
+  }
+
+  if (state.kind === 'ready' && isCharacter(storedCharacter) && place.kind === 'room') {
+    return withFlood(
+      <RoomView
+        roomId={place.roomId}
+        game={state.game}
+        character={storedCharacter}
+        onSolved={(session) => setState({ kind: 'ready', game: session })}
+        onLeave={() => travel(() => setPlace({ kind: 'lobby' }))}
+      />,
     )
   }
 
   // Reopened deliberately, so it starts from who you already are and can be
   // backed out of — neither of which is true of the gate above.
   if (editingCharacter && isCharacter(storedCharacter)) {
-    return (
+    return withFlood(
       <CharacterPicker
         onConfirm={confirmCharacter}
         onCancel={() => setEditingCharacter(false)}
         initial={storedCharacter}
-      />
+      />,
     )
   }
 
 
   const game = state.kind === 'ready' ? state.game : null
 
-  return (
+  return withFlood(
     <>
       <section className="pane flex flex-wrap items-center justify-between gap-4 p-5">
         <div className="flex items-center gap-4">
@@ -253,7 +332,7 @@ function GamePanel() {
       <Tabs
         label="Your game"
         tabs={[
-          { id: 'rooms', label: 'Rooms', render: () => <RoomsTab game={game} /> },
+          { id: 'rooms', label: 'Rooms', render: () => <RoomsTab game={game} onStart={enterLobby} /> },
           ...(game
             ? [
                 {
@@ -277,7 +356,7 @@ function GamePanel() {
             : []),
         ]}
       />
-    </>
+    </>,
   )
 }
 
@@ -285,7 +364,7 @@ function GamePanel() {
  * The rooms — the only tab that is the game itself rather than something
  * arranged around it, which is why it comes first and opens by default.
  */
-function RoomsTab({ game }: { game: GameSession | null }) {
+function RoomsTab({ game, onStart }: { game: GameSession | null; onStart: () => void }) {
   return (
     <section className="pane p-5">
       <h2 className="label">Rooms</h2>
@@ -326,9 +405,16 @@ function RoomsTab({ game }: { game: GameSession | null }) {
           )
         })}
       </ul>
-      <p className="prose mt-4 text-sm text-stock-600">
-        The rooms themselves are the team&apos;s work — this panel only proves the account and the
-        API agree about whose game this is.
+      <button
+        type="button"
+        onClick={onStart}
+        disabled={game === null}
+        className="btn play-button mt-5 w-full"
+      >
+        Start ▶
+      </button>
+      <p className="prose mt-3 text-sm text-stock-600">
+        Takes you to the waiting room. Friends can join you there — or press play and go in alone.
       </p>
     </section>
   )
