@@ -12,7 +12,8 @@ const SOLUTION = DIGITS.reduce((total, digit) => total + digit, 0)
 export const room04: RoomDefinition = {
   id: 'room-04',
   title: 'The Door',
-  intro: 'The last door. Six numbers are stencilled above the keypad, and the keypad wants only one.',
+  intro:
+    'The last door. Six numbers are stencilled above the keypad, and the keypad wants only one.',
   prompt: 'One number opens it. The six above the keypad are the whole instruction.',
 
   hints: [

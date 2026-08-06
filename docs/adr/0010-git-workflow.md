@@ -62,4 +62,4 @@ rule applies to everything from the second commit onward.
 overhead. Not available to us — the assignment forbids it explicitly.
 
 **Squash-merge only, no ADR requirement.** Tidier history and less writing. Rejected: the ADR trail is
-a deliverable of this project week, not overhead on top of it.
+a deliverable of this project, not overhead on top of it.

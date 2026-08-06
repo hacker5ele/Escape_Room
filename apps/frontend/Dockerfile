@@ -25,6 +25,11 @@ COPY apps/frontend ./apps/frontend
 ARG VITE_CLERK_PUBLISHABLE_KEY
 ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
 
+# `local` swaps Clerk for the development sign-in. The deploy pipeline never
+# sets it, so real builds always use Clerk.
+ARG VITE_AUTH_MODE
+ENV VITE_AUTH_MODE=$VITE_AUTH_MODE
+
 RUN npm run build --workspace @escape-room/shared \
     && npm run build --workspace @escape-room/frontend
 

@@ -1,111 +1,1480 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+@import 'tailwindcss';
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+/* ==========================================================================
+   Overprint — the escape room design system.  See ADR-0032.
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+   The metaphor is screenprinting: two spot inks laid over paper stock, going
+   dark where they cross. Panels are not floating cards — they are a third ink
+   layer, set to `multiply`, so they behave like something printed rather than
+   something hovering.
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+   Two rules that are easy to break by accident:
+
+   1. Never put `overflow: hidden` on an ancestor of `.pane`. It silently
+      disables `backdrop-filter` on every descendant and the glass goes flat
+      with no error anywhere.
+   2. Body text sits on `.pane`, whose fill is above 0.7 alpha for exactly
+      this reason — below that, contrast over the ink fields drops under the
+      WCAG floor depending on what happens to be behind it.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Typefaces.  Self-hosted: there is no font CDN request, so nothing renders
+   in a fallback face while a third party is slow. Licences sit next to the
+   files in src/assets/fonts/.
+   -------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Syne';
+  src: url('./assets/fonts/syne-latin.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-@media (prefers-color-scheme: dark) {
+@font-face {
+  font-family: 'Syne';
+  src: url('./assets/fonts/syne-latin-ext.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Martian Mono';
+  src: url('./assets/fonts/martian-mono-latin.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Martian Mono';
+  src: url('./assets/fonts/martian-mono-latin-ext.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* --------------------------------------------------------------------------
+   Tokens.  Tailwind v4 turns every entry here into a utility, so `stock-900`
+   below is what makes `text-stock-900` and `border-stock-900` exist.
+   -------------------------------------------------------------------------- */
+
+@theme {
+  /* The stock: paper through to key ink. Warm-biased — a neutral grey ramp
+     reads as unconsidered, and paper is never neutral. */
+  --color-stock-50: #f6f2e6;
+  --color-stock-100: #ede7d6;
+  --color-stock-200: #e0d9c5;
+  --color-stock-300: #cec6b0;
+  --color-stock-400: #a9a08a;
+  --color-stock-500: #837b68;
+  --color-stock-600: #5c574c;
+  --color-stock-700: #3e3a32;
+  --color-stock-800: #2a2721;
+  --color-stock-900: #18160f;
+  --color-stock-950: #0e0d08;
+
+  /* Ink A — warm red. Everything you can act on, and nothing else. Used
+     decoratively it stops meaning anything. */
+  --color-signal-100: #fbddd7;
+  --color-signal-300: #f28a78;
+  --color-signal-500: #e8452e;
+  --color-signal-600: #c9331e;
+  --color-signal-700: #a02718;
+
+  /* Ink B — process cyan. Solved, complete, resolved. */
+  --color-solved-100: #cfe6f4;
+  --color-solved-300: #62b2db;
+  --color-solved-500: #0b7fbf;
+  --color-solved-600: #086495;
+  --color-solved-700: #064b70;
+
+  /* Where the two inks actually cross. Not picked by eye — this is A
+     multiplied by B, which is what the press would give you. */
+  --color-overprint: #0a2222;
+
+  --font-display: 'Syne', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Martian Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Screenprint shadow: a hard offset, never a soft blur. Ink does not
+     diffuse, and a blurred shadow is what makes a panel look like a card. */
+  --shadow-print: 3px 3px 0 var(--color-stock-900);
+  --shadow-print-sm: 2px 2px 0 var(--color-stock-900);
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+
+@layer base {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    color-scheme: light;
+
+    /* These live in variables so the reduced-transparency rule at the bottom
+       can flatten every pane in the app at once.
+
+       `--pane-alpha` is the readability control. Below about 0.8 the ink
+       fields start showing through strongly enough to eat the contrast of
+       body text, so treat 0.8 as a floor rather than a starting point. */
+    --pane-blur: 10px;
+    --pane-alpha: 0.88;
+    --pane-ink: 0.05;
   }
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+  html {
+    background-color: var(--color-stock-100);
+  }
+
+  /* Deliberately NOT `overflow-x: hidden` here, however tempting.
+     `overflow` other than `visible` on an ancestor of a `.pane` disables its
+     `backdrop-filter` — that is the first rule in ADR-0032, and `html` is an
+     ancestor of every pane in the app. Anything genuinely wider than the screen
+     carries its own scroller instead; nothing else is allowed to overflow. */
+
+  body {
+    margin: 0;
+    min-height: 100svh;
+    color: var(--color-stock-900);
+    font-family: var(--font-mono);
+    font-size: 16px;
+    line-height: 1.6;
+    /* Martian Mono is an unusually wide face; without this it reads as
+       spaced-out. Kept mild — over-tightening a mono closes the counters and
+       costs more legibility than the width does. */
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    /* The press sheet: two ink fields over stock, plus a halftone screen so
+       the gradients do not read as gradients. Fixed, so the inks stay put
+       while content scrolls over them — the page is printed, not parallaxed.
+
+       Kept deliberately faint. This is an application, not a poster: the inks
+       are here to give the paper somewhere to be, and anything stronger turns
+       every panel into a contrast problem. */
+    background-color: var(--color-stock-100);
+    background-image:
+      radial-gradient(circle at center, rgb(24 22 15 / 0.14) 1px, transparent 1.1px),
+      radial-gradient(62% 66% at 8% 92%, rgb(11 127 191 / 0.2) 0%, rgb(11 127 191 / 0) 64%),
+      radial-gradient(58% 60% at 92% 4%, rgb(232 69 46 / 0.17) 0%, rgb(232 69 46 / 0) 62%);
+    background-size:
+      6px 6px,
+      100% 100%,
+      100% 100%;
+    background-attachment: fixed, fixed, fixed;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  /* Focus is ink A on key — visible over paper and over either ink field. */
+  :focus-visible {
+    outline: 2px solid var(--color-signal-500);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-signal-500);
+    color: var(--color-stock-50);
+  }
+
+  /* Inputs inherit nothing useful by default; without this they arrive in the
+     browser's own face and the whole system breaks at the first form. */
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    letter-spacing: inherit;
   }
 }
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
+/* --------------------------------------------------------------------------
+   Components
 
-body {
-  margin: 0;
-}
+   These exist as classes rather than utility strings because each is several
+   properties that only make sense together — a `.pane` missing its rim or its
+   shadow is not a cheaper pane, it is a broken one.
+   -------------------------------------------------------------------------- */
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
+@layer components {
+  /* The glass. Its fill lives on a pseudo-element so that `multiply` applies
+     to the ink layer alone; putting the blend on the panel itself would
+     multiply the text too, and body copy would go muddy over the ink fields. */
+  .pane {
+    position: relative;
+    border: 1px solid var(--color-stock-900);
+    box-shadow: var(--shadow-print);
+    color: var(--color-stock-900);
+  }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+  /* The readable base: paper, blended NORMALLY, with the blur behind it.
+     Plus the top-edge sheen, which is most of what separates glass from a
+     translucent rectangle.
+
+     This layer is emphatically not `multiply`. Multiply can only ever darken,
+     so a near-white paper fill multiplied over the ink fields leaves them
+     essentially untouched — the panel stops being a surface and text ends up
+     sitting directly on the loudest part of the background. That was the
+     first version, and it was unreadable.
+
+     Negative z-index, deliberately: it puts this behind the panel's own
+     content without `.pane` needing a stacking context. Give it one —
+     `isolation: isolate`, or any z-index of its own — and the tint below
+     would blend against the panel instead of the page, which flattens it. */
+  .pane::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.5) 0%, rgb(255 255 255 / 0) 34%),
+      rgb(246 242 230 / var(--pane-alpha));
+    backdrop-filter: blur(var(--pane-blur)) saturate(1.04);
+    -webkit-backdrop-filter: blur(var(--pane-blur)) saturate(1.04);
+  }
+
+  /* The ink. Still an overprint, but at the tint density a press would
+     actually lay under body copy — you do not print text over a solid field,
+     you drop to a tint or knock it out. Enough for the printed cast, far too
+     little to cost any contrast. */
+  .pane::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: rgb(10 34 34 / var(--pane-ink));
+    mix-blend-mode: multiply;
+  }
+
+  .pane > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .pane::before {
+      background: var(--color-stock-50);
+      mix-blend-mode: normal;
+    }
+  }
+
+  /* A quieter pane for nested surfaces — a row inside a panel. No shadow,
+     because stacked hard shadows read as clutter rather than depth. */
+  .pane-inset {
+    position: relative;
+    border: 1px solid rgb(24 22 15 / 0.28);
+    background: rgb(247 243 232 / 0.45);
+    color: var(--color-stock-900);
+  }
+
+  /* Buttons. The press-down on :active is 1px of real travel, not a colour
+     change — a control should feel like it moved. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    /* 44px is the smallest thing a finger hits reliably. The label is only
+       0.76rem, so without a floor these come out around 32px and are fiddly on
+       a phone — which is where somebody will be playing this. */
+    min-height: 2.75rem;
+    padding: 0.6rem 1.05rem;
+    border: 1px solid var(--color-stock-900);
+    background: var(--color-signal-500);
+    color: var(--color-stock-50);
+    font-size: 0.76rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: var(--shadow-print-sm);
+    transition:
+      transform 0.16s cubic-bezier(0.16, 0.84, 0.24, 1),
+      box-shadow 0.16s cubic-bezier(0.16, 0.84, 0.24, 1),
+      background-color 0.16s ease;
+  }
+
+  .btn:hover:not(:disabled) {
+    background: var(--color-signal-600);
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-stock-900);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: translate(1px, 1px);
+    box-shadow: 0 0 0 var(--color-stock-900);
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-stock-900);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--color-stock-900);
+    color: var(--color-stock-50);
+  }
+
+  .btn-sm {
+    min-height: 2.25rem;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.68rem;
+  }
+
+  /* Fields. Square, ink-bordered, and they gain ink A on focus so the active
+     field is unmistakable even mid-form. */
+  .field {
+    width: 100%;
+    min-height: 2.75rem;
+    /* At least 16px, always. iOS Safari zooms the whole page when a field
+       smaller than that takes focus, and it does not zoom back out — so a
+       0.85rem input turns the first tap on a form into a broken layout. */
+    font-size: max(1rem, 0.85rem);
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-stock-900);
+    background: rgb(247 243 232 / 0.72);
+    color: var(--color-stock-900);
+    font-size: 0.85rem;
+  }
+
+  .field::placeholder {
+    color: var(--color-stock-500);
+  }
+
+  .field:focus {
+    outline: none;
+    border-color: var(--color-signal-500);
+    box-shadow: inset 0 0 0 1px var(--color-signal-500);
+  }
+
+  /* The overline label: catalogue typography, used for every section heading
+     that is a name rather than a sentence. */
+  .label {
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-stock-600);
+  }
+
+  /* THE IDEA (ADR-0032): a locked room is frosted. You can see there is
+     something there and you cannot read it; solving clears the glass. The
+     blur is the lock state, not decoration.
+
+     Not a security boundary — the server never sends a locked room's payload
+     at all (ADR-0006). This is the same fact told visually. */
+  .veil {
+    filter: blur(6px);
+    opacity: 0.5;
+    user-select: none;
+    transition:
+      filter 0.6s cubic-bezier(0.4, 0, 0.15, 1),
+      opacity 0.6s ease;
+  }
+
+  .veil[data-unlocked='true'] {
+    filter: blur(0);
+    opacity: 1;
+    user-select: auto;
+  }
+
+  /* The ink rule — a hairline in key, for separating rows. */
+  .rule {
+    border: 0;
+    border-top: 1px solid rgb(24 22 15 / 0.22);
+  }
+
+  /* Tabs. The selected one is printed solid: on paper, the strongest available
+     statement of "you are here" is full ink coverage, and it needs no arrow,
+     no underline animation and no colour anybody has to learn. */
+  /* Scrolls sideways rather than wrapping.
+     Wrapped, the first row's tabs lose the strip's bottom border — each tab
+     sets `border-bottom: 0` on the assumption the container draws it — so a
+     second row reads as broken rather than as more tabs. Scrolling keeps the
+     strip one line at any width, which is also what a phone user expects.
+
+     `overflow-x` is safe here specifically because the strip contains buttons
+     and no `.pane`; see the note by `html` above. */
+  .tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--color-stock-900);
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    /* Never squeezed by a crowded strip — it scrolls instead. */
+    flex: none;
+    min-height: 2.75rem;
+    padding: 0.6rem 1rem;
+    /* The shared edge is collapsed, so a row of tabs reads as one printed
+       strip rather than a line of separate buttons. */
+    margin-right: -1px;
+    border: 1px solid var(--color-stock-900);
+    border-bottom: 0;
+    background: transparent;
+    color: var(--color-stock-700);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color 0.16s ease,
+      color 0.16s ease;
+  }
+
+  .tab:hover:not([aria-selected='true']) {
+    background: rgb(24 22 15 / 0.07);
+    color: var(--color-stock-900);
+  }
+
+  .tab[aria-selected='true'] {
+    background: var(--color-stock-900);
+    color: var(--color-stock-50);
+  }
+
+  /* Ink A, because a badge is always telling you there is something to act on.
+     Square, like everything else — a pill here would be the only rounded thing
+     in the app. */
+  .tab-badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 0.28rem;
+    background: var(--color-signal-500);
+    color: var(--color-stock-50);
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+
+  /* ---- the character (ADR-0033) ----------------------------------
+     Six layers hung on a rig. Positions, sizes and transform origins are all
+     written as inline styles by CharacterFigure, because they are computed
+     from the manifest — the only thing that belongs here is the motion. */
+
+  /* Sized entirely by the caller's width plus the inline `aspect-ratio`. Every
+     layer inside is placed in percentages, so there is no measuring step and
+     no pixel height to keep in step with the layout. */
+  .character {
+    position: relative;
+    width: 100%;
+  }
+
+  .character > span {
+    position: absolute;
+    display: block;
+    /* Promote each limb once, rather than letting the compositor decide part
+       way through an animation and flicker on the first frame. */
+    will-change: transform;
+  }
+
+  .character img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* Nearest-neighbour would alias the halftone into moiré at odd scales. */
+    image-rendering: auto;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  /* Deliberately mismatched periods. Equal ones land back on themselves every
+     cycle and the figure starts reading as a mechanism. */
+  @keyframes limb-swing {
+    0%,
+    100% {
+      transform: rotate(6deg);
+    }
+    50% {
+      transform: rotate(-6deg);
+    }
+  }
+
+  @keyframes limb-step {
+    0%,
+    100% {
+      transform: rotate(-4.5deg);
+    }
+    50% {
+      transform: rotate(4.5deg);
+    }
+  }
+
+  @keyframes torso-bob {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+
+  .character-live [data-motion='arm'] {
+    animation: limb-swing 2.9s ease-in-out infinite;
+  }
+
+  .character-live [data-motion='leg'] {
+    animation: limb-step 3.3s ease-in-out infinite;
+  }
+
+  .character-live [data-motion='body'] {
+    animation: torso-bob 2.5s ease-in-out infinite;
+  }
+
+  /* The far arm and far leg run the same keyframes backwards, which is what
+     makes it a walk instead of a march. */
+  .character-live [data-motion][data-mirror] {
+    animation-direction: reverse;
+  }
+
+  /* The head is driven from JavaScript by the pointer, not by a keyframe. The
+     easing is what makes it feel like it noticed you rather than snapped. */
+  .character [data-part='head'] {
+    transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  /* ---- the picker ---- */
+
+  .part-tile {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    padding: 0.35rem;
+    border: 1px solid rgb(24 22 15 / 0.28);
+    background: rgb(247 243 232 / 0.5);
+    cursor: pointer;
+    transition:
+      background-color 0.14s ease,
+      border-color 0.14s ease,
+      transform 0.14s cubic-bezier(0.16, 0.84, 0.24, 1);
+  }
+
+  .part-tile img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .part-tile:hover {
+    border-color: var(--color-stock-900);
+    transform: translateY(-1px);
+  }
+
+  /* Selected is a full key border plus a shadow — the same "printed solid"
+     logic the tabs use, so selection means one thing across the whole app. */
+  .part-tile[data-selected='true'] {
+    border-color: var(--color-stock-900);
+    background: rgb(255 255 255 / 0.85);
+    box-shadow: var(--shadow-print-sm);
+  }
+
+  /* Prose. Syne 400 for the few places that hold an actual sentence. Martian
+     Mono is for data and labels; a paragraph set in it is hard work, and the
+     app should never ask for that. */
+  .prose {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 1.62;
   }
 }
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+
+/* --------------------------------------------------------------------------
+   Accessibility
+
+   Both of these are why the blur and alpha are variables rather than literals
+   — one rule flattens every pane in the app.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --pane-blur: 0px;
+    --pane-alpha: 1;
+    --pane-ink: 0;
+  }
+
+  body {
+    background-image: none;
   }
 }
-p {
-  margin: 0;
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* The veil still has to resolve, just without the travel. */
+  .veil {
+    transition: none;
+  }
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+/* ==========================================================================
+   The stage (ADR-0037)
+
+   A fixed 1600×900 coordinate space scaled once to fit its box, so a position
+   on the wire means the same thing on a phone and a laptop. Everything below
+   is laid out in those units; nothing reads the window.
+   ========================================================================== */
+
+@layer components {
+  .stage-frame {
+    position: relative;
+    width: 100%;
+    /* Reserves the height the scaled stage will occupy. Without it the frame
+       collapses — a scaled element still claims its unscaled layout box. */
+    aspect-ratio: 1600 / 900;
+    border: 1px solid var(--color-stock-900);
+    box-shadow: var(--shadow-print);
+    /* Deliberately NOT `overflow: hidden`, which would flatten any `.pane`
+       drawn over the stage. Props are placed inside the bounds instead. */
+    background: var(--color-stock-100);
+  }
+
+  .stage {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: top left;
+  }
+
+  .stage-wall,
+  .stage-floor {
+    position: absolute;
+    left: 0;
+    width: 1600px;
+    user-select: none;
+  }
+
+  .stage-wall {
+    top: 0;
+    height: 600px;
+  }
+
+  .stage-floor {
+    top: 560px;
+    height: 340px;
+  }
+
+  .stage-prop,
+  .stage-actor {
+    position: absolute;
+    user-select: none;
+  }
+
+  .stage-prop {
+    -webkit-user-drag: none;
+  }
+
+  /* A player who has stopped sending heartbeats. Faded rather than removed —
+     somebody checking their email should not vanish from the room. */
+  .stage-actor[data-away] {
+    opacity: 0.45;
+    filter: saturate(0.4);
+  }
+
+  .stage-nameplate {
+    position: absolute;
+    top: -1.6rem;
+    left: 50%;
+    translate: -50% 0;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--color-stock-900);
+    background: rgb(246 242 230 / 0.92);
+    font-size: 0.72rem;
+    white-space: nowrap;
+    /* The actor is mirrored to face left; the label must not be. */
+    transform-origin: center;
+    animation: plate-pop 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  }
+
+  .stage-actor[data-me] .stage-nameplate {
+    background: var(--color-signal-500);
+    color: var(--color-stock-50);
+  }
+
+  /* Chrome sits over the stage but must not swallow clicks meant for it. */
+  .stage-chrome {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 1rem;
+    pointer-events: none;
+  }
+
+  /* ---- props that would move in a real room ---- */
+
+  .stage-prop[data-sway='leaves'] {
+    transform-origin: 50% 100%;
+    animation: sway 6s ease-in-out infinite;
+  }
+
+  .stage-prop[data-sway='swing'] {
+    transform-origin: 50% 0%;
+    animation: swing 5.5s ease-in-out infinite;
+  }
+
+  /* ==== cartoon motion =====================================================
+     Every one of these is anticipation, squash/stretch or overshoot. None is a
+     fade — a fade is the motion that reads as machine-made, and this is the
+     part that makes the thing feel like a game. */
+
+  @keyframes plate-pop {
+    0% {
+      opacity: 0;
+      scale: 0.6;
+    }
+    100% {
+      opacity: 1;
+      scale: 1;
+    }
+  }
+
+  @keyframes sway {
+    0%,
+    100% {
+      rotate: -1.5deg;
+    }
+    50% {
+      rotate: 1.5deg;
+    }
+  }
+
+  @keyframes swing {
+    0%,
+    100% {
+      rotate: -4deg;
+    }
+    50% {
+      rotate: 4deg;
+    }
+  }
+
+  /* Arrival: dropped in from above, squashing as it lands, then settling. */
+  @keyframes drop-in {
+    0% {
+      translate: 0 -60%;
+      scale: 0.9 1.15;
+      opacity: 0;
+    }
+    55% {
+      translate: 0 0;
+      opacity: 1;
+    }
+    70% {
+      scale: 1.18 0.82;
+    }
+    85% {
+      scale: 0.94 1.06;
+    }
+    100% {
+      scale: 1 1;
+    }
+  }
+
+  .stage-actor {
+    animation: drop-in 0.62s cubic-bezier(0.3, 1.2, 0.5, 1) both;
+  }
+
+  /* ---- the walk cycle ----
+     The same rig as the idle, run faster, with the body leaning into it. */
+
+  .character[data-walking] [data-motion='arm'] {
+    animation-duration: 0.55s;
+  }
+
+  .character[data-walking] [data-motion='leg'] {
+    animation-duration: 0.55s;
+  }
+
+  .character[data-walking] [data-motion='body'] {
+    animation-duration: 0.275s;
+  }
+
+  /* ---- emotes ----
+     Each one drives parts that already rotate about real joints, so a dance
+     costs a block of CSS and no artwork at all. */
+
+  .character[data-emote] [data-motion] {
+    animation: none;
+  }
+
+  @keyframes emote-wave {
+    0%,
+    100% {
+      rotate: -140deg;
+    }
+    50% {
+      rotate: -105deg;
+    }
+  }
+
+  .character[data-emote='wave'] [data-part='armA'] {
+    animation: emote-wave 0.32s ease-in-out infinite;
+  }
+
+  @keyframes emote-dance-arm {
+    0%,
+    100% {
+      rotate: -55deg;
+    }
+    50% {
+      rotate: 40deg;
+    }
+  }
+
+  @keyframes emote-dance-leg {
+    0%,
+    100% {
+      rotate: 18deg;
+    }
+    50% {
+      rotate: -18deg;
+    }
+  }
+
+  @keyframes emote-dance-body {
+    0%,
+    100% {
+      translate: 0 0;
+      rotate: -3deg;
+    }
+    50% {
+      translate: 0 -8px;
+      rotate: 3deg;
+    }
+  }
+
+  .character[data-emote='dance'] [data-part='armA'],
+  .character[data-emote='dance'] [data-part='armB'] {
+    animation: emote-dance-arm 0.36s ease-in-out infinite;
+  }
+
+  .character[data-emote='dance'] [data-part='armB'] {
+    animation-direction: reverse;
+  }
+
+  .character[data-emote='dance'] [data-part='legA'],
+  .character[data-emote='dance'] [data-part='legB'] {
+    animation: emote-dance-leg 0.36s ease-in-out infinite;
+  }
+
+  .character[data-emote='dance'] [data-part='legB'] {
+    animation-direction: reverse;
+  }
+
+  .character[data-emote='dance'] [data-part='body'],
+  .character[data-emote='dance'] [data-part='head'] {
+    animation: emote-dance-body 0.72s ease-in-out infinite;
+  }
+
+  @keyframes emote-jump {
+    0%,
+    100% {
+      translate: 0 0;
+      scale: 1 1;
+    }
+    15% {
+      scale: 1.15 0.85;
+    }
+    45% {
+      translate: 0 -70px;
+      scale: 0.9 1.12;
+    }
+    80% {
+      translate: 0 0;
+      scale: 1.15 0.85;
+    }
+  }
+
+  .character[data-emote='jump'] {
+    animation: emote-jump 0.9s cubic-bezier(0.3, 0.9, 0.4, 1) both;
+  }
+
+  @keyframes emote-spin {
+    0% {
+      rotate: 0deg;
+    }
+    100% {
+      rotate: 360deg;
+    }
+  }
+
+  .character[data-emote='spin'] {
+    animation: emote-spin 0.6s linear 2;
+  }
+
+  @keyframes emote-cheer-arm {
+    0%,
+    100% {
+      rotate: -155deg;
+    }
+    50% {
+      rotate: -170deg;
+    }
+  }
+
+  @keyframes emote-cheer-hop {
+    0%,
+    100% {
+      translate: 0 0;
+    }
+    50% {
+      translate: 0 -18px;
+    }
+  }
+
+  .character[data-emote='cheer'] [data-part='armA'] {
+    animation: emote-cheer-arm 0.3s ease-in-out infinite;
+  }
+
+  .character[data-emote='cheer'] [data-part='armB'] {
+    animation: emote-cheer-arm 0.3s ease-in-out infinite reverse;
+  }
+
+  .character[data-emote='cheer'] {
+    animation: emote-cheer-hop 0.3s ease-in-out infinite;
+  }
+
+  .character[data-emote='shrug'] [data-part='armA'] {
+    rotate: -68deg;
+  }
+
+  .character[data-emote='shrug'] [data-part='armB'] {
+    rotate: 68deg;
+  }
+
+  @keyframes emote-sit {
+    0% {
+      translate: 0 0;
+    }
+    100% {
+      translate: 0 42px;
+    }
+  }
+
+  .character[data-emote='sit'] {
+    animation: emote-sit 0.3s ease-out both;
+  }
+
+  .character[data-emote='sit'] [data-part='legA'] {
+    rotate: 78deg;
+  }
+
+  .character[data-emote='sit'] [data-part='legB'] {
+    rotate: -78deg;
+  }
+
+  @keyframes emote-faint {
+    0% {
+      rotate: 0deg;
+      translate: 0 0;
+    }
+    100% {
+      rotate: 84deg;
+      translate: -18% 12%;
+    }
+  }
+
+  .character[data-emote='faint'] {
+    animation: emote-faint 0.5s cubic-bezier(0.6, 0, 0.9, 0.4) both;
+  }
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+@media (prefers-reduced-motion: reduce) {
+  /* Emotes still *happen* — they hold their pose instead of moving. Removing
+     them entirely would take a feature away rather than calm it down. */
+  .stage-actor,
+  .stage-prop[data-sway],
+  .stage-nameplate,
+  .character[data-emote],
+  .character[data-emote] [data-part] {
+    animation: none !important;
+  }
+}
+
+@layer components {
+  /* ---- the emote bar ---- */
+
+  .emote-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .emote-key {
+    flex: 1 1 auto;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-stock-900);
+    background: rgb(246 242 230 / 0.9);
+    box-shadow: var(--shadow-print-sm);
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+      transform 0.14s cubic-bezier(0.2, 1.6, 0.4, 1),
+      background-color 0.14s ease;
+  }
+
+  .emote-key:hover {
+    background: var(--color-signal-500);
+    color: var(--color-stock-50);
+    transform: translateY(-2px);
+  }
+
+  /* Squash on press, overshoot on release — the whole cartoon vocabulary in
+     two rules, and the reason these do not feel like form controls. */
+  .emote-key:active {
+    transform: translateY(1px) scale(0.94, 1.06);
+  }
+
+  /* Cooling down drains rather than disables: a control that greys out for
+     three-quarters of a second reads as broken, one that refills reads as a
+     rule you are being shown. */
+  .emote-bar[data-cooling] .emote-key {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .stage-frame {
+    touch-action: none;
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  /* ---- the lobby ---- */
+
+  .room-tile {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    border: 1px solid var(--color-stock-900);
+    background: rgb(246 242 230 / 0.85);
+    box-shadow: var(--shadow-print-sm);
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+      transform 0.16s cubic-bezier(0.2, 1.6, 0.4, 1),
+      background-color 0.16s ease;
+  }
+
+  .room-tile:hover:not(:disabled) {
+    /* A degree of rotation is the difference between a control and a card
+       somebody printed and pinned up. */
+    transform: translateY(-3px) rotate(-1.5deg);
+  }
+
+  .room-tile[data-selected='true'] {
+    background: var(--color-stock-900);
+    color: var(--color-stock-50);
+  }
+
+  /* Locked rooms use the same frost as everywhere else in the app, because it
+     already means exactly this (ADR-0032). */
+  .room-tile[data-locked] {
+    cursor: not-allowed;
+    filter: blur(1.4px);
+    opacity: 0.55;
+  }
+
+  .room-tile[data-locked]:active {
+    animation: refuse 0.3s ease-in-out;
+  }
+
+  @keyframes refuse {
+    0%,
+    100% {
+      translate: 0 0;
+    }
+    25% {
+      translate: -4px 0;
+    }
+    75% {
+      translate: 4px 0;
+    }
+  }
+
+  /* Ready stamps rather than toggles — scale down from oversized with a
+     rotation settle, the way a rubber stamp hits paper. */
+  .ready-toggle[data-on] {
+    background: var(--color-solved-500);
+    border-color: var(--color-solved-700);
+    color: var(--color-stock-50);
+    animation: stamp-down 0.34s cubic-bezier(0.2, 1.5, 0.4, 1);
+  }
+
+  @keyframes stamp-down {
+    0% {
+      scale: 1.4;
+      rotate: -6deg;
+      opacity: 0.4;
+    }
+    60% {
+      scale: 0.96;
+      rotate: 1.5deg;
+    }
+    100% {
+      scale: 1;
+      rotate: 0deg;
+    }
+  }
+
+  .play-button {
+    font-size: 1rem;
+    letter-spacing: 0.16em;
+    padding-block: 0.9rem;
+    animation: play-breathe 2.4s ease-in-out infinite;
+  }
+
+  /* The one thing on the screen that is asking to be pressed. */
+  @keyframes play-breathe {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.025);
+    }
+  }
+
+  /* ---- the countdown ---- */
+
+  .countdown {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    background: rgb(24 22 15 / 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+
+  .countdown-number {
+    font-family: var(--font-display);
+    font-size: clamp(6rem, 30vw, 16rem);
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    color: var(--color-stock-50);
+    -webkit-text-stroke: 4px var(--color-stock-900);
+    animation: count-stamp 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+
+  @keyframes count-stamp {
+    0% {
+      scale: 3;
+      opacity: 0;
+      rotate: -12deg;
+    }
+    35% {
+      scale: 0.92;
+      opacity: 1;
+      rotate: 2deg;
+    }
+    55% {
+      scale: 1.04;
+      rotate: 0deg;
+    }
+    100% {
+      scale: 1;
+      opacity: 1;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-button,
+  .countdown-number,
+  .ready-toggle[data-on],
+  .room-tile[data-locked]:active {
+    animation: none !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Unbuilding into dots — the screen transition (ADR-0044)
+   --------------------------------------------------------------------------
+
+   The whole app is printed as a halftone: a 1px dot on a 6px grid, set on
+   `body` above. This animation is that screen coming apart and going back
+   together, so a panel leaving the page does not slide or fade — it loses its
+   ink until only its dots are left, and those dots are the same size and pitch
+   as the page's own. They fade into the ground rather than off it.
+
+   Everything below is transform, opacity and one mask. No layout property is
+   touched, so nothing here can reflow the page it is animating. */
+
+/* The mask's dot radius has to interpolate, and only a registered property
+   does. Unregistered, a custom property jumps at each keyframe instead — which
+   is exactly the fallback on a browser without `@property`: three visible steps
+   rather than a dissolve, with the travel and the fade intact. Degrades, does
+   not break. */
+@property --dot-r {
+  syntax: '<length>';
+  inherits: false;
+  /* Larger than the 4.25px half-diagonal of a 6px cell, so at rest the dots
+     overlap completely and the mask is solid — an un-animated element is not
+     screened at all. */
+  initial-value: 5px;
+}
+
+@layer components {
+  /* A moving panel hides its own fill, because a resting one already does.
+     ---------------------------------------------------------------------
+     This is the fix for "the panels fly in white", and it is not a tweak — it
+     corrects a wrong assumption about what a `.pane` looks like.
+
+     **`.pane::before` and `::after` are invisible.** Not subtle, not partly:
+     they never reach the screen. They sit at `z-index: -1` and `.pane` is not a
+     stacking context, so they paint in the *root* stacking context's negative
+     layer — which comes **before** `body`, an in-flow block whose background is
+     opaque. The page is drawn straight over the top of them.
+
+     Painting a pane's fill bright red proves it: the panel looks completely
+     ordinary. Give that same panel any transform at all and it turns scarlet,
+     because the transform makes `.pane` a stacking context and the fill is
+     trapped inside it, where it finally paints on top.
+
+     Measured, a pane's interior at rest is the bare page to within a rounding
+     error — same colour, same halftone contrast. Under a transform it becomes a
+     flat, bluer block with no page texture in it at all. That is the white.
+
+     So the fill is taken away for exactly as long as a piece is moving, which
+     leaves the panel showing the page through it — which is what it does when
+     it is standing still. The two states then match to about one part in 200.
+
+     This makes the animation correct. It does **not** make the design system
+     correct: the glass, the sheen and the overprint tint have never once been
+     seen in this app, and whether to fix that is a decision about how every
+     screen looks, not about a transition. Flagged, not quietly changed. */
+  .piece-arriving.pane::before,
+  .piece-arriving.pane::after,
+  .piece-arriving .pane::before,
+  .piece-arriving .pane::after,
+  .piece-leaving.pane::before,
+  .piece-leaving.pane::after,
+  .piece-leaving .pane::before,
+  .piece-leaving .pane::after {
+    display: none;
+  }
+
+  /* Beyond that, nothing. No `--pane-*` token is touched — three separate
+     attempts to compensate for the stacking context by nudging alpha, ink or
+     blur all failed, because none of them was the mechanism. And no `overflow`
+     goes on `.assemble` in either axis: clipping above a `.pane` is what the top
+     of this file forbids, and "only while animating" flattens every panel on the
+     page for the length of the animation. `inward()` in `Assemble.tsx` turns
+     stray pieces around instead, so there is nothing to clip. */
+
+  /* The dots belong to the unbuild, and only to it.
+     ---------------------------------------------------------------------
+     A screen coming apart dissolves into its own halftone. A screen arriving
+     flies in and lands, **fully inked**.
+
+     Screening the arrival as well was symmetrical, obvious, and wrong to look
+     at. A 1px dot grid destroys type long before it stops filling a rectangle:
+     a panel keeps reading as a pale box while every word inside it has already
+     gone. So each arriving panel appeared as a blank white rectangle that only
+     afterwards filled in — twenty of them, staggered across a second.
+
+     It is also not what was asked for. The request was that everything unbuilds
+     itself, that only the dots are left, and that the next screen *flies in*.
+     Only the first half of that is a dissolve. */
+  .piece-leaving {
+    /* Radius animates; pitch never does — a screen whose pitch moves reads as
+       the image scaling, not as the image dissolving. */
+    mask-image: radial-gradient(
+      circle at center,
+      #000 var(--dot-r),
+      transparent calc(var(--dot-r) + 0.6px)
+    );
+    mask-size: 6px 6px;
+    mask-repeat: repeat;
+    -webkit-mask-image: radial-gradient(
+      circle at center,
+      #000 var(--dot-r),
+      transparent calc(var(--dot-r) + 0.6px)
+    );
+    -webkit-mask-size: 6px 6px;
+    -webkit-mask-repeat: repeat;
+
+    /* No pane token is touched here either. A mask does make the element its own
+       backdrop root, so `.pane::before` has nothing left to blur — but that
+       happens on its own, and forcing `--pane-blur: 0` to "match" it can only
+       ever lighten a panel that is already dissolving. Nothing in this
+       transition is allowed to change how a panel is coloured. */
+    will-change: transform, opacity, --dot-r;
+  }
+
+  /* The dissolve and the travel are two animations rather than one, and they
+     share no property between them: one owns `--dot-r` and `opacity`, the other
+     owns `translate`, `rotate` and `scale`.
+
+     Two reasons. A keyframe in the middle would otherwise apply the easing to
+     each interval it creates, so an overshoot curve written once would overshoot
+     three times. And they want genuinely different timings — how long a panel
+     spends coming apart is not how long it spends flying. */
+  .assemble {
+    --land-ease: cubic-bezier(0.16, 1.02, 0.3, 1);
+  }
+
+  /* Two easings, because they are two different sentences. `fly` lands with an
+     overshoot — a thing thrown into place. `gather` settles without one, which
+     is what coming home should feel like. */
+  .assemble[data-assemble-mode='fly'] {
+    --land-ease: cubic-bezier(0.22, 1.35, 0.36, 1);
+  }
+
+  /* Scoped under `.assemble` for specificity, not for tidiness — a piece only
+     ever exists inside it, so the descendant selector costs nothing and buys
+     the (0,2,0) needed to beat `.stage-prop[data-sway='leaves']`, which carries
+     its own `animation`. Unscoped, every swaying prop in the room — the palm,
+     the hanging bulb, the chain — would keep swaying and simply never fly in,
+     with nothing anywhere to say why. */
+  .assemble .piece-leaving {
+    animation:
+      piece-unink 340ms ease-in var(--fly-delay, 0ms) both,
+      piece-recede 340ms cubic-bezier(0.55, 0, 0.85, 0.35) var(--fly-delay, 0ms) both;
+  }
+
+  .assemble .piece-arriving {
+    animation:
+      piece-appear 1ms linear var(--fly-delay, 0ms) both,
+      piece-land 560ms var(--land-ease) var(--fly-delay, 0ms) both;
+  }
+
+  @keyframes piece-unink {
+    0% {
+      --dot-r: 5px;
+      opacity: 1;
+    }
+    /* Ink gone, dots left. The panel is still legibly where it was — this is
+       the moment it stops being a surface and becomes a screen. */
+    62% {
+      --dot-r: 1px;
+      opacity: 1;
+    }
+    100% {
+      --dot-r: 0.8px;
+      opacity: 0;
+    }
+  }
+
+  @keyframes piece-recede {
+    0% {
+      translate: 0 0;
+      rotate: 0deg;
+      scale: 1;
+    }
+    100% {
+      translate: var(--fly-x, 0) var(--fly-y, 0);
+      rotate: var(--fly-spin, 0deg);
+      scale: 0.96;
+    }
+  }
+
+  /* A switch, not a fade. It exists only so a piece is not sitting visible at
+     its scattered starting position while it waits out its stagger — the moment
+     its delay elapses it is simply there, and flying.
+
+     1ms rather than a real duration on purpose. "Nothing fades in" is a rule of
+     this app's motion, because a linear fade is the tell that reads as
+     machine-made; and an element at `opacity < 1` is its own backdrop root, so
+     a panel fading in is a panel with its glass switched off. */
+  @keyframes piece-appear {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes piece-land {
+    0% {
+      translate: var(--fly-x, 0) var(--fly-y, 0);
+      rotate: var(--fly-spin, 0deg);
+      scale: 0.94;
+    }
+    100% {
+      translate: 0 0;
+      rotate: 0deg;
+      scale: 1;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The JS refuses to mark anything in the first place, so these classes never
+     appear. Belt and braces for a preference changed mid-flight. */
+  .piece-leaving,
+  .piece-arriving {
+    animation: none !important;
+    mask-image: none !important;
+    -webkit-mask-image: none !important;
+    opacity: 1 !important;
+    translate: none !important;
+    rotate: none !important;
+    scale: none !important;
+  }
 }

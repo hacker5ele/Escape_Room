@@ -7,7 +7,7 @@
 
 ## Context
 
-The assignment offers two projects for KW 32: **A**, a digital escape room made of 2–4 sequential
+The assignment offers two projects: **A**, a digital escape room made of 2–4 sequential
 rooms, and **B**, an arcade platform with a central highscore API. Monday morning is reserved for the
 choice, and no code may be written before midday — so this decision has to be recorded before anything
 else in this repository exists.

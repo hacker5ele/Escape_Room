@@ -38,6 +38,15 @@ export const gameSessionSchema = z.object({
    * before the log existed still parses instead of failing the whole read.
    */
   events: z.array(gameEventSchema).default([]),
+  /**
+   * Bumped on every write, and checked on every write.
+   *
+   * Only matters once a game is shared: two players solving at the same moment
+   * would otherwise each read the same game, each add their own event, and the
+   * second write would silently discard the first. Defaulted so games written
+   * before co-op existed still parse. See ADR-0028.
+   */
+  version: z.number().int().nonnegative().default(0),
 })
 
 export type GameSession = z.infer<typeof gameSessionSchema>
