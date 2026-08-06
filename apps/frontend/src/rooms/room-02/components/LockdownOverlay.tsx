@@ -6,7 +6,6 @@ export function LockdownOverlay({ open, onDone }: { open: boolean; onDone: () =>
     if (!open) return
     const timeout = setTimeout(onDone, STORY.lockdownLines.length * 800 + 1400)
     return () => clearTimeout(timeout)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   if (!open) return null

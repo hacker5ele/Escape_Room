@@ -78,3 +78,14 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "mail_from" {
+  description = "Who invitation emails come from. Empty turns email off entirely."
+  type        = string
+  default     = ""
+}
+
+variable "mail_identity_arn" {
+  description = "The verified SES identity this environment may send as."
+  type        = string
+}

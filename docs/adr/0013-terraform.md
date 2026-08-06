@@ -10,7 +10,7 @@
 The AWS setup in [ADR-0012](0012-aws-hosting.md) is a dozen resources per environment, times two
 environments, in an account that already contains unrelated production workloads. Clicking it together
 in the console would leave nobody able to say what belongs to this project, and no way to remove it
-cleanly after the project week.
+cleanly once the project is over.
 
 That last point matters more than usual here: this is a personal account, and the project should be
 deletable in one command when the week is over.

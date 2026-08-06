@@ -9,16 +9,20 @@ services:
       context: .
       dockerfile: apps/backend/Dockerfile
     environment:
-      NODE_ENV: production
+      # development, not production: this is a local stack, and the local auth
+      # mode below is refused outright when NODE_ENV is production.
+      NODE_ENV: development
       PORT: 3000
+      # No Clerk keys needed to run the stack. Type a username and you are in.
+      AUTH_MODE: local
       # nginx is the single proxy hop in front of us, so trust exactly one.
       TRUST_PROXY: 1
       CORS_ORIGIN: http://localhost:8080
       ATTEMPT_RATE_LIMIT: 30
-      # Needed to verify Clerk tokens. Put it in a gitignored .env beside this
-      # file; see .env.example. Without it the API starts but every signed-in
-      # request fails.
+      # Unused while AUTH_MODE is local. Set both, and remove AUTH_MODE above,
+      # if you want the compose stack to exercise the real Clerk path.
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
+      CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY:-}
       # Deliberately unset: no table means the in-memory repository, so compose
       # stays a one-command experience with no AWS credentials. Progress does
       # not survive `docker compose down`.
@@ -33,7 +37,9 @@ services:
       context: .
       dockerfile: apps/frontend/Dockerfile
       args:
-        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-pk_test_Z2VudWluZS1zbG90aC02My5jbGVyay5hY2NvdW50cy5kZXYk}
+        # Matches the backend: the compose stack signs in locally by default.
+        VITE_AUTH_MODE: ${VITE_AUTH_MODE:-local}
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
     ports:
       - '8080:80'
     depends_on:

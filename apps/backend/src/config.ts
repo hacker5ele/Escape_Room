@@ -44,11 +44,45 @@ export const config = {
    */
   gamesTableName: process.env.GAMES_TABLE_NAME ?? '',
 
+  /** Profile cache. Empty selects the in-memory repository, as with games. */
+  profilesTableName: process.env.PROFILES_TABLE_NAME ?? '',
+
+  friendshipsTableName: process.env.FRIENDSHIPS_TABLE_NAME ?? '',
+  invitesTableName: process.env.INVITES_TABLE_NAME ?? '',
+  notificationsTableName: process.env.NOTIFICATIONS_TABLE_NAME ?? '',
+  messagesTableName: process.env.MESSAGES_TABLE_NAME ?? '',
+
   awsRegion: process.env.AWS_REGION ?? 'us-east-1',
+
+  /**
+   * Who invitation emails come from — `Escape Room <noreply@cool.tf>`.
+   *
+   * **Empty turns email off entirely**, which is what local development, the
+   * test suite and `docker compose up` all run with. There is no key here to
+   * forget: SES is reached with the instance role (ADR-0046).
+   */
+  mailFrom: process.env.MAIL_FROM ?? '',
+
+  /**
+   * Where a link in an email points. `https://cool.tf`, no trailing slash.
+   *
+   * The browser builds its own links from `window.location`, but an email is
+   * read somewhere else entirely and has to be told.
+   */
+  publicOrigin: (process.env.PUBLIC_ORIGIN ?? '').replace(/\/$/, ''),
 
   /**
    * Clerk's server-side key. Read by @clerk/express directly from the
    * environment; listed here only so a missing value is visible at start-up.
    */
   clerkSecretKey: process.env.CLERK_SECRET_KEY ?? '',
+
+  /**
+   * `clerk` (the default) or `local`.
+   *
+   * `local` replaces Clerk with a "type a username and you are that person"
+   * identity, so the team can build rooms without keys or a network. It is
+   * refused outright when NODE_ENV is production — see `createApp()`.
+   */
+  authMode: process.env.AUTH_MODE === 'local' ? ('local' as const) : ('clerk' as const),
 } as const

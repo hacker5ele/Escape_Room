@@ -19,7 +19,10 @@ export function shuffle<T>(items: readonly T[]): T[] {
   const copy = [...items]
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
-    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+    // Both indices are in bounds by construction (i from length-1 down to 1, j
+    // from 0 to i), so the non-null assertions are just telling TypeScript what
+    // the Fisher-Yates invariant already guarantees.
+    ;[copy[i], copy[j]] = [copy[j]!, copy[i]!]
   }
   return copy
 }
@@ -99,7 +102,9 @@ export function isCircuitTileSolved(tile: CircuitTile, rotation: number): boolea
 }
 
 export function isCircuitSolved(rotations: Readonly<Record<string, number>>): boolean {
-  return CIRCUIT_PATH.every((tile) => isCircuitTileSolved(tile, rotations[circuitTileKey(tile.row, tile.col)] ?? 0))
+  return CIRCUIT_PATH.every((tile) =>
+    isCircuitTileSolved(tile, rotations[circuitTileKey(tile.row, tile.col)] ?? 0),
+  )
 }
 
 /** A rotation guaranteed NOT to already satisfy the tile, so the puzzle never starts pre-solved. */

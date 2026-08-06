@@ -31,7 +31,6 @@ export function EndingSequence({
           ]
     const doneTimeout = setTimeout(onDone, lines.length * 1100 + 1600)
     return () => [...timeouts, doneTimeout].forEach(clearTimeout)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, variant])
 
   if (!open) return null

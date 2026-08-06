@@ -14,8 +14,8 @@ export function ActivityLog({ events }: { events: GameEvent[] }) {
   const newestFirst = [...events].reverse()
 
   return (
-    <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-5">
-      <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+    <section className="pane p-5">
+      <h2 className="label">
         Your activity ({events.length})
       </h2>
 
@@ -23,9 +23,9 @@ export function ActivityLog({ events }: { events: GameEvent[] }) {
         {newestFirst.map((event, index) => (
           <li
             key={`${event.at}-${index}`}
-            className="flex items-baseline gap-3 border-b border-vault-800/60 py-1 last:border-0"
+            className="flex items-baseline gap-3 border-b border-stock-900/30/60 py-1 last:border-0"
           >
-            <time dateTime={event.at} className="shrink-0 text-vault-500">
+            <time dateTime={event.at} className="shrink-0 text-stock-600">
               {formatTime(event.at)}
             </time>
             <span className={toneFor(event)}>{describe(event)}</span>
@@ -44,10 +44,10 @@ function formatTime(iso: string): string {
 }
 
 function toneFor(event: GameEvent): string {
-  if (event.type === 'room_solved' || event.type === 'game_completed') return 'text-solved-400'
-  if (event.type === 'attempt' && event.correct === false) return 'text-vault-300'
-  if (event.type === 'hint_taken') return 'text-signal-400'
-  return 'text-vault-100'
+  if (event.type === 'room_solved' || event.type === 'game_completed') return 'text-solved-600'
+  if (event.type === 'attempt' && event.correct === false) return 'text-stock-700'
+  if (event.type === 'hint_taken') return 'text-signal-600'
+  return 'text-stock-900'
 }
 
 function describe(event: GameEvent): string {

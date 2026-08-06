@@ -52,6 +52,12 @@ module "environment" {
   ecr_repository_url = data.terraform_remote_state.shared.outputs.ecr_repository_url
   ecr_repository_arn = data.terraform_remote_state.shared.outputs.ecr_repository_arn
   deploy_role_name   = data.terraform_remote_state.shared.outputs.deploy_role_name
+  mail_identity_arn  = data.terraform_remote_state.shared.outputs.mail_identity_arn
+
+  # Both environments send as the same verified domain. The subject and the body
+  # say which game it is; a separate sending address per environment would be a
+  # second thing to verify for no benefit anybody receiving one would notice.
+  mail_from = "Der digitale Escape Room <noreply@cool.tf>"
 
   image_tag = "staging"
 

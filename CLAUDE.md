@@ -1,6 +1,6 @@
 # Escape Room — Project Guide
 
-Project week KW 32 (Mon 2026-08-03 → Fri 2026-08-07). We are building **Projekt A: Der digitale
+Monday 2026-08-03 → Friday 2026-08-07. We are building **Projekt A: Der digitale
 Escape Room**.
 
 This file is the single entry point for the whole team and for Claude. It holds the binding rules, the
@@ -37,6 +37,12 @@ These rules are not suggestions. They apply to every team member and to Claude.
    assignment itself.
 7. **Interface changes need agreement first.** Any change to the API surface or the data model
    requires an ADR *and* prior agreement with the whole team, before the code is written.
+8. **Everything new is fully responsive.** Every screen, panel and room works from a 320px phone up,
+   and "works" means usable rather than merely not broken: nothing overflows sideways, nothing is
+   clipped, controls are big enough to hit with a thumb, and text stays readable without zooming.
+   This is a condition of the work being finished, not a pass somebody makes afterwards — a room
+   that only works on a laptop is not done. Details and the specific traps are in
+   [ADR-0035](docs/adr/0035-responsive.md).
 
 ### The approval flow in practice
 
@@ -120,6 +126,7 @@ Escape_Room/
 ├── CLAUDE.md                   ← you are here
 ├── docs/
 │   ├── adr/                    ← Architecture Decision Records (approval required)
+│   ├── building-a-room.md      ← how to build a room, end to end — start here
 │   └── api-contract.md         ← the HTTP contract, in prose
 ├── packages/
 │   └── shared/                 ← @escape-room/shared — types, schemas, unlock rule
@@ -134,7 +141,19 @@ Where things belong:
 | --- | --- | --- |
 | A room's puzzle & solution | `apps/backend/src/domain/rooms/room-0N.ts` | — |
 | A room's look & interaction | — | `apps/frontend/src/rooms/room-0N/` |
+| Colours, type, panels, buttons | — | `apps/frontend/src/index.css` — the design system |
+| Shared UI primitives (tabs, …) | — | `apps/frontend/src/ui/` |
+| Character parts & the picker | `scripts/characters/` — generation | `apps/frontend/src/character/` |
+| Scenery, props, backdrops | `scripts/scenery/` — generation | `apps/frontend/src/stage/scenes.ts` |
+| A room's puzzle UI | — | `apps/frontend/src/rooms/room-0N.tsx` |
+| The lobby | — | `apps/frontend/src/lobby/` |
+| Sound effects | — | `apps/frontend/src/audio/sfx.ts` |
+| Invitation email | `apps/backend/src/mail/` | — |
 | Shared types / API shapes | `packages/shared/src/` | same file — one source |
+| Friends, invites, avatars | `apps/backend/src/{routes,services}/` | `apps/frontend/src/social/` |
+| Notifications / polling | `apps/backend/src/routes/sync.routes.ts` | `apps/frontend/src/sync/` |
+| Chat | `apps/backend/src/services/chat.service.ts` | `apps/frontend/src/social/ChatWindow.tsx` |
+| Co-op parties | `apps/backend/src/services/party.service.ts` | `apps/frontend/src/social/PartyPanel.tsx` |
 | Session handling | `apps/backend/src/services/session.service.ts` | `apps/frontend/src/game/` |
 
 ---
@@ -174,8 +193,10 @@ interface RoomDefinition {
 
 Full detail in [`docs/api-contract.md`](docs/api-contract.md).
 
-**Everything except `/api/health` requires a signed-in user.** Authentication is a Clerk session token
-in `Authorization: Bearer …`.
+**Two endpoints are open; everything else requires a signed-in user.** Authentication is a Clerk
+session token in `Authorization: Bearer …`. The open pair are `/api/health` and the invite preview —
+the latter deliberately, because a link that demands an account before it shows you anything is a
+registration wall rather than a link ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)).
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
@@ -187,6 +208,46 @@ in `Authorization: Bearer …`.
 | `GET` | `/api/rooms/:roomId` | — | `{ room }` or `403` if locked |
 | `POST` | `/api/rooms/:roomId/attempt` | `{ answer }` | `{ correct, session, feedback? }` |
 | `POST` | `/api/rooms/:roomId/hint` | — | `{ hint, hintsUsed }` |
+
+The social layer, added by ADRs 0023–0029:
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| `GET` | `/api/profiles/me` | — | `{ profile }` — your own public profile |
+| `GET` | `/api/profiles/by-username/:username` | — | `{ profile }` — public fields only |
+| `GET` | `/api/friends` | — | `{ friends, incoming, outgoing }` |
+| `POST` | `/api/friends/by-username` | `{ username }` | the updated lists |
+| `POST` | `/api/friends/:userId/accept` | — | the updated lists |
+| `DELETE` | `/api/friends/:userId` | — | reject and unfriend are one operation |
+| `POST` | `/api/friends/:userId/block` · `/unblock` | — | the updated lists |
+| `GET` | `/api/invites/:token` | — | `{ inviter }` — **open, no account needed** |
+| `POST` | `/api/invites` | `{ forParty? }` | `{ invite }` — mints a link; `forParty` also joins the party |
+| `GET` | `/api/invites` | — | `{ invites }` — your own, to share or revoke |
+| `DELETE` | `/api/invites/:token` | — | `204` — revoke |
+| `POST` | `/api/invites/:token/accept` | — | friends immediately; the link was the consent |
+| `GET` | `/api/sync?since=` | — | `{ now, notifications, unreadCount }` |
+| `POST` | `/api/sync/read` | — | `204` — marks everything seen |
+| `GET` | `/api/chat/:userId/messages?since=` | — | `{ messages }` |
+| `POST` | `/api/chat/:userId/messages` | `{ body }` | `{ message }` |
+| `GET` | `/api/leaderboard/friends` | — | `{ entries }` — you and your friends |
+| `GET` | `/api/leaderboard/global` | — | `{ entries }` — everybody who has started |
+| `GET` | `/api/party` | — | `{ party }` — host, members, `isHost` |
+| `POST` | `/api/stage/heartbeat` | position, emote, ready, hidden | `{ peers, phase, isHost }` — 2 Hz |
+| `POST` | `/api/stage/alive` | `{ hidden }` | `204` — "I still have the game open", 5 s, every screen |
+| `POST` | `/api/stage/phase` | `{ kind, roomId? }` | `204` — host only; moves the whole party |
+| `DELETE` | `/api/stage` | — | `204` — off the stage, still in the party |
+| `POST` | `/api/party/invite/:userId` | — | `204` — notifies, moves nobody |
+| `POST` | `/api/party/join/:userId` | — | `{ party }` |
+| `DELETE` | `/api/party` | — | back to your own game |
+| `DELETE` | `/api/party/members/:userId` | — | the host sending somebody home |
+
+**No conversation id and no game id appear in any URL.** Chat is addressed by person and the server
+derives the conversation from the two ids ([ADR-0026](docs/adr/0026-chat.md)); a game is found from
+the party ([ADR-0028](docs/adr/0028-co-op-play.md)). There is nothing to forge in either case.
+
+**Rate limits key on the account** where a request carries one, and on the IP only where it does not
+— a whole class shares one address
+([ADR-0029](docs/adr/0029-rate-limits-per-account-and-invite-acceptance.md)).
 
 **There is no session id anywhere.** A player has exactly one game and the server finds it from the
 verified token, so nothing identifying a game travels on the wire to be forged
@@ -202,6 +263,7 @@ Every action is recorded on the account as an activity log — attempts, hints, 
 
 ```bash
 npm install            # install all workspaces
+                       # no Clerk keys needed — `npm run dev` signs you in locally
 
 npm run dev            # shared (watch) + backend :3000 + frontend :5173
 npm run build          # build shared → backend → frontend
@@ -284,6 +346,31 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-06 | [0046](docs/adr/0046-email-an-absent-friend.md) | Invite a friend who is not on the app and they get an email, with your character in it | Accepted |
+| 2026-08-06 | [0045](docs/adr/0045-membership-is-liveness.md) | Being in a game is a claim you keep alive; close the tab and you leave both | Accepted |
+| 2026-08-05 | [0044](docs/adr/0044-unbuild-into-dots.md) | Screens unbuild into their own halftone dots and rebuild out of them | Accepted |
+| 2026-08-05 | [0043](docs/adr/0043-hints-are-per-room.md) | Hints are counted per room, derived from the activity log | Accepted |
+| 2026-08-05 | [0042](docs/adr/0042-party-invites.md) | Invite a friend into your game, or a link that befriends and joins in one step | Accepted |
+| 2026-08-05 | [0041](docs/adr/0041-stable-callbacks-in-effects.md) | An effect may not depend on a callback prop — wrap it in `useEvent()` | Accepted |
+| 2026-08-05 | [0040](docs/adr/0040-path-routing.md) | Real paths, no hash; reload recovers the room, the tab and the outfit | Accepted |
+| 2026-08-05 | [0039](docs/adr/0039-empty-key-cursor.md) | Null is the empty cursor; in-memory stand-ins must be as strict as DynamoDB | Accepted |
+| 2026-08-05 | [0038](docs/adr/0038-presence-and-the-iris-wipe.md) | Presence in memory, polled and interpolated; the transition is an iris wipe — *the transition half is superseded by [0044](docs/adr/0044-unbuild-into-dots.md)* | Accepted |
+| 2026-08-05 | [0037](docs/adr/0037-lobby-stage-and-rooms.md) | Start → lobby → room; one walkable stage, generated scenery, synthesised sound | Accepted |
+| 2026-08-05 | [0036](docs/adr/0036-global-board-is-a-top-ten.md) | The global board is a top ten plus your own row; games read in one batch | Accepted |
+| 2026-08-05 | [0035](docs/adr/0035-responsive.md) | Everything responsive from 320px up; never `overflow-x: hidden` on the root | Accepted |
+| 2026-08-05 | [0034](docs/adr/0034-global-leaderboard.md) | A global leaderboard beside the friends one; Friends stays the default | Accepted |
+| 2026-08-05 | [0033](docs/adr/0033-modular-characters.md) | Build-your-own character at sign-up; generated parts printed in the two inks | Accepted |
+| 2026-08-05 | [0032](docs/adr/0032-overprint-design-system.md) | Overprint: a design system of two spot inks on paper; glass panels are a third ink | Accepted |
+| 2026-08-04 | [0031](docs/adr/0031-drop-project-week-branding.md) | Drop the project-week branding; the assignment quotation stays verbatim | Accepted |
+| 2026-08-04 | [0030](docs/adr/0030-tests-own-one-server-per-app.md) | Tests start one HTTP server per app instead of one per request | Accepted |
+| 2026-08-04 | [0029](docs/adr/0029-rate-limits-per-account-and-invite-acceptance.md) | Rate limits key on the account; following an invite link makes you friends | Accepted |
+| 2026-08-04 | [0028](docs/adr/0028-co-op-play.md) | Co-op play: a player points at a host, and every write is versioned | Accepted |
+| 2026-08-04 | [0027](docs/adr/0027-friends-leaderboard.md) | A leaderboard scoped to friends, derived from the game | Accepted |
+| 2026-08-04 | [0026](docs/adr/0026-chat.md) | One-to-one chat; the conversation id is derived server-side | Accepted |
+| 2026-08-04 | [0025](docs/adr/0025-notifications-by-polling.md) | Notifications delivered by one polled `/api/sync`, not WebSockets | Accepted |
+| 2026-08-04 | [0024](docs/adr/0024-friend-graph-and-invite-links.md) | Friend graph stored both ways; revocable invite links | Accepted |
+| 2026-08-04 | [0023](docs/adr/0023-public-profiles.md) | Cache a public profile per player | Accepted |
+| 2026-08-03 | [0022](docs/adr/0022-local-development-auth.md) | Local development runs without Clerk | Accepted |
 | 2026-08-03 | [0021](docs/adr/0021-unique-usernames.md) | Every player has a unique username, enforced by Clerk | Accepted |
 | 2026-08-03 | [0020](docs/adr/0020-activity-log.md) | Record an activity log against each account | Accepted |
 | 2026-08-03 | [0019](docs/adr/0019-games-belong-to-accounts.md) | A game belongs to an account; the session header goes away | Accepted |
@@ -306,19 +393,168 @@ approved the corresponding ADR.
 | 2026-08-03 | [0002](docs/adr/0002-monorepo-npm-workspaces.md) | npm workspaces monorepo | Accepted |
 | 2026-08-03 | [0001](docs/adr/0001-project-choice.md) | We build Projekt A, the digital escape room | Accepted |
 
-All eleven were approved by Nepomuk Crhonek on 2026-08-03.
+All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03, the rest as they were written.
 
 ### Where the code stands
 
 - **`packages/shared`** — complete. The contract, the room ids, and `isRoomUnlocked()`.
+- **Hints are per room** ([ADR-0043](docs/adr/0043-hints-are-per-room.md)) — a room's hints are
+  indexed by hints taken *in that room*, counted from the activity log, which has recorded
+  `hint_taken` with a `roomId` since ADR-0020. `session.hintsUsed` stays a whole-game total because
+  that is what the leaderboard ranks on. `hintsAvailable` on the wire means *how many you can still
+  take here*, not how many the room has.
 - **`apps/backend`** — complete for the scaffold. All seven endpoints, the 403 room gate, four
   **placeholder** puzzles, rate limiting, and 54 tests. The placeholder puzzles exist to prove the
   architecture and to serve as templates; the room sub-teams replace them.
+  **[`docs/building-a-room.md`](docs/building-a-room.md) is the guide** — the two files and two
+  registry lines a room actually is, the rules the test suite already enforces for you, how to
+  generate scenery with the image model, and why the result does not look AI-generated.
 - **`apps/frontend`** — a sign-in gate and one page behind it. It proves the whole chain works: Clerk
   issues a token, the browser sends it, the API verifies it and finds that account's game. The rooms
   themselves are the team's work.
+- **Design** — *Overprint* ([ADR-0032](docs/adr/0032-overprint-design-system.md)): two spot inks on
+  paper stock, and glass panels are a third ink rather than a floating card — a `.pane` is a paper
+  fill with a light ink tint multiplied over it. Syne and Martian Mono are self-hosted in
+  `src/assets/fonts/`. Build rooms with the component classes (`.pane`, `.btn`, `.field`, `.label`,
+  `.veil`, `.prose`) and the `stock` / `signal` / `solved` tokens; do not hardcode a colour. **A
+  locked room is frosted** — that is `.veil`, and it is cosmetic only, since the server never sends a
+  locked room's contents at all. Three rules break the design silently if ignored: never put
+  `overflow: hidden` above a `.pane`, never give a `.pane` its own stacking context, and never blend a
+  panel *fill* with `multiply` — multiply cannot lighten, so the panel stops being a readable surface
+  and the text ends up sitting on the background.
+- **Characters** — every player builds one at sign-up: head, body, arms and legs, twenty of each
+  ([ADR-0033](docs/adr/0033-modular-characters.md)). The parts are generated with `gpt-image-1` and
+  then *printed* — posterised to the four Overprint inks with a halftone screen, which is what stops
+  eighty separately generated images looking generated. `scripts/characters/generate_all.py` is
+  resumable; run it again for anything that failed. The composed still is a **head-and-shoulders
+  portrait** uploaded to Clerk, so every avatar surface in the app shows it **without any change to
+  `packages/shared` or the backend**. Two rules the catalogue depends on: the far limb is the near
+  limb mirrored, so **no part may have a handedness** (a V sign becomes a rude gesture reversed), and
+  the head hangs from `chin` rather than `neck` so it overlaps the torso instead of resting on it.
+  "Change character" in the game header reopens the picker.
+- **Every screen is a real path** ([ADR-0040](docs/adr/0040-path-routing.md)) — `/`, `/friends`,
+  `/leaderboard`, `/activity`, `/character`, `/lobby`, `/room/:roomId`, `/invite/:token`. **No hash
+  anywhere.** Reloading returns you to where you were, and the character picker keeps the outfit in
+  the query string (`?head=…&body=…`), validated against the catalogue rather than trusted.
+  - The gates are one layout route, `RequiresGame` — loading, signed out, no profile, no character.
+    Everything below can assume a signed-in player with a game.
+  - **The host's location is the party's location; a guest follows it.** That is what makes the back
+    button out of a room work instead of the server pulling you straight back in.
+  - `isInviteToken()` in `src/routing.ts` still guards the invite path: the router hands over whatever
+    was in the segment and it goes into a request URL.
+  - No infrastructure was needed — CloudFront, nginx and Vite already rewrote unknown paths to
+    `index.html`, and the smoke test now checks seven routes rather than one.
 - **Accounts** — players register with Clerk before they can reach anything. Progress and an activity
   log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
+- **An invitation reaches somebody who is not here** ([ADR-0046](docs/adr/0046-email-an-absent-friend.md)).
+  Invite a friend with the app closed and they get an **email** instead of a bell nobody will read.
+  Three questions decide it, and any one of them false means the bell alone: are they live
+  (ADR-0045), do they already have an unread invitation from you (`hasUnreadFrom` — the throttle
+  chat already built, so no new state), and do they have a **verified** address. The link is the
+  party link from ADR-0042, unchanged. **Almost nothing here is new** — the only new parts are a
+  sender and a template.
+  - **No secret anywhere.** SES is reached with the instance role, so there is no API key to create,
+    store or rotate. `MAIL_FROM` empty turns email off entirely, which is what local development,
+    the tests and `docker compose up` run with.
+  - **SES starts in a sandbox** — it delivers only to *verified* addresses until AWS grants
+    production access, which is a support request. Verifying the team covers a demo completely.
+  - The email carries **your character**, composited on the server with `pngjs` from a PNG part set
+    that ships with the API. Not `sharp`: the image is alpine, and sharp on musl is a fight for
+    alpha-over blending of four flat pictures. The character and the starburst are baked into **one**
+    image, because overlapping two with a negative margin works in a browser and nowhere else.
+  - The **avatar is soft and it is not Clerk's fault**: the portrait is a 260-unit window blown up to
+    512, so it is upscaled ~2× at source. Drawing the whole figure sidesteps the crop, and at email
+    size the shipped parts are indistinguishable from the 1024px originals — so no re-export.
+  - An email must never break an invitation: the bell is written first, and everything after it is
+    best-effort.
+- **Invites** ([ADR-0042](docs/adr/0042-party-invites.md)) — from the lobby, the host can invite a
+  friend (they get a notification with a **Join their game** button) or mint a **party link**.
+  Following a party link makes you friends *and* puts you in the game in one step. The join is
+  best-effort and the friendship is not: if the party filled up or the host left, the friendship
+  still stands and you land in your own lobby. The preview says how many are in the party, never who.
+- **Friends** — add somebody by username, or send a revocable invite link that shows who is inviting
+  before the recipient has an account. Accept, reject, unfriend and block all work
+  ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)). Following a link makes the two of you
+  friends straight away — the link was the consent
+  ([ADR-0029](docs/adr/0029-rate-limits-per-account-and-invite-acceptance.md)).
+- **Notifications** — a bell with an unread badge, fed by a single polled `/api/sync`. The cursor is
+  `null` for "from the beginning", **never an empty string** — DynamoDB rejects an empty string as a
+  key value, so `sk > ''` is a 500 rather than an unbounded query. The in-memory repositories now
+  refuse it too: a stand-in that is *more permissive* than the real database does not simulate it, it
+  hides it, and that is how this shipped ([ADR-0039](docs/adr/0039-empty-key-cursor.md)). App Runner
+  supports neither WebSockets nor long-lived streams, so polling is the only option; it stops
+  entirely while the tab is hidden ([ADR-0025](docs/adr/0025-notifications-by-polling.md)). Chat and
+  co-op will add fields to the same response rather than endpoints of their own.
+- **Chat** — one-to-one messages between friends. The conversation id is derived from the two user
+  ids server-side and never accepted from a client, so no request can name a conversation the caller
+  is not part of; friendship is re-checked on every read and write, so blocking closes an open
+  window ([ADR-0026](docs/adr/0026-chat.md)).
+- **Leaderboard** — ranked by rooms solved, then finishing time, then hints, and derived from what
+  the game already records rather than a separate score table
+  ([ADR-0027](docs/adr/0027-friends-leaderboard.md)). Two scopes: **Friends**, which is the default,
+  and **Everyone** ([ADR-0034](docs/adr/0034-global-leaderboard.md)). The global board shows only
+  players who have actually started, and is the one **table scan** in the app — capped at 200, and
+  the reason the instance role needs `dynamodb:Scan`. It returns a **top ten plus your own row** if
+  you are outside it, so nobody is missing from their own board
+  ([ADR-0036](docs/adr/0036-global-board-is-a-top-ten.md)). Position comes from `rank` on the wire,
+  never from the array index — the eleventh row may be the player in twenty-third place.
+- **Co-op play** — invite a friend into your game, or join theirs. Both see the same progress and
+  either can solve; the log says who did what. A player points at the *host's* user id rather than a
+  synthetic game id, so the games table never had to be re-keyed and no progress was thrown away,
+  and every write is conditional on a version so two simultaneous solves cannot lose an update
+  ([ADR-0028](docs/adr/0028-co-op-play.md)).
+- **The game** — **Start** on the Rooms tab runs an ink-flood transition into the **lobby**: a
+  printed 1950s room your character stands in the middle of and walks around, with an emote bar, a
+  room picker and PLAY ([ADR-0037](docs/adr/0037-lobby-stage-and-rooms.md)). PLAY counts down and
+  drops you into the room. **Room 01 is deliberately empty and walkable**; rooms 02–04 are stubs
+  wired to the real `attempt` and `hint` endpoints — a sub-team writes the puzzle in
+  `rooms/room-0N.tsx` and touches nothing else (ADR-0007).
+  - **Depth is `z-index`, never DOM order.** Sorting the stage's children by
+    position made React reorder keyed nodes as people walked, and **moving a DOM node restarts its
+    CSS animations** — the drop-in replayed dozens of times a minute. A test pins the DOM order as
+    stable.
+  - **An effect may not depend on a callback prop** — wrap it in `useEvent()` first
+    ([ADR-0041](docs/adr/0041-stable-callbacks-in-effects.md)). An inline `onDone={() => …}` is a new
+    function every render, so the effect is rebuilt every render: the countdown never counted and the
+    iris wipe played six times. `react-hooks/exhaustive-deps` does **not** catch this — it checks
+    that deps are complete, not that they are stable.
+  - **The stage** (`src/stage/`) is one component used by the lobby *and* every room. It is a fixed
+    1600×900 space scaled once; everything is placed **by its feet** and sorted by `y`, which is what
+    lets you walk behind the sofa. Flat things (a rug) need a `depth` override or they draw over
+    people's feet.
+  - **Scenery** is 35 generated pieces put through the *character* pipeline unchanged, which is why
+    a potted palm and a player's head match. `scripts/scenery/generate_all.py` is resumable.
+  - **Sound** is synthesised in `audio/sfx.ts` — no files, nothing to license. The `AudioContext` is
+    built on the Start click and nowhere else, because that is the first gesture in the flow and a
+    context made any earlier is refused by Safari.
+  - **Motion is cartoon**: squash, stretch, overshoot. **Nothing fades in** — a linear fade is the
+    tell that reads as machine-made.
+  - **Multiplayer** ([ADR-0038](docs/adr/0038-presence-and-the-iris-wipe.md)) — friends stand in
+    the same lobby and the same room, walk about and emote at each other. Presence is polled at
+    500 ms and **interpolated**, which is the one technique that turns a twice-a-second update into
+    somebody walking. The host holds PLAY; guests follow on their next beat.
+  - **Presence is in memory, and that pins the API to one instance.** `min_size = max_size = 1` in
+    the Terraform is load-bearing now: raise it and friends will vanish for each other, because two
+    instances would each hold half the room. **A deploy clears every lobby and now also dissolves
+    every party** — everyone lands back in their own game ([ADR-0045](docs/adr/0045-membership-is-liveness.md)).
+    The party is capped at **four**, and the cap counts people who are actually there.
+  - **Close the tab and you leave the lobby *and* the game; reload and nothing happened at all.**
+    There is no membership row any more — being in somebody's party is a claim you keep alive by
+    beating, held in one self-emptying map beside your position, so both end by the same expiry.
+    Fifteen seconds if your tab was visible when it went quiet; five minutes if it said it was
+    hidden, because the browser throttles background timers and a throttled tab cannot be told from
+    a closed one. **No `pagehide` beacon**: it never fires on a crash or a force-quit, and it fires
+    on reload too, which would make everyone watching see you blink out and come back. `useLiveness`
+    beats from *every* screen, not just the stage — you can be in a friend's game while reading the
+    leaderboard. Walking out of the lobby takes your character off the stage at once and leaves you
+    in the party, which is the one departure that is a real click rather than a guess.
+  - **Screens unbuild themselves into dots** ([ADR-0044](docs/adr/0044-unbuild-into-dots.md)). The
+    whole app is printed as a halftone, so a panel leaving does not slide or fade: an animated dot
+    mask at the page's own 6px pitch takes its ink away until only its dots are left, those fade into
+    the ground, and the next screen's pieces fly in from their own directions and land. Panels and
+    the controls a player aims at — **not** list rows. `/` gathers, everywhere else is thrown. Opt a
+    block in with `data-piece`, out with `data-piece="no"`. This replaced an iris wipe, which was
+    period-correct and generic to every cartoon ever made.
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions

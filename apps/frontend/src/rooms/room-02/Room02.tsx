@@ -25,7 +25,16 @@ import { EndingSequence } from './components/EndingSequence'
 import { EndScreen } from './components/EndScreen'
 import { Toast } from './components/Toast'
 
-type ModalKind = 'inspect' | 'dna' | 'circuit' | 'recording' | 'terminal' | 'lock' | 'evidence' | 'powerRouter' | null
+type ModalKind =
+  | 'inspect'
+  | 'dna'
+  | 'circuit'
+  | 'recording'
+  | 'terminal'
+  | 'lock'
+  | 'evidence'
+  | 'powerRouter'
+  | null
 type Screen = 'title' | 'game' | 'end'
 type EndingVariant = 'win' | 'death'
 
@@ -36,7 +45,8 @@ function getObjective(state: RoomState): string {
   if (!state.terminalUnlocked) return 'Find facility access, then use the security terminal.'
   if (state.currentLocation === 'lab') return 'Proceed to the Security Control Room.'
   if (!state.evidenceCompiled) return 'Compile proof of the cover-up and extract it.'
-  if (!state.powerRestored) return "Clock's running — restore power to the corridor evacuation route."
+  if (!state.powerRestored)
+    return "Clock's running — restore power to the corridor evacuation route."
   if (!state.locksSolved.has('exit')) {
     return 'Get to the emergency exit and clear the override before time runs out.'
   }
@@ -51,7 +61,9 @@ export function Room02({ onSubmit }: RoomProps) {
   const [staticFlash, setStaticFlash] = useState(false)
 
   const [openModal, setOpenModal] = useState<ModalKind>(null)
-  const [inspectContent, setInspectContent] = useState<{ title: string; lines: string[] } | null>(null)
+  const [inspectContent, setInspectContent] = useState<{ title: string; lines: string[] } | null>(
+    null,
+  )
   const [currentLockKind, setCurrentLockKind] = useState<LockKind | null>(null)
   const [travelLocationName, setTravelLocationName] = useState<string | null>(null)
 
@@ -97,7 +109,8 @@ export function Room02({ onSubmit }: RoomProps) {
       const delay = 6000 + Math.random() * 6000
       timeout = setTimeout(() => {
         if (screenRef.current === 'game') {
-          const line = STORY.ambientLines[Math.floor(Math.random() * STORY.ambientLines.length)]
+          // In bounds by construction — the index is drawn from the array's own length.
+          const line = STORY.ambientLines[Math.floor(Math.random() * STORY.ambientLines.length)]!
           switch (Math.floor(Math.random() * 5)) {
             case 0:
             case 1:
@@ -536,7 +549,10 @@ export function Room02({ onSubmit }: RoomProps) {
       )}
 
       {finalSprintActive && (
-        <FinalSprint background={LOCATIONS[state.currentLocation].background} lines={STORY.exitUnlocked} />
+        <FinalSprint
+          background={LOCATIONS[state.currentLocation].background}
+          lines={STORY.exitUnlocked}
+        />
       )}
 
       <TravelTransition locationName={travelLocationName} />
@@ -557,7 +573,11 @@ export function Room02({ onSubmit }: RoomProps) {
           clearDnaSchedule()
         }}
       />
-      <CircuitModal open={openModal === 'circuit'} onSolved={handleCircuitSolved} onClose={() => setOpenModal(null)} />
+      <CircuitModal
+        open={openModal === 'circuit'}
+        onSolved={handleCircuitSolved}
+        onClose={() => setOpenModal(null)}
+      />
       <RecordingModal
         open={openModal === 'recording'}
         step={state.recordingStep}

@@ -80,6 +80,17 @@ export const API_ERROR_CODES = [
   'PROFILE_INCOMPLETE',
   'VALIDATION_ERROR',
   'SESSION_NOT_FOUND',
+  'PROFILE_NOT_FOUND',
+  /** The invite link is unknown, revoked or expired — all reported identically. */
+  'INVITE_INVALID',
+  'ALREADY_FRIENDS',
+  'CANNOT_FRIEND_SELF',
+  'NOT_FRIENDS',
+  'GAME_CONFLICT',
+  'NOT_HOST',
+  /** The host's game already has as many people in it as a stage can hold. */
+  'PARTY_FULL',
+  'BLOCKED',
   'ROOM_NOT_FOUND',
   'ROOM_LOCKED',
   'ROOM_ALREADY_SOLVED',

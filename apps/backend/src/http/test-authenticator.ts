@@ -21,11 +21,12 @@ export function createTestAuthenticator(): Authenticator {
     async identify(req) {
       return req.header(TEST_USER_HEADER) ?? null
     },
-    async profile(userId) {
+    async profile(_req, userId) {
       return {
         username: userId === TEST_USER_WITHOUT_USERNAME ? null : `handle_${userId}`,
         firstName: userId === TEST_USER_WITHOUT_NAME ? null : 'Test',
         lastName: userId === TEST_USER_WITHOUT_NAME ? null : 'Player',
+        imageUrl: null,
       }
     },
   }

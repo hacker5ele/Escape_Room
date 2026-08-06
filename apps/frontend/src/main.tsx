@@ -1,17 +1,41 @@
-import { StrictMode } from 'react'
+import { StrictMode, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import { ClerkProvider } from '@clerk/react'
 import './index.css'
 import { App } from './App'
+import { AUTH_MODE } from './auth/types'
+import { ClerkAuthProvider } from './auth/ClerkAuthProvider'
+import { LocalAuthProvider } from './auth/LocalAuthProvider'
+import { SyncProvider } from './sync/SyncProvider'
 
-// Publishable keys are meant to be public — they identify the Clerk instance
-// and carry no authority. The secret key never comes near the frontend.
-const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+/**
+ * Chooses the identity provider once, here.
+ *
+ * A single component that branched internally would mean calling Clerk's hooks
+ * conditionally, which React does not allow — so the choice is made by picking
+ * which provider to render, and everything below talks to `useAppAuth()`
+ * without knowing which one it got.
+ */
+function AuthProvider({ children }: { children: ReactNode }) {
+  if (AUTH_MODE === 'local') {
+    return <LocalAuthProvider>{children}</LocalAuthProvider>
+  }
 
-if (!publishableKey) {
-  throw new Error(
-    'VITE_CLERK_PUBLISHABLE_KEY is not set. Copy .env.example to .env and paste the ' +
-      'publishable key from the Clerk dashboard.',
+  // Publishable keys are meant to be public — they identify the Clerk instance
+  // and carry no authority. The secret key never comes near the frontend.
+  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+  if (!publishableKey) {
+    throw new Error(
+      'VITE_CLERK_PUBLISHABLE_KEY is not set. Either paste the publishable key from the Clerk ' +
+        'dashboard, or set VITE_AUTH_MODE=local to develop without Clerk.',
+    )
+  }
+
+  return (
+    <ClerkProvider publishableKey={publishableKey}>
+      <ClerkAuthProvider>{children}</ClerkAuthProvider>
+    </ClerkProvider>
   )
 }
 
@@ -20,8 +44,18 @@ if (!container) throw new Error('Missing #root element in index.html')
 
 createRoot(container).render(
   <StrictMode>
-    <ClerkProvider publishableKey={publishableKey}>
-      <App />
-    </ClerkProvider>
+    <AuthProvider>
+      {/* Inside the auth provider: the poll needs an identity, and stops
+          entirely when there is not one. */}
+      <SyncProvider>
+        {/* Paths, never a hash. Every environment already rewrites unknown
+            paths to index.html — CloudFront in the deployed ones, `try_files`
+            in the docker nginx, Vite's own fallback in development — so a deep
+            link like /room/room-02 loads the app rather than 404ing. */}
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </SyncProvider>
+    </AuthProvider>
   </StrictMode>,
 )

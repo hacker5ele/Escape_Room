@@ -32,3 +32,8 @@ output "deploy_role_arn" {
 output "deploy_role_name" {
   value = aws_iam_role.deploy.name
 }
+
+output "mail_identity_arn" {
+  description = "The verified sending identity each environment is allowed to send as."
+  value       = aws_sesv2_email_identity.main.arn
+}
