@@ -226,3 +226,148 @@ describe('what the leaderboard exposes', () => {
     expect(response.headers['cache-control']).toMatch(/no-store/)
   })
 })
+
+/**
+ * The global board, added in ADR-0034. Same rows, same order, different set of
+ * people — so what is worth testing is who appears rather than how they rank.
+ */
+const globalBoard = async (app: Server, user: string): Promise<LeaderboardEntry[]> => {
+  const response = await as(app, user).get('/api/leaderboard/global')
+  expect(response.status).toBe(200)
+  return response.body.entries as LeaderboardEntry[]
+}
+
+describe('the global leaderboard', () => {
+  it('needs an account, like every other board', async () => {
+    const { app } = buildApp()
+    expect((await request(app).get('/api/leaderboard/global')).status).toBe(401)
+  })
+
+  it('shows people you have never met', async () => {
+    const { app, gameRepository } = buildApp()
+    await signIn(app, ALICE, BOB, CAROL)
+    await setProgress(gameRepository, ALICE, { solved: 1 })
+    await setProgress(gameRepository, BOB, { solved: 3 })
+    await setProgress(gameRepository, CAROL, { solved: 2 })
+
+    // Nobody is anybody's friend here, which is the whole point.
+    const entries = await globalBoard(app, ALICE)
+    expect(entries.map((entry) => entry.profile.userId)).toEqual([BOB, CAROL, ALICE])
+  })
+
+  it('marks your own row, whoever is asking', async () => {
+    const { app, gameRepository } = buildApp()
+    await signIn(app, ALICE, BOB)
+    await setProgress(gameRepository, ALICE, { solved: 1 })
+    await setProgress(gameRepository, BOB, { solved: 2 })
+
+    expect((await globalBoard(app, ALICE)).find((entry) => entry.isMe)?.profile.userId).toBe(ALICE)
+    expect((await globalBoard(app, BOB)).find((entry) => entry.isMe)?.profile.userId).toBe(BOB)
+  })
+
+  it('ranks by the same rule as the friends board', async () => {
+    const { app, gameRepository } = buildApp()
+    await signIn(app, ALICE, BOB, CAROL)
+    await befriend(app, ALICE, BOB)
+    await befriend(app, ALICE, CAROL)
+    // Equal rooms, so the tie-breaks decide: finished beats unfinished, then
+    // fewest hints.
+    await setProgress(gameRepository, ALICE, { solved: 2, hints: 5 })
+    await setProgress(gameRepository, BOB, { solved: 2, hints: 1 })
+    await setProgress(gameRepository, CAROL, { solved: 2, finishedAfterMs: 60_000 })
+
+    // A player must not be above somebody on one board and below them on the
+    // other — the boards differ in who they include, never in how they order.
+    const friends = (await board(app, ALICE)).map((entry) => entry.profile.userId)
+    const everyone = (await globalBoard(app, ALICE)).map((entry) => entry.profile.userId)
+    expect(everyone).toEqual(friends)
+  })
+
+  it('leaves out people who have not started playing', async () => {
+    const { app, gameRepository } = buildApp()
+    await signIn(app, ALICE)
+    await setProgress(gameRepository, ALICE, { solved: 1 })
+
+    // Bob has a profile — he signed up — but never opened a game. Listing him
+    // last in a public ranking would say something untrue about him.
+    await as(app, BOB).get('/api/profiles/me')
+
+    const entries = await globalBoard(app, ALICE)
+    expect(entries.map((entry) => entry.profile.userId)).not.toContain(BOB)
+  })
+
+  it('exposes nothing a friend list would not', async () => {
+    const { app, gameRepository } = buildApp()
+    await signIn(app, ALICE, BOB)
+    await setProgress(gameRepository, ALICE, { solved: 1 })
+    await setProgress(gameRepository, BOB, { solved: 2 })
+
+    // The board is now visible to strangers, so this matters more than it did
+    // when it was friends-only.
+    for (const entry of await globalBoard(app, ALICE)) {
+      expect(Object.keys(entry.profile).sort()).toEqual([
+        'displayName',
+        'imageUrl',
+        'userId',
+        'username',
+      ])
+      expect(JSON.stringify(entry)).not.toMatch(/@|email/i)
+    }
+  })
+})
+
+describe('the global board is a top ten', () => {
+  /** Signs in `count` players and gives each strictly worse progress than the last. */
+  async function crowd(app: Server, repository: InMemoryGameRepository, count: number) {
+    const users = Array.from({ length: count }, (_, index) => `user_p${String(index).padStart(2, '0')}`)
+    await signIn(app, ...users)
+    for (const [index, user] of users.entries()) {
+      // Same room count, increasing hints — so the order is fully determined.
+      await setProgress(repository, user, { solved: 2, hints: index })
+    }
+    return users
+  }
+
+  it('returns ten rows when the leader is asking', async () => {
+    const { app, gameRepository } = buildApp()
+    const users = await crowd(app, gameRepository, 25)
+
+    const entries = await globalBoard(app, users[0]!)
+    expect(entries).toHaveLength(10)
+    expect(entries.map((entry) => entry.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  })
+
+  it('appends your own row when you are outside the ten', async () => {
+    const { app, gameRepository } = buildApp()
+    const users = await crowd(app, gameRepository, 25)
+
+    // Twentieth-best, so nowhere near the top.
+    const entries = await globalBoard(app, users[19]!)
+
+    expect(entries).toHaveLength(11)
+    expect(entries[10]?.isMe).toBe(true)
+    expect(entries[10]?.profile.userId).toBe(users[19])
+    // The real position, not the array index — showing "11" here would be a
+    // confident, wrong number next to somebody's name.
+    expect(entries[10]?.rank).toBe(20)
+  })
+
+  it('does not append twice when you are already in the ten', async () => {
+    const { app, gameRepository } = buildApp()
+    const users = await crowd(app, gameRepository, 25)
+
+    const entries = await globalBoard(app, users[3]!)
+    expect(entries).toHaveLength(10)
+    expect(entries.filter((entry) => entry.isMe)).toHaveLength(1)
+  })
+
+  it('numbers the friends board too, from one', async () => {
+    const { app, gameRepository } = buildApp()
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+    await setProgress(gameRepository, ALICE, { solved: 1 })
+    await setProgress(gameRepository, BOB, { solved: 3 })
+
+    expect((await board(app, ALICE)).map((entry) => entry.rank)).toEqual([1, 2])
+  })
+})

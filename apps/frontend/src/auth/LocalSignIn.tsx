@@ -36,19 +36,19 @@ export function LocalSignIn() {
   }
 
   return (
-    <section className="rounded-lg border border-signal-500/40 bg-vault-900/60 p-6">
-      <p className="font-mono text-xs tracking-[0.2em] text-signal-400 uppercase">
+    <section className="rounded-lg border border-signal-500/40 bg-stock-50/70 p-6">
+      <p className="label text-signal-600">
         Local development
       </p>
-      <h2 className="mt-2 font-mono text-sm text-vault-100">Sign in as anyone</h2>
-      <p className="mt-2 text-sm text-vault-300">
+      <h2 className="mt-2 font-mono text-sm text-stock-900">Sign in as anyone</h2>
+      <p className="mt-2 text-sm text-stock-700">
         No account and no password — this mode exists so you can build rooms without Clerk. Reuse a
         username to pick up that game again.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-5 space-y-4">
         <label className="block">
-          <span className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+          <span className="label">
             Username
           </span>
           <input
@@ -57,13 +57,13 @@ export function LocalSignIn() {
             autoComplete="off"
             maxLength={64}
             required
-            className="mt-1 w-full rounded border border-vault-700 bg-vault-950 px-3 py-2 font-mono text-sm text-vault-100 outline-none focus:border-signal-400"
+            className="mt-1 w-full field"
           />
         </label>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
-            <span className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+            <span className="label">
               First name
             </span>
             <input
@@ -72,12 +72,12 @@ export function LocalSignIn() {
               autoComplete="off"
               maxLength={64}
               required
-              className="mt-1 w-full rounded border border-vault-700 bg-vault-950 px-3 py-2 font-mono text-sm text-vault-100 outline-none focus:border-signal-400"
+              className="mt-1 w-full field"
             />
           </label>
 
           <label className="block">
-            <span className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+            <span className="label">
               Last name
             </span>
             <input
@@ -86,20 +86,20 @@ export function LocalSignIn() {
               autoComplete="off"
               maxLength={64}
               required
-              className="mt-1 w-full rounded border border-vault-700 bg-vault-950 px-3 py-2 font-mono text-sm text-vault-100 outline-none focus:border-signal-400"
+              className="mt-1 w-full field"
             />
           </label>
         </div>
 
         {error && (
-          <p role="alert" className="font-mono text-sm text-alarm-400">
+          <p role="alert" className="font-mono text-sm text-signal-600">
             {error}
           </p>
         )}
 
         <button
           type="submit"
-          className="rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300"
+          className="btn"
         >
           Enter
         </button>

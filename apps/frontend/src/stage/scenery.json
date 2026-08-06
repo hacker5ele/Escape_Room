@@ -1,0 +1,148 @@
+{
+  "stage": [
+    1600,
+    900
+  ],
+  "pieces": {
+    "lobby-wall": {
+      "w": 1600,
+      "h": 1621
+    },
+    "lobby-floor": {
+      "w": 1600,
+      "h": 749
+    },
+    "lobby-window": {
+      "w": 287,
+      "h": 420
+    },
+    "lobby-lamp": {
+      "w": 247,
+      "h": 400
+    },
+    "lobby-palm": {
+      "w": 371,
+      "h": 380
+    },
+    "lobby-armchair": {
+      "w": 214,
+      "h": 230
+    },
+    "lobby-sofa": {
+      "w": 370,
+      "h": 240
+    },
+    "lobby-table": {
+      "w": 149,
+      "h": 160
+    },
+    "lobby-clock": {
+      "w": 116,
+      "h": 120
+    },
+    "lobby-picture-a": {
+      "w": 96,
+      "h": 130
+    },
+    "lobby-picture-b": {
+      "w": 88,
+      "h": 110
+    },
+    "lobby-rug": {
+      "w": 218,
+      "h": 120
+    },
+    "lobby-coatstand": {
+      "w": 190,
+      "h": 430
+    },
+    "lobby-radiator": {
+      "w": 173,
+      "h": 160
+    },
+    "lobby-bin": {
+      "w": 96,
+      "h": 110
+    },
+    "lobby-sign": {
+      "w": 130,
+      "h": 140
+    },
+    "vault-wall": {
+      "w": 1600,
+      "h": 1541
+    },
+    "vault-floor": {
+      "w": 1600,
+      "h": 818
+    },
+    "vault-door": {
+      "w": 511,
+      "h": 520
+    },
+    "vault-crate-a": {
+      "w": 170,
+      "h": 170
+    },
+    "vault-crate-b": {
+      "w": 168,
+      "h": 140
+    },
+    "vault-barrel": {
+      "w": 128,
+      "h": 180
+    },
+    "vault-pipes": {
+      "w": 350,
+      "h": 320
+    },
+    "vault-cabinet": {
+      "w": 160,
+      "h": 300
+    },
+    "vault-desk": {
+      "w": 249,
+      "h": 210
+    },
+    "vault-bulb": {
+      "w": 279,
+      "h": 280
+    },
+    "vault-vent": {
+      "w": 174,
+      "h": 130
+    },
+    "vault-chain": {
+      "w": 48,
+      "h": 320
+    },
+    "vault-warning": {
+      "w": 137,
+      "h": 130
+    },
+    "vault-clock": {
+      "w": 129,
+      "h": 130
+    },
+    "vault-locker": {
+      "w": 140,
+      "h": 330
+    },
+    "splat-a": {
+      "w": 296,
+      "h": 300
+    },
+    "splat-b": {
+      "w": 316,
+      "h": 300
+    },
+    "splat-c": {
+      "w": 299,
+      "h": 300
+    },
+    "burst": {
+      "w": 346,
+      "h": 340
+    }
+  }
+}

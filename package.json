@@ -16,7 +16,7 @@
     "dev": "concurrently --names shared,backend,frontend --prefix-colors magenta,cyan,green \"npm:dev:shared\" \"npm:dev:backend\" \"npm:dev:frontend\"",
     "dev:shared": "npm run dev --workspace @escape-room/shared",
     "dev:backend": "AUTH_MODE=local npm run dev --workspace @escape-room/backend",
-    "dev:frontend": "npm run dev --workspace @escape-room/frontend",
+    "dev:frontend": "VITE_AUTH_MODE=local npm run dev --workspace @escape-room/frontend",
     "build": "npm run build --workspace @escape-room/shared && npm run build --workspace @escape-room/backend && npm run build --workspace @escape-room/frontend",
     "pretypecheck": "npm run build --workspace @escape-room/shared",
     "typecheck": "npm run typecheck --workspaces --if-present",

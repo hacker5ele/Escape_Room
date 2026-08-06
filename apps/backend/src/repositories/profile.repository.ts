@@ -5,6 +5,7 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
+  ScanCommand,
 } from '@aws-sdk/lib-dynamodb'
 import {
   normalizeUsername,
@@ -26,6 +27,16 @@ export interface ProfileRepository {
   findByUsername(username: string): Promise<PublicProfile | null>
   /** Bulk lookup for rendering a list of people. Order is not guaranteed. */
   findManyByUserId(userIds: string[]): Promise<PublicProfile[]>
+  /**
+   * Everybody, up to `limit`. Order is not guaranteed.
+   *
+   * The only unbounded read in the app, and the only one that has to look at
+   * every row rather than following a key — there is no index of "all players"
+   * because until the global leaderboard there was no reason to ask. The limit
+   * is required rather than optional so no caller can accidentally ask for the
+   * whole table as it grows.
+   */
+  listAll(limit: number): Promise<PublicProfile[]>
 }
 
 /** What DynamoDB stores: the profile, plus the lower-cased key the index is on. */
@@ -60,6 +71,10 @@ export class InMemoryProfileRepository implements ProfileRepository {
       .map((userId) => this.#byUserId.get(userId))
       .filter((profile): profile is PublicProfile => profile !== undefined)
       .map((profile) => structuredClone(profile))
+  }
+
+  async listAll(limit: number): Promise<PublicProfile[]> {
+    return [...this.#byUserId.values()].slice(0, limit).map((profile) => structuredClone(profile))
   }
 }
 
@@ -140,6 +155,39 @@ export class DynamoProfileRepository implements ProfileRepository {
       .flat()
       .map(parse)
       .filter((profile): profile is PublicProfile => profile !== null)
+  }
+
+  async listAll(limit: number): Promise<PublicProfile[]> {
+    // A Scan, which is exactly what it looks like: DynamoDB reads every item
+    // and charges for all of them. It is acceptable here only because this
+    // table holds one small row per player and the result is capped — but it
+    // is the one call in the app whose cost grows with the number of accounts,
+    // so if the global board ever gets slow this is why.
+    //
+    // Paged rather than one call: `Limit` bounds items *examined*, not
+    // returned, so a single Scan can come back short while more rows exist.
+    const profiles: PublicProfile[] = []
+    let startKey: Record<string, unknown> | undefined
+
+    do {
+      const result = await this.#client.send(
+        new ScanCommand({
+          TableName: this.#tableName,
+          Limit: Math.min(limit * 2, 200),
+          ExclusiveStartKey: startKey,
+        }),
+      )
+
+      for (const item of result.Items ?? []) {
+        const profile = parse(item)
+        if (profile) profiles.push(profile)
+        if (profiles.length >= limit) return profiles
+      }
+
+      startKey = result.LastEvaluatedKey
+    } while (startKey)
+
+    return profiles
   }
 }
 

@@ -70,11 +70,24 @@ await check('serves the built app', async () => {
 
 await check('SPA deep links fall back to index.html', async () => {
   // A CloudFront Function rewrites extensionless paths. If this breaks,
-  // reloading inside a room shows an S3 XML error instead of the app.
-  const response = await fetch(`${baseUrl}/room/room-02`, { redirect: 'follow' })
-  assert(response.status === 200, `expected 200, got ${response.status}`)
-  const html = await response.text()
-  assert(html.includes('<div id="root">'), 'deep link did not return the app shell')
+  // reloading anywhere but the front page shows an S3 XML error instead of the
+  // app — which is the whole promise of path routing (ADR-0040).
+  const paths = [
+    '/room/room-02',
+    '/lobby',
+    '/friends',
+    '/leaderboard',
+    '/activity',
+    '/character?head=head-01&body=body-01',
+    '/invite/abc123',
+  ]
+
+  for (const path of paths) {
+    const response = await fetch(`${baseUrl}${path}`, { redirect: 'follow' })
+    assert(response.status === 200, `${path} returned ${response.status}, expected 200`)
+    const html = await response.text()
+    assert(html.includes('<div id="root">'), `${path} did not return the app shell`)
+  }
 })
 
 await check('a missing asset still 404s', async () => {
@@ -110,6 +123,35 @@ await check('the rooms are closed to anyone not signed in', async () => {
   for (const path of ['/api/rooms', '/api/rooms/room-01', '/api/sessions/me']) {
     const response = await api(path)
     assert(response.status === 401, `${path} returned ${response.status}, expected 401`)
+  }
+})
+
+await check('every signed-in endpoint answers 401, and never 500', async () => {
+  // The gap this closes: every other check here is anonymous, so a deploy could
+  // go green while the whole signed-in half of the app was broken — which is
+  // exactly what happened when `/api/sync` 500ed on its first poll for days.
+  //
+  // A smoke test cannot hold a Clerk token, so it cannot prove those endpoints
+  // *work*. It can prove they are mounted and that the handler reaches its auth
+  // check without falling over on the way, which is the difference between a
+  // 401 and a 500 — and a 500 here means something is wrong before anybody has
+  // even signed in.
+  const guarded = [
+    ['GET', '/api/sync'],
+    ['GET', '/api/friends'],
+    ['GET', '/api/party'],
+    ['GET', '/api/leaderboard/friends'],
+    ['GET', '/api/leaderboard/global'],
+    ['GET', '/api/profiles/me'],
+    ['POST', '/api/stage/heartbeat'],
+  ]
+
+  for (const [method, path] of guarded) {
+    const response = await api(path, method === 'POST' ? { method, body: {} } : undefined)
+    assert(
+      response.status === 401,
+      `${method} ${path} returned ${response.status}, expected 401 — a 5xx here means the route is broken, not protected`,
+    )
   }
 })
 

@@ -57,6 +57,8 @@ import { createSyncRoutes } from './routes/sync.routes.js'
 import { createChatRoutes } from './routes/chat.routes.js'
 import { createLeaderboardRoutes } from './routes/leaderboard.routes.js'
 import { createPartyRoutes } from './routes/party.routes.js'
+import { createPresenceRoutes } from './routes/presence.routes.js'
+import { PresenceService } from './services/presence.service.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
 import {
   createAttemptRateLimiter,
@@ -166,13 +168,20 @@ export function createApp(options: AppOptions = {}): Express {
     profileService,
     notificationService,
   )
+
+  // In memory, deliberately: a position is meaningless a second later and a
+  // lobby does not outlive the process. Sound only because App Runner is pinned
+  // to one instance — see ADR-0038.
+  const presenceService = new PresenceService(partyService, profileService)
   const chatService = new ChatService(
     messageRepository,
     friendService,
     profileService,
     notificationService,
   )
-  const inviteService = new InviteService(inviteRepository, profileService)
+  // The party is passed so a link minted from the lobby can describe it — and
+  // is constructed above, so the order here matters.
+  const inviteService = new InviteService(inviteRepository, profileService, partyService)
   const roomService = new RoomService(gameService)
 
   const app = express()
@@ -232,6 +241,21 @@ export function createApp(options: AppOptions = {}): Express {
   )
 
   app.use(
+    '/api/stage',
+    createPresenceRoutes(
+      presenceService,
+      partyService,
+      gameService,
+      authenticator,
+      // Its own limiter, generous because this is polled twice a second while
+      // somebody is on the stage: 240/minute is two per second with headroom,
+      // and it is deliberately not shared with `/api/sync`, which is polled
+      // twenty times more slowly and would be starved by the same budget.
+      createRateLimiter({ limit: 240, authenticator, message: 'Slow down.' }),
+    ),
+  )
+
+  app.use(
     '/api/leaderboard',
     createLeaderboardRoutes(
       leaderboardService,
@@ -268,6 +292,8 @@ export function createApp(options: AppOptions = {}): Express {
       // stays keyed by IP, because a caller with no account offers nothing else
       // to key on.
       createRateLimiter({ limit: 20, message: 'Too many requests. Wait a moment.' }),
+      // So a link minted from the lobby can join the party as well as befriend.
+      partyService,
     ),
   )
   app.use(

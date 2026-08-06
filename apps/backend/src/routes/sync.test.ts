@@ -231,3 +231,66 @@ describe('caching', () => {
     expect(response.headers['cache-control']).toMatch(/private/)
   })
 })
+
+/**
+ * The bug that took `/api/sync` down in production while every test passed.
+ *
+ * `cursorFor` used `''` to mean "from the beginning" and passed it straight into
+ * a DynamoDB key condition. DynamoDB refuses an empty string as a key value —
+ * *"The AttributeValue for a key attribute cannot contain an empty string
+ * value"* — so the first poll of every session was a 500.
+ *
+ * Nothing caught it because the in-memory repository compared against `''`
+ * quite happily. It is now as strict as the real database, which is what turns
+ * this class of mistake into a test failure instead of an outage.
+ */
+describe('the first poll of a session', () => {
+  it('works with no cursor at all', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE)
+
+    // No `since`: exactly what the frontend sends on the very first poll.
+    const response = await as(app, ALICE).get('/api/sync')
+    expect(response.status).toBe(200)
+    expect(response.body.notifications).toEqual([])
+  })
+
+  it('works with an empty cursor', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE)
+    expect((await as(app, ALICE).get('/api/sync?since=')).status).toBe(200)
+  })
+
+  it('works with a cursor that is not a date', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE)
+    // Treated as absent rather than as a key. A bad cursor should cost one
+    // large page, not a 500.
+    expect((await as(app, ALICE).get('/api/sync?since=yesterday')).status).toBe(200)
+  })
+
+  it('still returns notifications when there is no cursor', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE, BOB)
+    // Alice asks; Bob is the one who gets told about it.
+    await askToBeFriends(app)
+
+    const body = (await as(app, BOB).get('/api/sync')).body
+    expect(body.notifications.length).toBeGreaterThan(0)
+    expect(body.unreadCount).toBeGreaterThan(0)
+  })
+})
+
+describe('the in-memory repository is as strict as DynamoDB', () => {
+  it('refuses an empty-string cursor rather than quietly accepting it', async () => {
+    const { InMemoryNotificationRepository } = await import(
+      '../repositories/notification.repository.js'
+    )
+    const repository = new InMemoryNotificationRepository()
+
+    // The whole point: a stand-in that is more permissive than the real thing
+    // does not simulate the database, it hides it.
+    await expect(repository.listSince('user_alice', '', 10)).rejects.toThrow(/empty string/i)
+    await expect(repository.listSince('user_alice', null, 10)).resolves.toEqual([])
+  })
+})

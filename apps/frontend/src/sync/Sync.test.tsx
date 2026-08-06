@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 
 let signedIn = true
 
@@ -12,6 +13,8 @@ vi.mock('../auth/useAppAuth', () => ({
     profile: signedIn ? { username: 'alice', firstName: 'Alice', lastName: 'Example' } : null,
     authHeaders: () => Promise.resolve({ 'X-Dev-User': 'user_alice' }),
     updateProfile: vi.fn(),
+    storedCharacter: { head: 'head-01', body: 'body-01', arm: 'arm-01', leg: 'leg-01' },
+    saveCharacter: vi.fn(),
     signOut: vi.fn(),
   }),
 }))
@@ -51,10 +54,13 @@ function stubSync(pages: Array<ReturnType<typeof syncBody>> | (() => Response)) 
 }
 
 function renderBell() {
+  // A party invite row offers a "Join their game" button, which navigates.
   return render(
-    <SyncProvider>
-      <NotificationBell />
-    </SyncProvider>,
+    <MemoryRouter>
+      <SyncProvider>
+        <NotificationBell />
+      </SyncProvider>
+    </MemoryRouter>,
   )
 }
 

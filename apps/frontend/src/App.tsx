@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { SignInButton, SignUpButton, UserButton } from '@clerk/react'
-import type { GameSession } from '@escape-room/shared'
+import type { GameSession, RoomId } from '@escape-room/shared'
 import { ROOM_IDS } from '@escape-room/shared'
 import { ApiRequestError, startOrResumeGame } from './api/game'
 import { ProfileForm } from './account/ProfileForm'
@@ -13,20 +13,58 @@ import { inviteTokenFromPath } from './routing'
 import { NotificationBell } from './sync/NotificationBell'
 import { LocalSignIn } from './auth/LocalSignIn'
 import { useAppAuth } from './auth/useAppAuth'
+import { ROOM_REGISTRY } from './rooms/registry'
 
-/**
- * The scaffold page, behind a sign-in gate.
- *
- * Signed out you get the door and nothing else. Signed in, the app asks the API
- * to open your game — which proves the whole chain: an identity provider issues
- * a credential, the browser sends it, the API verifies it and finds the game
- * belonging to that account.
- *
- * The rooms replace the panel below. See ADR-0007 for where each sub-team's
- * code goes.
- */
+const PREVIEW_ROOM_ID = new URLSearchParams(window.location.search).get('preview') as RoomId | null
+
+const PREVIEW_DOOR_SOLUTION = 108
+
+const FAKE_SESSION: GameSession = {
+  id: '00000000-0000-0000-0000-000000000000',
+  userId: 'preview-user',
+  username: 'preview',
+  playerName: 'Preview',
+  solvedRooms: [],
+  startedAt: new Date().toISOString(),
+  finishedAt: null,
+  hintsUsed: 0,
+  events: [],
+  version: 0,
+}
+
+function PreviewRoom({ roomId }: { roomId: RoomId }) {
+  const RoomComponent = ROOM_REGISTRY[roomId]
+  if (!RoomComponent) {
+    return <p className="p-8 font-mono text-sm text-vault-300">No frontend registered for {roomId}.</p>
+  }
+  return (
+    <Suspense fallback={<p className="p-8 font-mono text-sm text-vault-300">Loading room…</p>}>
+      <RoomComponent
+        room={{
+          id: roomId,
+          order: 4,
+          title: 'The Door',
+          intro: 'The last door.',
+          prompt: 'The lock wants a number.',
+          data: { digits: [4, 8, 15, 16, 23, 42] },
+          hintsAvailable: 3,
+        }}
+        onSubmit={async (answer: unknown) => {
+          const correct = Number(answer) === PREVIEW_DOOR_SOLUTION
+          return { correct, feedback: correct ? undefined : 'Preview mode — checked locally, no backend involved.', session: FAKE_SESSION }
+        }}
+        onHint={async () => ({ hint: 'Preview mode — no real hints.', hintsUsed: 0, hintsRemaining: 0 })}
+      />
+    </Suspense>
+  )
+}
+
 export function App() {
   const { isLoaded, isSignedIn, mode } = useAppAuth()
+
+  if (PREVIEW_ROOM_ID) {
+    return <PreviewRoom roomId={PREVIEW_ROOM_ID} />
+  }
 
   // Read after the hook, never before it, so the hook order cannot change.
   const inviteToken = inviteTokenFromPath(window.location.pathname)

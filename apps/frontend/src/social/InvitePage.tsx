@@ -7,11 +7,14 @@ import { useAppAuth } from '../auth/useAppAuth'
 import { LocalSignIn } from '../auth/LocalSignIn'
 import { Avatar } from './Avatar'
 
+/** Set when the link came from a lobby: they want you to play, now. */
+type PartyPreview = { size: number; full: boolean } | null
+
 type State =
   | { kind: 'loading' }
   | { kind: 'invalid'; message: string }
-  | { kind: 'ready'; inviter: PublicProfile }
-  | { kind: 'accepted'; inviter: PublicProfile }
+  | { kind: 'ready'; inviter: PublicProfile; party: PartyPreview }
+  | { kind: 'accepted'; inviter: PublicProfile; party: PartyPreview }
 
 /**
  * What somebody sees when they open an invite link.
@@ -34,7 +37,7 @@ export function InvitePage({ token }: { token: string }) {
 
     previewInvite(token)
       .then((preview) => {
-        if (!cancelled) setState({ kind: 'ready', inviter: preview.inviter })
+        if (!cancelled) setState({ kind: 'ready', inviter: preview.inviter, party: preview.party })
       })
       .catch((error: unknown) => {
         if (cancelled) return
@@ -57,7 +60,9 @@ export function InvitePage({ token }: { token: string }) {
     try {
       await acceptInvite(await authRef.current(), token)
       setState((current) =>
-        current.kind === 'ready' ? { kind: 'accepted', inviter: current.inviter } : current,
+        current.kind === 'ready'
+          ? { kind: 'accepted', inviter: current.inviter, party: current.party }
+          : current,
       )
     } catch (error) {
       setState({
@@ -71,15 +76,15 @@ export function InvitePage({ token }: { token: string }) {
 
   return (
     <Shell>
-      {state.kind === 'loading' && <p className="font-mono text-sm text-vault-300">Loading…</p>}
+      {state.kind === 'loading' && <p className="font-mono text-sm text-stock-700">Loading…</p>}
 
       {state.kind === 'invalid' && (
         <>
-          <h2 className="font-mono text-sm text-vault-100">That link does not work</h2>
-          <p className="mt-2 text-sm text-vault-300">{state.message}</p>
+          <h2 className="font-mono text-sm text-stock-900">That link does not work</h2>
+          <p className="mt-2 text-sm text-stock-700">{state.message}</p>
           <a
             href="/"
-            className="mt-5 inline-block rounded border border-vault-700 px-4 py-2 font-mono text-sm text-vault-100 transition hover:border-vault-500"
+            className="mt-5 inline-block btn btn-ghost"
           >
             Go to the escape room
           </a>
@@ -88,14 +93,14 @@ export function InvitePage({ token }: { token: string }) {
 
       {state.kind === 'accepted' && (
         <>
-          <Inviter profile={state.inviter} />
-          <p className="mt-4 text-sm text-vault-300">
+          <Inviter profile={state.inviter} party={state.party} />
+          <p className="mt-4 text-sm text-stock-700">
             Done — {state.inviter.displayName} has been asked to confirm. You will see them in your
             friend list once they do.
           </p>
           <a
             href="/"
-            className="mt-5 inline-block rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300"
+            className="mt-5 inline-block btn"
           >
             Go to the escape room
           </a>
@@ -104,9 +109,9 @@ export function InvitePage({ token }: { token: string }) {
 
       {state.kind === 'ready' && (
         <>
-          <Inviter profile={state.inviter} />
+          <Inviter profile={state.inviter} party={state.party} />
 
-          {!isLoaded && <p className="mt-5 font-mono text-sm text-vault-300">Loading…</p>}
+          {!isLoaded && <p className="mt-5 font-mono text-sm text-stock-700">Loading…</p>}
 
           {isLoaded && isSignedIn && (
             <div className="mt-5 flex flex-wrap gap-3">
@@ -114,13 +119,13 @@ export function InvitePage({ token }: { token: string }) {
                 type="button"
                 disabled={busy}
                 onClick={() => void accept()}
-                className="rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300 disabled:opacity-50"
+                className="btn"
               >
-                Accept
+                {state.party && !state.party.full ? 'Join their game' : 'Accept'}
               </button>
               <a
                 href="/"
-                className="rounded border border-vault-700 px-4 py-2 font-mono text-sm text-vault-100 transition hover:border-vault-500"
+                className="btn btn-ghost"
               >
                 No thanks
               </a>
@@ -139,7 +144,7 @@ export function InvitePage({ token }: { token: string }) {
               <SignUpButton mode="modal">
                 <button
                   type="button"
-                  className="rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300"
+                  className="btn"
                 >
                   Create an account to accept
                 </button>
@@ -147,7 +152,7 @@ export function InvitePage({ token }: { token: string }) {
               <SignInButton mode="modal">
                 <button
                   type="button"
-                  className="rounded border border-vault-700 px-4 py-2 font-mono text-sm text-vault-100 transition hover:border-vault-500"
+                  className="btn btn-ghost"
                 >
                   I already have one
                 </button>
@@ -160,14 +165,22 @@ export function InvitePage({ token }: { token: string }) {
   )
 }
 
-function Inviter({ profile }: { profile: PublicProfile }) {
+function Inviter({ profile, party }: { profile: PublicProfile; party: PartyPreview }) {
   return (
     <div className="flex items-center gap-4">
       <Avatar subject={profile} size={64} />
       <div className="min-w-0">
-        <p className="font-mono text-lg text-vault-100">{profile.displayName}</p>
-        <p className="font-mono text-sm text-vault-500">@{profile.username}</p>
-        <p className="mt-1 text-sm text-vault-300">wants to be your friend.</p>
+        <p className="font-mono text-lg text-stock-900">{profile.displayName}</p>
+        <p className="font-mono text-sm text-stock-600">@{profile.username}</p>
+        {/* A party link asks a different question from a friend link, so it
+            gets a different sentence — and a different button below. */}
+        <p className="mt-1 text-sm text-stock-700">
+          {party
+            ? party.full
+              ? 'wants you to play — but their game is full right now.'
+              : `wants you to play. ${party.size} already in.`
+            : 'wants to be your friend.'}
+        </p>
       </div>
     </div>
   )
@@ -175,12 +188,12 @@ function Inviter({ profile }: { profile: PublicProfile }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-8 px-6 py-16">
+    <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col gap-8 px-5 py-10 sm:px-6 sm:py-16">
       <header className="space-y-3">
-        <p className="font-mono text-xs tracking-[0.3em] text-signal-400 uppercase">Invitation</p>
-        <h1 className="font-mono text-3xl font-semibold text-vault-100">Der digitale Escape Room</h1>
+        <p className="font-mono text-xs tracking-[0.3em] text-signal-600 uppercase">Invitation</p>
+        <h1 className="font-mono text-3xl font-semibold text-stock-900">Der digitale Escape Room</h1>
       </header>
-      <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">{children}</section>
+      <section className="pane p-6">{children}</section>
     </main>
   )
 }

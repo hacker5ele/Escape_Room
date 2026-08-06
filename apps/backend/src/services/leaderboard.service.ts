@@ -10,10 +10,33 @@ import type { ProfileService } from './profile.service.js'
  * There is nothing to keep in step, and a player's row cannot disagree with
  * their own progress screen.
  *
- * Scoped to friends on purpose. A global leaderboard in a class is a way to
- * make the slowest person feel bad in public; among people who chose each
- * other it is a reason to keep playing.
+ * Two boards, and they answer different questions. "Friends" is how you are
+ * doing among people who chose each other, which is a reason to keep playing.
+ * "Global" is where the room as a whole has got to. See ADR-0034 — the friends
+ * board was originally the only one, on the grounds that a class-wide ranking
+ * is a way to make the slowest person feel bad in public, and that concern has
+ * not gone away; it is why Friends stays the default view.
  */
+
+/**
+ * How many players the global board will look at.
+ *
+ * There is no index of "all players", so this is a table scan — the only one in
+ * the app — and the cap is what stops it growing without limit. Comfortably
+ * above a school's worth of accounts, and the board shows fewer than this.
+ */
+export const GLOBAL_LEADERBOARD_LIMIT = 200
+
+/**
+ * How many rows the global board returns.
+ *
+ * Ten, plus your own row if you are not in the ten. That exception is the whole
+ * reason a top-ten board is acceptable here: ADR-0034 rejected one outright
+ * because it hides a player from themselves, and somebody in eleventh place
+ * seeing no row at all is worse than seeing a low one.
+ */
+export const GLOBAL_LEADERBOARD_ROWS = 10
+
 export class LeaderboardService {
   constructor(
     private readonly games: GameRepository,
@@ -40,7 +63,49 @@ export class LeaderboardService {
       }),
     )
 
-    return entries.sort(compare)
+    return ranked(entries.sort(compare))
+  }
+
+  /**
+   * Everybody who has a profile, best first.
+   *
+   * Built from the same parts as the friends board and sorted by the same rule,
+   * so a player cannot be above someone on one board and below them on the
+   * other.
+   *
+   * Only players who have actually started a game appear. Somebody who
+   * registered and never opened a room is not "last" — they are not playing,
+   * and listing them at the bottom of a public ranking says something untrue
+   * about them.
+   */
+  async global(userId: string): Promise<LeaderboardEntry[]> {
+    const profiles = await this.profiles.listAll(GLOBAL_LEADERBOARD_LIMIT)
+
+    // One batched read rather than one read per player. Asking for each game by
+    // key meant up to two hundred round trips for a single page, which is what
+    // made this board slow enough to notice.
+    const games = await this.games.findManyByUserId(profiles.map((profile) => profile.userId))
+    const gameOf = new Map(games.map((game) => [game.userId, game]))
+
+    const ordered = profiles
+      .map((profile) => {
+        const game = gameOf.get(profile.userId)
+        // Only players who have actually started. Somebody who registered and
+        // never opened a room is not last — they are not playing.
+        return game ? toEntry(profile, game, profile.userId === userId) : null
+      })
+      .filter((entry): entry is Omit<LeaderboardEntry, 'rank'> => entry !== null)
+      .sort(compare)
+
+    const all = ranked(ordered)
+    const top = all.slice(0, GLOBAL_LEADERBOARD_ROWS)
+    if (top.some((entry) => entry.isMe)) return top
+
+    // Outside the ten: your own row is appended rather than the board being
+    // extended, so the list stays ten-plus-you rather than growing for
+    // whoever is furthest down.
+    const mine = all.find((entry) => entry.isMe)
+    return mine ? [...top, mine] : top
   }
 }
 
@@ -48,7 +113,7 @@ function toEntry(
   profile: PublicProfile,
   game: GameSession | null,
   isMe: boolean,
-): LeaderboardEntry {
+): Omit<LeaderboardEntry, 'rank'> {
   if (!game) {
     // Somebody who has a profile but has not opened a game yet. Shown at the
     // bottom rather than hidden — they are still your friend.
@@ -70,6 +135,16 @@ function toEntry(
 }
 
 /**
+ * Stamps positions onto an already-sorted list.
+ *
+ * Done once, here, so both boards agree on what a rank means and neither has to
+ * remember to number its own rows.
+ */
+function ranked(entries: Omit<LeaderboardEntry, 'rank'>[]): LeaderboardEntry[] {
+  return entries.map((entry, index) => ({ ...entry, rank: index + 1 }))
+}
+
+/**
  * Most rooms first, then whoever finished fastest, then fewest hints.
  *
  * Rooms come first because that is what the game is about. Time only separates
@@ -77,7 +152,7 @@ function toEntry(
  * has actually finished — ranking an unfinished game by elapsed time would put
  * whoever started most recently on top.
  */
-function compare(a: LeaderboardEntry, b: LeaderboardEntry): number {
+function compare(a: Omit<LeaderboardEntry, 'rank'>, b: Omit<LeaderboardEntry, 'rank'>): number {
   if (a.solvedRooms !== b.solvedRooms) return b.solvedRooms - a.solvedRooms
 
   if (a.finishedInMs !== null && b.finishedInMs !== null && a.finishedInMs !== b.finishedInMs) {

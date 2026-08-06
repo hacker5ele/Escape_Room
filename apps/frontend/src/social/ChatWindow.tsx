@@ -126,18 +126,21 @@ export function ChatWindow({
   }
 
   return (
-    <section className="flex h-96 flex-col rounded-lg border border-vault-800 bg-vault-900/60">
-      <header className="flex items-center gap-3 border-b border-vault-800 p-3">
+    // Tall enough to hold a conversation, never taller than the screen. A
+    // fixed 24rem overflowed a phone held sideways, which is exactly when two
+    // people are most likely to be typing at each other.
+    <section className="pane flex h-[min(24rem,70svh)] flex-col">
+      <header className="flex items-center gap-3 border-b border-stock-900/30 p-3">
         <Avatar subject={friend} size={32} />
         <div className="min-w-0 flex-1">
-          <p className="truncate font-mono text-sm text-vault-100">{friend.displayName}</p>
-          <p className="truncate font-mono text-xs text-vault-500">@{friend.username}</p>
+          <p className="truncate font-mono text-sm text-stock-900">{friend.displayName}</p>
+          <p className="truncate font-mono text-xs text-stock-600">@{friend.username}</p>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close conversation"
-          className="rounded border border-vault-700 px-2 py-1 font-mono text-xs text-vault-300 transition hover:border-vault-500"
+          className="rounded border border-stock-900/40 px-2 py-1 font-mono text-xs text-stock-700 transition hover:border-stock-900/70"
         >
           Close
         </button>
@@ -145,7 +148,7 @@ export function ChatWindow({
 
       <div className="flex-1 space-y-2 overflow-y-auto p-3">
         {messages.length === 0 && (
-          <p className="text-sm text-vault-500">No messages yet. Say something.</p>
+          <p className="text-sm text-stock-600">No messages yet. Say something.</p>
         )}
         {messages.map((message) => (
           <Bubble key={message.id} message={message} mine={message.authorUserId === meUserId} />
@@ -154,13 +157,13 @@ export function ChatWindow({
       </div>
 
       {error && (
-        <p role="alert" className="border-t border-red-900 bg-red-950/40 p-2 text-sm text-red-200">
+        <p role="alert" className="border-t border-signal-500 bg-signal-100/70 p-2 text-sm text-signal-700">
           {error}
         </p>
       )}
 
       <form
-        className="flex gap-2 border-t border-vault-800 p-3"
+        className="flex gap-2 border-t border-stock-900/30 p-3"
         onSubmit={(event) => {
           event.preventDefault()
           void submit()
@@ -173,12 +176,12 @@ export function ChatWindow({
           aria-label={`Message ${friend.displayName}`}
           maxLength={MAX_MESSAGE_LENGTH}
           autoComplete="off"
-          className="min-w-0 flex-1 rounded border border-vault-700 bg-vault-950 px-3 py-2 font-mono text-sm text-vault-100 placeholder:text-vault-600"
+          className="min-w-0 flex-1 field"
         />
         <button
           type="submit"
           disabled={sending || draft.trim().length === 0}
-          className="rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300 disabled:opacity-50"
+          className="btn"
         >
           Send
         </button>
@@ -192,7 +195,7 @@ function Bubble({ message, mine }: { message: Message; mine: boolean }) {
     <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
-          mine ? 'bg-signal-400 text-vault-950' : 'bg-vault-800 text-vault-100'
+          mine ? 'bg-signal-500 text-stock-50' : 'bg-stock-200 text-stock-900'
         }`}
       >
         {/* Plain text. React escapes it; dangerouslySetInnerHTML must never

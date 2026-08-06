@@ -86,11 +86,11 @@ export function FriendsPanel({
     <>
       <PartyPanel friends={lists.friends} onChanged={onGameChanged} />
 
-      <section className="space-y-5 rounded-lg border border-vault-800 bg-vault-900/60 p-5">
-      <h2 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">Friends</h2>
+      <section className="space-y-5 pane p-5">
+      <h2 className="label">Friends</h2>
 
       {error && (
-        <p role="alert" className="rounded border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
+        <p role="alert" className="border border-signal-500 bg-signal-100/70 p-3 text-sm text-signal-700">
           {error}
         </p>
       )}
@@ -237,12 +237,12 @@ function AddFriend({
         aria-label="Their username"
         autoComplete="off"
         maxLength={64}
-        className="min-w-0 flex-1 rounded border border-vault-700 bg-vault-950 px-3 py-2 font-mono text-sm text-vault-100 placeholder:text-vault-600"
+        className="min-w-0 flex-1 field"
       />
       <button
         type="submit"
         disabled={disabled}
-        className="rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300 disabled:opacity-50"
+        className="btn"
       >
         Add
       </button>
@@ -265,7 +265,7 @@ function InviteLinks({
 
   return (
     <Group title="Invite links">
-      <p className="text-sm text-vault-500">
+      <p className="text-sm text-stock-600">
         Send one of these to somebody who does not have an account yet. They see who invited them
         before deciding.
       </p>
@@ -273,12 +273,12 @@ function InviteLinks({
       {invites.map((invite) => (
         <div
           key={invite.token}
-          className="flex flex-wrap items-center gap-2 rounded border border-vault-800 px-3 py-2"
+          className="flex flex-wrap items-center gap-2 pane-inset px-3 py-2"
         >
-          <code className="min-w-0 flex-1 truncate font-mono text-xs text-vault-300">
+          <code className="min-w-0 flex-1 truncate font-mono text-xs text-stock-700">
             {inviteLink(invite.token)}
           </code>
-          <span className="font-mono text-xs text-vault-600">
+          <span className="font-mono text-xs text-stock-500">
             {invite.useCount === 1 ? '1 join' : `${invite.useCount} joins`}
           </span>
           <Action
@@ -304,7 +304,7 @@ function InviteLinks({
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <h3 className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">{title}</h3>
+      <h3 className="label">{title}</h3>
       {children}
     </div>
   )
@@ -312,11 +312,11 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 
 function Row({ friend, children }: { friend: Friend; children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded border border-vault-800 px-3 py-2">
+    <div className="flex flex-wrap items-center gap-3 pane-inset px-3 py-2">
       <Avatar subject={friend.profile} size={36} />
       <div className="min-w-0 flex-1">
-        <p className="truncate font-mono text-sm text-vault-100">{friend.profile.displayName}</p>
-        <p className="truncate font-mono text-xs text-vault-500">@{friend.profile.username}</p>
+        <p className="truncate font-mono text-sm text-stock-900">{friend.profile.displayName}</p>
+        <p className="truncate font-mono text-xs text-stock-600">@{friend.profile.username}</p>
       </div>
       {children}
     </div>
@@ -341,8 +341,8 @@ function Action({
       disabled={disabled}
       className={
         primary
-          ? 'rounded bg-signal-400 px-3 py-1.5 font-mono text-xs font-semibold text-vault-950 transition hover:bg-signal-300 disabled:opacity-50'
-          : 'rounded border border-vault-700 px-3 py-1.5 font-mono text-xs text-vault-300 transition hover:border-vault-500 disabled:opacity-50'
+          ? 'rounded bg-signal-500 px-3 py-1.5 font-mono text-xs font-semibold text-stock-50 transition hover:bg-signal-600 disabled:opacity-50'
+          : 'btn btn-ghost btn-sm'
       }
     >
       {label}
@@ -351,5 +351,5 @@ function Action({
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-vault-500">{children}</p>
+  return <p className="text-sm text-stock-600">{children}</p>
 }
