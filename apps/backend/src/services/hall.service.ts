@@ -44,7 +44,13 @@ export class HallService {
 
     const occupants = this.#occupants(hostUserId, now)
     const existing = this.#halls.get(hostUserId)
-    const state = existing ?? beginHall(now, occupants.length)
+    // Seeded from the whole party rather than from whoever has beaten so far.
+    // A hall is created by the *first* beat to arrive, and when two people walk
+    // in together theirs are only milliseconds apart — so counting the standing
+    // occupants here gave a pair the solo shape for the first five seconds,
+    // until the re-form noticed. The party is already known; guessing from it is
+    // right far more often than it is wrong, and the re-form still corrects it.
+    const state = existing ?? beginHall(now, this.#partySize(hostUserId, now))
     if (!existing) this.#halls.set(hostUserId, state)
 
     tickHall(state, now, occupants)
@@ -98,6 +104,11 @@ export class HallService {
    * not a pair of hands the hall can count — which is what makes "the hall
    * counts you" mean the people in the room rather than the people in the game.
    */
+  /** Everybody live in this party, standing or not. The host counts themselves. */
+  #partySize(hostUserId: string, now: number): number {
+    return 1 + this.live.membersOf(hostUserId, now).length
+  }
+
   #occupants(hostUserId: string, now: number): Occupant[] {
     const ids = [hostUserId, ...this.live.membersOf(hostUserId, now)]
     const occupants: Occupant[] = []
