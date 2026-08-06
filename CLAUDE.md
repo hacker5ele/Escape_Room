@@ -231,9 +231,10 @@ The social layer, added by ADRs 0023–0029:
 | `GET` | `/api/leaderboard/friends` | — | `{ entries }` — you and your friends |
 | `GET` | `/api/leaderboard/global` | — | `{ entries }` — everybody who has started |
 | `GET` | `/api/party` | — | `{ party }` — host, members, `isHost` |
-| `POST` | `/api/stage/heartbeat` | position, emote, ready | `{ peers, phase, isHost }` — 2 Hz |
+| `POST` | `/api/stage/heartbeat` | position, emote, ready, hidden | `{ peers, phase, isHost }` — 2 Hz |
+| `POST` | `/api/stage/alive` | `{ hidden }` | `204` — "I still have the game open", 5 s, every screen |
 | `POST` | `/api/stage/phase` | `{ kind, roomId? }` | `204` — host only; moves the whole party |
-| `DELETE` | `/api/stage` | — | `204` — take me off the stage |
+| `DELETE` | `/api/stage` | — | `204` — off the stage, still in the party |
 | `POST` | `/api/party/invite/:userId` | — | `204` — notifies, moves nobody |
 | `POST` | `/api/party/join/:userId` | — | `{ party }` |
 | `DELETE` | `/api/party` | — | back to your own game |
@@ -344,6 +345,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-06 | [0045](docs/adr/0045-membership-is-liveness.md) | Being in a game is a claim you keep alive; close the tab and you leave both | Accepted |
 | 2026-08-05 | [0044](docs/adr/0044-unbuild-into-dots.md) | Screens unbuild into their own halftone dots and rebuild out of them | Accepted |
 | 2026-08-05 | [0043](docs/adr/0043-hints-are-per-room.md) | Hints are counted per room, derived from the activity log | Accepted |
 | 2026-08-05 | [0042](docs/adr/0042-party-invites.md) | Invite a friend into your game, or a link that befriends and joins in one step | Accepted |
@@ -510,8 +512,19 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
     somebody walking. The host holds PLAY; guests follow on their next beat.
   - **Presence is in memory, and that pins the API to one instance.** `min_size = max_size = 1` in
     the Terraform is load-bearing now: raise it and friends will vanish for each other, because two
-    instances would each hold half the room. A deploy clears every lobby and drops nobody from their
-    party. The party is capped at **four**.
+    instances would each hold half the room. **A deploy clears every lobby and now also dissolves
+    every party** — everyone lands back in their own game ([ADR-0045](docs/adr/0045-membership-is-liveness.md)).
+    The party is capped at **four**, and the cap counts people who are actually there.
+  - **Close the tab and you leave the lobby *and* the game; reload and nothing happened at all.**
+    There is no membership row any more — being in somebody's party is a claim you keep alive by
+    beating, held in one self-emptying map beside your position, so both end by the same expiry.
+    Fifteen seconds if your tab was visible when it went quiet; five minutes if it said it was
+    hidden, because the browser throttles background timers and a throttled tab cannot be told from
+    a closed one. **No `pagehide` beacon**: it never fires on a crash or a force-quit, and it fires
+    on reload too, which would make everyone watching see you blink out and come back. `useLiveness`
+    beats from *every* screen, not just the stage — you can be in a friend's game while reading the
+    leaderboard. Walking out of the lobby takes your character off the stage at once and leaves you
+    in the party, which is the one departure that is a real click rather than a guess.
   - **Screens unbuild themselves into dots** ([ADR-0044](docs/adr/0044-unbuild-into-dots.md)). The
     whole app is printed as a halftone, so a panel leaving does not slide or fade: an animated dot
     mask at the page's own 6px pitch takes its ink away until only its dots are left, those fade into

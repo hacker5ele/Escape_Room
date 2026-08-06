@@ -29,6 +29,7 @@ import { Tabs } from './ui/Tabs'
 import { LobbyView } from './lobby/LobbyView'
 import { RoomView } from './rooms/RoomView'
 import { unlockAudio } from './audio/sfx'
+import { useLiveness } from './stage/useLiveness'
 import { Assemble, LEAVE_TOTAL_MS, unbuild } from './fx/Assemble'
 import { isInviteToken } from './routing'
 
@@ -184,6 +185,13 @@ type GameState =
 function RequiresGame() {
   const { isLoaded, isSignedIn, mode, storedCharacter, saveCharacter } = useAppAuth()
   const [state, setState] = useState<GameState>({ kind: 'loading' })
+
+  // "I still have the game open", from every screen rather than only the stage.
+  // Being in a friend's game is a claim kept alive by beating (ADR-0045), so a
+  // beat that only ran in the lobby would drop you out of their game the moment
+  // you opened the leaderboard. Mounted here because this is the one component
+  // that is up for as long as somebody is playing.
+  useLiveness({ enabled: isSignedIn === true })
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -431,7 +439,11 @@ function RoomsRoute() {
           )
         })}
       </ul>
-      <button type="button" onClick={() => travel('/lobby')} className="btn play-button mt-5 w-full">
+      <button
+        type="button"
+        onClick={() => travel('/lobby')}
+        className="btn play-button mt-5 w-full"
+      >
         Start ▶
       </button>
       <p className="prose mt-3 text-sm text-stock-600">
