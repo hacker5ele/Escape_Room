@@ -12,7 +12,8 @@ const SOLUTION = 21
 export const room03: RoomDefinition = {
   id: 'room-03',
   title: 'The Laboratory',
-  intro: 'Five numbered dials, and a sixth that spins freely. Someone scratched a note into the bench.',
+  intro:
+    'Five numbered dials, and a sixth that spins freely. Someone scratched a note into the bench.',
   prompt: 'Set the sixth dial to the number that continues the sequence.',
 
   hints: [

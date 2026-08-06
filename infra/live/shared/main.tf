@@ -269,3 +269,45 @@ resource "aws_budgets_budget" "project" {
     }
   }
 }
+
+# --------------------------------------------------------------------------
+# Sending email
+# --------------------------------------------------------------------------
+
+# One verified identity for the whole domain, shared by both environments, so
+# there is one thing to verify rather than one per environment (ADR-0046).
+#
+# There is no API key anywhere in this: the App Runner instance role is granted
+# `ses:SendEmail` on this ARN and that is the entire credential. Nothing to
+# create out of band, nothing to rotate, nothing to leak.
+resource "aws_sesv2_email_identity" "main" {
+  email_identity = var.domain_name
+
+  dkim_signing_attributes {
+    next_signing_key_length = "RSA_2048_BIT"
+  }
+}
+
+# Three CNAMEs prove we own the domain and sign what we send. Until they
+# resolve, SES will not send at all — and mail that is unsigned is mail that
+# lands in a spam folder, which for an invitation is the same as not sending it.
+resource "aws_route53_record" "ses_dkim" {
+  count = 3
+
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "${aws_sesv2_email_identity.main.dkim_signing_attributes[0].tokens[count.index]}._domainkey.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 600
+  records = ["${aws_sesv2_email_identity.main.dkim_signing_attributes[0].tokens[count.index]}.dkim.amazonses.com"]
+}
+
+# Tells a receiver what to do with mail that fails the checks above. `none` is
+# the honest setting while this is new: it asks for nothing to be rejected and
+# reports nowhere, which is where a domain starts. Tighten once it has a record.
+resource "aws_route53_record" "dmarc" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "_dmarc.${var.domain_name}"
+  type    = "TXT"
+  ttl     = 600
+  records = ["v=DMARC1; p=none;"]
+}

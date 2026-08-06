@@ -6,7 +6,10 @@ import { config } from '../config.js'
 
 export const notFoundHandler: RequestHandler = (req, res) => {
   const body: ApiErrorResponse = {
-    error: { code: 'ROOM_NOT_FOUND', message: `Unknown endpoint: ${req.method} ${req.originalUrl}` },
+    error: {
+      code: 'ROOM_NOT_FOUND',
+      message: `Unknown endpoint: ${req.method} ${req.originalUrl}`,
+    },
   }
   res.status(404).json(body)
 }

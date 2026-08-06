@@ -51,7 +51,9 @@ describe('adding a friend by username', () => {
   it('attaches the profile so faces render without a second round trip', async () => {
     const app = buildApp()
     await signIn(app, ALICE, BOB)
-    await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(BOB) })
+    await as(app, ALICE)
+      .post('/api/friends/by-username')
+      .send({ username: usernameOf(BOB) })
 
     const list = await as(app, ALICE).get('/api/friends')
     expect(list.body.outgoing[0].profile).toMatchObject({
@@ -89,7 +91,9 @@ describe('adding a friend by username', () => {
     const app = buildApp()
     await signIn(app, ALICE, BOB)
 
-    await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(BOB) })
+    await as(app, ALICE)
+      .post('/api/friends/by-username')
+      .send({ username: usernameOf(BOB) })
     // Without this, both sides would sit on an outgoing request forever.
     const bobAsks = await as(app, BOB)
       .post('/api/friends/by-username')
@@ -102,7 +106,9 @@ describe('adding a friend by username', () => {
   it('refuses a duplicate request once you are already friends', async () => {
     const app = buildApp()
     await signIn(app, ALICE, BOB)
-    await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(BOB) })
+    await as(app, ALICE)
+      .post('/api/friends/by-username')
+      .send({ username: usernameOf(BOB) })
     await as(app, BOB).post(`/api/friends/${ALICE}/accept`)
 
     const again = await as(app, ALICE)
@@ -118,7 +124,9 @@ describe('accepting and removing', () => {
   it('makes both sides friends', async () => {
     const app = buildApp()
     await signIn(app, ALICE, BOB)
-    await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(BOB) })
+    await as(app, ALICE)
+      .post('/api/friends/by-username')
+      .send({ username: usernameOf(BOB) })
 
     const accepted = await as(app, BOB).post(`/api/friends/${ALICE}/accept`)
     expect(accepted.status).toBe(200)
@@ -137,7 +145,9 @@ describe('accepting and removing', () => {
   it('removes the friendship from both sides at once', async () => {
     const app = buildApp()
     await signIn(app, ALICE, BOB)
-    await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(BOB) })
+    await as(app, ALICE)
+      .post('/api/friends/by-username')
+      .send({ username: usernameOf(BOB) })
     await as(app, BOB).post(`/api/friends/${ALICE}/accept`)
 
     await as(app, ALICE).delete(`/api/friends/${BOB}`)
@@ -153,7 +163,9 @@ describe('blocking', () => {
   it('removes the friendship and hides it from the blocked person', async () => {
     const app = buildApp()
     await signIn(app, ALICE, BOB)
-    await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(BOB) })
+    await as(app, ALICE)
+      .post('/api/friends/by-username')
+      .send({ username: usernameOf(BOB) })
     await as(app, BOB).post(`/api/friends/${ALICE}/accept`)
 
     await as(app, ALICE).post(`/api/friends/${BOB}/block`)
@@ -286,7 +298,9 @@ describe('invite links', () => {
     const token = await mint(app, ALICE, { forParty: true })
 
     // Alice joins Carol, so she is no longer hosting anything to be joined.
-    await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(CAROL) })
+    await as(app, ALICE)
+      .post('/api/friends/by-username')
+      .send({ username: usernameOf(CAROL) })
     await as(app, CAROL).post(`/api/friends/${ALICE}/accept`)
     await as(app, ALICE).post(`/api/party/join/${CAROL}`)
 
@@ -300,7 +314,9 @@ describe('invite links', () => {
   it('a party link says how big the party is and nothing about who is in it', async () => {
     const app = buildApp()
     await signIn(app, ALICE, BOB)
-    await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(BOB) })
+    await as(app, ALICE)
+      .post('/api/friends/by-username')
+      .send({ username: usernameOf(BOB) })
     await as(app, BOB).post(`/api/friends/${ALICE}/accept`)
     await as(app, BOB).post(`/api/party/join/${ALICE}`)
 
@@ -327,7 +343,9 @@ describe('invite links', () => {
     expect(accepted.body.outgoing).toHaveLength(0)
 
     const aliceSees = await as(app, ALICE).get('/api/friends')
-    expect(aliceSees.body.friends.map((f: { profile: { userId: string } }) => f.profile.userId)).toEqual([BOB])
+    expect(
+      aliceSees.body.friends.map((f: { profile: { userId: string } }) => f.profile.userId),
+    ).toEqual([BOB])
     expect(aliceSees.body.incoming).toHaveLength(0)
   })
 

@@ -508,6 +508,23 @@ data "aws_iam_policy_document" "apprunner_instance" {
     ]
   }
 
+  # Sending an invitation to somebody who is not online (ADR-0046).
+  #
+  # Scoped to the one identity we own rather than "*". SES resource ARNs name
+  # the *sending* identity, so this permits mail from cool.tf and nothing else —
+  # which is the whole of what the API should be able to do with somebody's
+  # inbox.
+  statement {
+    sid    = "SendInvitationEmail"
+    effect = "Allow"
+    actions = [
+      "ses:SendEmail",
+    ]
+    resources = [
+      var.mail_identity_arn,
+    ]
+  }
+
   statement {
     sid    = "DecryptThroughSsmOnly"
     effect = "Allow"
@@ -555,6 +572,12 @@ resource "aws_apprunner_service" "api" {
           TRUST_PROXY        = tostring(var.trust_proxy)
           ATTEMPT_RATE_LIMIT = tostring(var.attempt_rate_limit)
           CORS_ORIGIN        = "https://${var.domain_name}"
+          # A link in an email is read somewhere the browser is not, so it has
+          # to be told where it points rather than reading window.location.
+          PUBLIC_ORIGIN = "https://${var.domain_name}"
+          # Empty turns invitation email off. There is no key here — SES is
+          # reached with the instance role below (ADR-0046).
+          MAIL_FROM = var.mail_from
           # Presence of this selects the DynamoDB repository over the in-memory
           # one, so a local run without AWS credentials still works.
           GAMES_TABLE_NAME         = aws_dynamodb_table.games.name
