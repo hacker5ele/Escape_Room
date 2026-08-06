@@ -8,6 +8,7 @@ import type {
 import { PRESENCE_AWAY_MS, STAGE_BOUNDS } from '@escape-room/shared'
 import type { LiveStore, Standing } from './live-store.js'
 import type { ProfileService } from './profile.service.js'
+import type { HallService } from './hall.service.js'
 
 /**
  * Who is standing where.
@@ -31,6 +32,7 @@ export class PresenceService {
   constructor(
     private readonly live: LiveStore,
     private readonly profiles: ProfileService,
+    private readonly halls: HallService,
   ) {}
 
   /**
@@ -80,12 +82,28 @@ export class PresenceService {
       })
       .filter((peer): peer is Peer => peer !== null)
 
+    const phase = this.#phases.get(host) ?? { kind: 'lobby' }
+
+    // A room with a clock in it rides this beat rather than taking an endpoint
+    // of its own — the rule this file's own routes state, which is to share
+    // when the cadences match. The water changes twice a second and so does
+    // this. Anywhere else, the hall drains: leaving a room and dying in one
+    // cost the same, so there is no half-finished flood to come back to.
+    const room =
+      phase.kind === 'room' ? this.halls.beat(host, phase.roomId, now) : this.#drain(host)
+
     return {
       now: new Date(now).toISOString(),
       peers,
-      phase: this.#phases.get(host) ?? { kind: 'lobby' },
+      phase,
       isHost: host === userId,
+      room,
     }
+  }
+
+  #drain(hostUserId: string): null {
+    this.halls.clear(hostUserId)
+    return null
   }
 
   /**

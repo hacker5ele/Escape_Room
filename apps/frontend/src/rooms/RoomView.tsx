@@ -8,12 +8,12 @@ import { Stage, type Actor } from '../stage/Stage'
 import { useMovement } from '../stage/useMovement'
 import { usePresence, toActor } from '../stage/usePresence'
 import { leaveStage, setPhase, useRegisterStageAuth } from '../api/stage'
-import { spawnPoint } from '../stage/scenes'
+import { floodLine, spawnPoint } from '../stage/scenes'
 import { EmoteBar } from '../lobby/EmoteBar'
 import { type EmoteName, emoteDuration, emoteSound } from '../character/emotes'
 import type { SoundName } from '../audio/sfx'
 import { isCharacter, type Character } from '../character/parts'
-import { roomDefinition } from './registry'
+import { roomDefinition, type RoomProps } from './registry'
 import { useEvent } from '../ui/useEvent'
 
 /**
@@ -33,6 +33,9 @@ type State =
   | { kind: 'locked'; message: string }
   | { kind: 'error'; message: string }
   | { kind: 'ready'; room: RoomPublicData }
+
+/** How long the splash panel holds before the party is put back in the lobby. */
+const DROWNED_MS = 1_800
 
 export function RoomView({
   roomId,
@@ -68,7 +71,7 @@ export function RoomView({
   const leave = useEvent(onLeave)
   const { position, walkTo, stopWalking, current } = useMovement(spawnPoint(0, 1))
   useRegisterStageAuth()
-  const { actors, phase, isHost, sendEmote } = usePresence({
+  const { actors, phase, isHost, room: live, sendEmote } = usePresence({
     position: current,
     character,
     ready: false,
@@ -93,6 +96,42 @@ export function RoomView({
     if (phase.kind === 'lobby') leave()
     else if (phase.roomId !== roomId) leave()
   }, [isHost, phase, roomId, leave])
+
+  /**
+   * The room killed everybody in it.
+   *
+   * **Latched, and that is not defensive coding — it is the fix.** The first
+   * version told the server to put the party back in the lobby as soon as
+   * `drowned` arrived. The server then dropped the hall, the next beat carried
+   * `room: null`, and `live?.drowned` went from `true` to `undefined` — so
+   * React saw the dependency change, ran the cleanup, **cancelled the timer
+   * that does the leaving**, and left the player standing in a room that had
+   * already reset. Remembering it locally is what makes the departure survive
+   * the state it is reacting to going away.
+   *
+   * Nothing is said to the server until the splash has finished, so a guest
+   * whose beat lands late still sees what happened to them rather than being
+   * teleported out of a room that looked fine.
+   */
+  const [drowned, setDrowned] = useState(false)
+
+  useEffect(() => {
+    if (!live?.drowned || drowned) return
+    setDrowned(true)
+    play('bubble')
+    window.setTimeout(() => play('slide'), 220)
+  }, [live?.drowned, drowned])
+
+  useEffect(() => {
+    if (!drowned) return
+    const timer = window.setTimeout(() => {
+      // The host moves the party; a guest follows on their next beat. Leaving
+      // also drops the phase, so the hall is thrown away either way.
+      if (isHost) void setPhase({ kind: 'lobby' })
+      leave()
+    }, DROWNED_MS)
+    return () => window.clearTimeout(timer)
+  }, [drowned, isHost, leave])
 
   // Held in a ref, and the effect runs on mount only: depending on the function
   // itself would re-enter the room on every render.
@@ -175,16 +214,19 @@ export function RoomView({
     }
   }
 
-  async function hint() {
-    if (busy) return
+  /** Returns the hint text so a custom-scene room can show it inline, not just RoomView's own list. */
+  async function hint(): Promise<string> {
     setBusy(true)
     try {
       const result = await takeHint(roomId, await authRef.current())
       play('pop')
       setHints((current) => [...current, result.hint])
       setRemaining(result.hintsRemaining)
+      return result.hint
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'No more hints.')
+      const message = error instanceof Error ? error.message : 'No more hints.'
+      setFeedback(message)
+      throw error
     } finally {
       setBusy(false)
     }
@@ -202,6 +244,24 @@ export function RoomView({
     isMe: true,
   }
 
+  /**
+   * Everybody standing in the room, you first.
+   *
+   * Handed to the room as well as to the stage, because a room built out of
+   * where people are standing needs the same list the stage is drawing from —
+   * two lists would be two answers to "is my friend at the far wheel".
+   */
+  const everybody: Actor[] = [me, ...actors.map(toActor)]
+
+  const roomProps = (room: RoomPublicData): RoomProps => ({
+    room,
+    onAnswer: (value: unknown) => void answer(value),
+    busy,
+    onLeave,
+    live,
+    actors: everybody,
+  })
+
   // A custom-scene room takes the entire viewport, not just the column
   // inside `<main>` below — it draws its own backdrop instead of standing on
   // the shared Stage. RoomView still owns leaving here, but does not draw
@@ -217,7 +277,7 @@ export function RoomView({
     return (
       <>
         {definition.render({
-          room: state.room,
+          ...roomProps(state.room),
           onAnswer: async (value: unknown) => {
             const result = await answer(value)
             // `answer` returns null only for the rare cases every other room
@@ -227,8 +287,6 @@ export function RoomView({
             if (!result) throw new Error('Could not check that answer.')
             return result
           },
-          busy,
-          onLeave,
         })}
 
         {!definition.ownsEnding && feedback && (
@@ -279,28 +337,32 @@ export function RoomView({
         <>
           <p className="prose max-w-[62ch] text-sm text-stock-600">{state.room.intro}</p>
 
-          <Stage
-            scene={definition.scene}
-            actors={[me, ...actors.map(toActor)]}
-            onWalkTo={walkTo}
-            onWalkEnd={stopWalking}
-          >
-            {solved ? (
-              <div className="pane pointer-events-auto p-4 text-center">
-                <p className="font-display text-2xl font-bold text-solved-600">Solved</p>
-                <button type="button" onClick={onLeave} className="btn mt-3">
-                  Onward
-                </button>
-              </div>
-            ) : (
-              definition.render({
-                room: state.room,
-                onAnswer: (value) => void answer(value),
-                busy,
-                onLeave,
-              })
-            )}
-          </Stage>
+          {solved ? (
+            <div className="pane pointer-events-auto p-4 text-center">
+              <p className="font-display text-2xl font-bold text-solved-600">Solved</p>
+              <button type="button" onClick={onLeave} className="btn mt-3">
+                Onward
+              </button>
+            </div>
+          ) : (
+            <Stage
+              scene={definition.scene}
+              actors={everybody}
+              onWalkTo={walkTo}
+              onWalkEnd={stopWalking}
+              world={definition.renderWorld?.(roomProps(state.room))}
+              waterline={live ? floodLine(live.depth) : null}
+            >
+              {definition.render(roomProps(state.room))}
+            </Stage>
+          )}
+
+          {drowned && (
+            <div className="hall-drowned" role="alert">
+              <p>GLUB.</p>
+              <span>The hall has you. Back to the lobby.</span>
+            </div>
+          )}
 
           <EmoteBar onEmote={fire} />
 
@@ -315,7 +377,9 @@ export function RoomView({
               <h2 className="label">Hints</h2>
               <button
                 type="button"
-                onClick={() => void hint()}
+                onClick={() => {
+                  hint().catch(() => {})
+                }}
                 disabled={busy || remaining === 0}
                 className="btn btn-ghost btn-sm"
               >

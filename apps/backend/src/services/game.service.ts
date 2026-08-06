@@ -110,6 +110,22 @@ export class GameService {
   }
 
   /**
+   * Wipes one room's progress only — its events and its `solvedRooms` entry
+   * — leaving the rest of the game untouched. See ADR-0066: this exists so a
+   * client-only sub-mechanic (room-03's Atlantis quest) can trigger a true
+   * "start this room over" without the server having any other way to learn
+   * that happened.
+   */
+  async resetRoom(game: GameSession, roomId: RoomId): Promise<GameSession> {
+    const updated: GameSession = {
+      ...game,
+      solvedRooms: game.solvedRooms.filter((id) => id !== roomId),
+      events: game.events.filter((event) => event.roomId !== roomId),
+    }
+    return this.repository.save(updated)
+  }
+
+  /**
    * Records the first time a player opens a room.
    *
    * Only the first — this runs on a read path, and logging every refresh would
@@ -129,7 +145,16 @@ export class GameService {
   }
 
   /**
-   * Logs an answer and, when it is right, marks the room solved — in one save.
+   * Logs an answer and, when the ROOM is actually finished, marks it solved
+   * — in one save.
+   *
+   * `correct` and `roomComplete` are deliberately separate (ADR-0068):
+   * `correct` is whether this one attempt was right (always logged, right
+   * or wrong — the wrong ones are what show where players get stuck).
+   * `roomComplete` is whether the whole room is now done. For a one-shot
+   * room they're the same value; a multi-stage room like room-03 has many
+   * correct answers before the one that actually finishes it, and
+   * `roomComplete` is `false` for all the others.
    *
    * Combined deliberately: writing the event and the progress separately would
    * mean two round trips per attempt and a window where the log and the
@@ -140,6 +165,7 @@ export class GameService {
     roomId: RoomId,
     answer: unknown,
     correct: boolean,
+    roomComplete: boolean,
     actor?: Actor,
   ): Promise<GameSession> {
     // Re-applied against whatever the game looks like at write time, so a
@@ -157,7 +183,7 @@ export class GameService {
         ...by(actor),
       })
 
-      if (correct && !updated.solvedRooms.includes(roomId)) {
+      if (roomComplete && !updated.solvedRooms.includes(roomId)) {
         updated = { ...updated, solvedRooms: [...updated.solvedRooms, roomId] }
         updated = append(updated, { at, type: 'room_solved', roomId, ...by(actor) })
 
@@ -165,6 +191,37 @@ export class GameService {
           updated = { ...updated, finishedAt: at }
           updated = append(updated, { at, type: 'game_completed' })
         }
+      }
+
+      return updated
+    })
+  }
+
+  /**
+   * Marks a room solved directly, with no attempt/answer involved — for a
+   * room whose later stages are entirely client-side (ADR-0070: room-03's
+   * Atlantis quest and Olympus carpet race), so there is no further
+   * server-checked answer left to hang `roomComplete` off of. The room
+   * itself decides when this is allowed to succeed — see
+   * `RoomDefinition.canComplete` — so calling this early (e.g. before the
+   * Sphinx's five riddles are actually done) does nothing.
+   */
+  async completeRoom(game: GameSession, roomId: RoomId, actor?: Actor): Promise<GameSession> {
+    if (game.solvedRooms.includes(roomId)) return game
+
+    return this.#mutate(game, (current) => {
+      if (current.solvedRooms.includes(roomId)) return null
+
+      const at = now()
+      let updated: GameSession = {
+        ...current,
+        solvedRooms: [...current.solvedRooms, roomId],
+      }
+      updated = append(updated, { at, type: 'room_solved', roomId, ...by(actor) })
+
+      if (isGameComplete(updated) && updated.finishedAt === null) {
+        updated = { ...updated, finishedAt: at }
+        updated = append(updated, { at, type: 'game_completed' })
       }
 
       return updated

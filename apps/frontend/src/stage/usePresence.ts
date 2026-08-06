@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { HeartbeatResponse, PartyPhase, Peer } from '@escape-room/shared'
+import type { HeartbeatResponse, LiveRoom, PartyPhase, Peer } from '@escape-room/shared'
 import { heartbeatResponseSchema } from '@escape-room/shared'
 import { request } from '../api/client'
 import { markStageBeat } from '../api/stage'
@@ -73,6 +73,15 @@ export function usePresence({
   const [actors, setActors] = useState<RemoteActor[]>([])
   const [phase, setPhase] = useState<PartyPhase>({ kind: 'lobby' })
   const [isHost, setIsHost] = useState(true)
+  /**
+   * The room's own state, when the party is standing in one that has a clock.
+   *
+   * Null everywhere else, which is every room but the Reading Hall. It rides
+   * this response rather than a poll of its own because the water changes at
+   * exactly the rate presence already runs at — the rule `presence.routes.ts`
+   * sets out, applied the other way round (ADR-0048).
+   */
+  const [room, setRoom] = useState<LiveRoom | null>(null)
 
   const tracks = useRef(new Map<string, Track>())
   const pendingEmote = useRef<EmoteName | null>(null)
@@ -128,6 +137,7 @@ export function usePresence({
         pendingEmote.current = null
         setPhase(body.phase)
         setIsHost(body.isHost)
+        setRoom(body.room)
 
         const now = performance.now()
         const next = new Map<string, Track>()
@@ -211,7 +221,7 @@ export function usePresence({
     return () => cancelAnimationFrame(frame)
   }, [enabled])
 
-  return { actors, phase, isHost, sendEmote }
+  return { actors, phase, isHost, room, sendEmote }
 }
 
 /**

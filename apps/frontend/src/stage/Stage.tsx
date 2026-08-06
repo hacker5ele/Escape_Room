@@ -59,6 +59,8 @@ export function Stage({
   actors,
   onWalkTo,
   onWalkEnd,
+  world,
+  waterline,
   children,
 }: {
   scene: SceneName
@@ -66,6 +68,25 @@ export function Stage({
   /** A place on the stage was pointed at, in stage units. */
   onWalkTo?: (x: number, y: number) => void
   onWalkEnd?: () => void
+  /**
+   * Drawn **inside** the stage's own 1600×900 space, so it scales with
+   * everything else and sorts against the players by `z-index`.
+   *
+   * `children` is chrome — it floats over the stage in screen pixels, which is
+   * right for a panel and wrong for a lamp you have to be able to walk behind.
+   * A room whose furniture changes twice a second cannot express that as a
+   * `Scene`, which is a list of things that stand still.
+   */
+  world?: React.ReactNode
+  /**
+   * The stage y of a water surface, if this room has one.
+   *
+   * Only used to mark the actors: somebody whose feet are under it is wading,
+   * somebody whose chest is under it is afloat. Doing it here rather than in
+   * the room is what lets the character react — the room does not own how a
+   * player is drawn, and every actor including your peers gets it for free.
+   */
+  waterline?: number | null
   /** Chrome drawn over the stage — the room's puzzle, the lobby's emote bar. */
   children?: React.ReactNode
 }) {
@@ -201,8 +222,17 @@ export function Stage({
           )
         })}
 
+        {world}
+
         {people.map((actor) => {
           const height = ACTOR_HEIGHT * depthScale(actor.y)
+
+          // Wading, then afloat. Measured against this actor's own height, so
+          // somebody at the front of the stage — who is drawn bigger — goes
+          // under a little later than somebody at the back, which is what makes
+          // the depth of the room read as depth of water.
+          const wet = waterline != null && waterline < actor.y
+          const afloat = waterline != null && waterline < actor.y - height * 0.45
 
           return (
             <div
@@ -210,6 +240,8 @@ export function Stage({
               data-actor={actor.userId}
               data-me={actor.isMe ? '' : undefined}
               data-away={actor.away ? '' : undefined}
+              data-wet={wet ? '' : undefined}
+              data-afloat={afloat ? '' : undefined}
               className="stage-actor"
               style={{
                 left: actor.x,
