@@ -164,6 +164,8 @@ beforeEach(() => {
     'fetch',
     vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input)
+      // "I still have the game open", beaten from every screen (ADR-0045).
+      if (url.includes('/stage')) return Promise.resolve(new Response(null, { status: 204 }))
       if (url.includes('/party')) return Promise.resolve(soloPartyResponse())
       if (url.includes('/leaderboard')) return Promise.resolve(emptyLeaderboardResponse())
       if (url.includes('/friends')) return Promise.resolve(emptyFriendsResponse())
@@ -297,10 +299,7 @@ describe('App', () => {
       screen.getByRole('tab', { name: /rooms/i }).focus()
       await userEvent.keyboard('{ArrowRight}')
 
-      expect(screen.getByRole('tab', { name: /friends/i })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      )
+      expect(screen.getByRole('tab', { name: /friends/i })).toHaveAttribute('aria-selected', 'true')
     })
 
     it('reports a failure instead of hanging', async () => {
@@ -381,12 +380,26 @@ describe('App', () => {
       clerkFirstName = null
       clerkLastName = null
       // The server decides this, not the browser — the UI reacts to the 409.
+      //
+      // Matched on the URL rather than on being the *first* call. It was the
+      // first call until the liveness beat started running above every screen
+      // (ADR-0045) and raced it — and a test that says "whatever is fetched
+      // first is the game" is asserting on something it does not mean.
+      let sessionCalls = 0
       vi.stubGlobal(
         'fetch',
-        vi
-          .fn()
-          .mockImplementationOnce(() => Promise.resolve(profileIncompleteResponse()))
-          .mockImplementation(() => Promise.resolve(gameResponse())),
+        vi.fn().mockImplementation((input: RequestInfo | URL) => {
+          const url = String(input)
+          if (url.includes('/stage')) return Promise.resolve(new Response(null, { status: 204 }))
+          if (url.includes('/sessions')) {
+            sessionCalls += 1
+            // Incomplete once; complete after the form has been submitted.
+            return Promise.resolve(
+              sessionCalls === 1 ? profileIncompleteResponse() : gameResponse(),
+            )
+          }
+          return Promise.resolve(gameResponse())
+        }),
       )
     })
 
@@ -529,16 +542,18 @@ describe('real URLs', () => {
     // shared link. A stale id should quietly become a valid one.
     open('/character?head=head-999')
     await screen.findByRole('heading', { name: /change your character/i })
-    expect(screen.getAllByRole('radio').some((t) => t.getAttribute('aria-checked') === 'true')).toBe(
-      true,
-    )
+    expect(
+      screen.getAllByRole('radio').some((t) => t.getAttribute('aria-checked') === 'true'),
+    ).toBe(true)
   })
 
   it('opens the picker at its own address, not as a takeover', async () => {
     open()
     await screen.findByText(/alice42/)
     await userEvent.click(screen.getByRole('button', { name: /change character/i }))
-    expect(await screen.findByRole('heading', { name: /change your character/i })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: /change your character/i }),
+    ).toBeInTheDocument()
   })
 })
 

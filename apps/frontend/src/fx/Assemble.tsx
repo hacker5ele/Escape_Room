@@ -35,9 +35,27 @@ const HOLD_MS = 120
 export const LEAVE_TOTAL_MS = LEAVE_MS + HOLD_MS
 
 const ARRIVE_MS = 560
-const STAGGER_MS = 42
 /** The travel half of the arrival — the one whose end means a piece has landed. */
 const LANDED = 'piece-land'
+
+/**
+ * The gap between one piece setting off and the next.
+ *
+ * A **fixed** gap per piece was fine while a screen held about twenty of them
+ * and stopped being fine the moment the room's scenery joined in: at forty
+ * pieces the last one would not set off for one and a half seconds, so the wave
+ * outlasted the animation it was supposed to be part of.
+ *
+ * The gap is the thing that gives, not the wave. Below the crossover a screen
+ * keeps the leisurely spacing it has now; above it the pieces simply tighten up,
+ * which is what a crowd does anyway.
+ */
+const STAGGER_MS = 42
+const WAVE_MS = 720
+
+export function stagger(count: number, longest: number, cap: number): number {
+  return Math.min(cap, longest / Math.max(1, count - 1))
+}
 
 /** Outermost only — a panel nested in a panel rides with its parent. */
 const PANEL = '.pane'
@@ -160,10 +178,16 @@ let mounted: HTMLElement | null = null
 export function unbuild(): void {
   if (!mounted || prefersReducedMotion()) return
 
-  pieces(mounted).forEach((node, index) => {
+  const moving = pieces(mounted)
+  // Whatever is left after the dissolve itself is all the stagger can have —
+  // past that, the route changes while the last pieces are still half there,
+  // and the new screen appears on top of them.
+  const step = stagger(moving.length, LEAVE_TOTAL_MS - LEAVE_MS, 16)
+
+  moving.forEach((node, index) => {
     // A short throw on the way out. The dissolve is the exit; the travel only
     // gives it a direction, and is not there to carry the piece off screen.
-    place(node, 'gather', index, 16)
+    place(node, 'gather', index, step)
     node.classList.add('piece-leaving')
   })
 }
@@ -188,9 +212,11 @@ export function Assemble({ children }: { children: React.ReactNode }) {
     const mode: Mode = pathname === '/' ? 'gather' : 'fly'
     const moving = pieces(root)
 
+    const step = stagger(moving.length, WAVE_MS, STAGGER_MS)
+
     root.dataset.assembleMode = mode
     moving.forEach((node, index) => {
-      place(node, mode, index, STAGGER_MS)
+      place(node, mode, index, step)
       node.classList.add('piece-arriving')
     })
 
@@ -223,7 +249,7 @@ export function Assemble({ children }: { children: React.ReactNode }) {
         delete root.dataset.assembleMode
         for (const node of moving) clear(node)
       },
-      ARRIVE_MS + moving.length * STAGGER_MS + 140,
+      ARRIVE_MS + (moving.length - 1) * step + 140,
     )
 
     return () => {

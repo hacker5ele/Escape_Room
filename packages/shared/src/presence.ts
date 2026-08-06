@@ -7,8 +7,12 @@ import { roomIdSchema } from './rooms.js'
  *
  * Everything in this file is deliberately **ephemeral**. It lives in memory on
  * the API and is gone when the process restarts, because a position is
- * meaningless a second later and a lobby does not outlive the server. Party
- * membership and progress are durable and stay in DynamoDB, untouched.
+ * meaningless a second later and a lobby does not outlive the server.
+ *
+ * Since ADR-0045 that includes **who is playing with whom**. Being in a party
+ * is not a row somebody has to remember to delete; it is a claim you keep alive
+ * by beating, and it ends when you stop. Progress is the durable half and stays
+ * in DynamoDB, untouched.
  *
  * That is only safe because App Runner is pinned to exactly one instance —
  * `min_size = 1, max_size = 1` in `infra/modules/environment/main.tf`. Raise
@@ -63,6 +67,27 @@ export const partyPhaseSchema = z.discriminatedUnion('kind', [
 
 export type PartyPhase = z.infer<typeof partyPhaseSchema>
 
+/**
+ * "I still have the game open."
+ *
+ * The whole of a player's claim on a party. Sent from every screen, not just
+ * the stage — you can be in a friend's game while reading the leaderboard, and
+ * a claim nobody is renewing is a claim that has ended.
+ */
+export const aliveRequestSchema = z.object({
+  /**
+   * The tab is in the background.
+   *
+   * A closed tab and a *throttled* tab look identical from the server: Chrome
+   * clamps timers in tabs hidden for more than five minutes to roughly one a
+   * minute. The client is the only one that can tell the difference, so it
+   * says which it is and the server picks its patience accordingly.
+   */
+  hidden: z.boolean(),
+})
+
+export type AliveRequest = z.infer<typeof aliveRequestSchema>
+
 export const heartbeatRequestSchema = z.object({
   x: z.number(),
   y: z.number(),
@@ -71,6 +96,8 @@ export const heartbeatRequestSchema = z.object({
   walking: z.boolean(),
   character: characterSchema,
   ready: z.boolean(),
+  /** Same meaning as on `aliveRequestSchema` — a heartbeat is an alive beat that also has a position. */
+  hidden: z.boolean(),
   /**
    * An emote just started, or null. Sent once rather than held: peers are told
    * when it began and play it from that offset, so a dance looks synchronised
@@ -118,6 +145,25 @@ export type HeartbeatResponse = z.infer<typeof heartbeatResponseSchema>
 /** Most people are in a party of one, and four is a room rather than a crowd. */
 export const MAX_PARTY_SIZE = 4
 
-/** Silent for this long and you are shown as away; for `PRESENCE_TTL_MS` and you are gone. */
+/** How often a player says they are still here from somewhere other than the stage. */
+export const LIVENESS_BEAT_MS = 5_000
+
+/** Silent for this long and you are shown faded, but you have not gone anywhere. */
 export const PRESENCE_AWAY_MS = 10_000
-export const PRESENCE_TTL_MS = 120_000
+
+/**
+ * Silent for this long and you have left — the lobby *and* the game.
+ *
+ * There is no separate record of who is in which party. Being in one is a claim
+ * you keep alive by beating, so these two numbers are the only thing that
+ * decides whether somebody is still playing. See ADR-0045.
+ *
+ * **Visible**: three missed beats. You were looking at the tab and now it is
+ * silent, so you closed it — the case that has to be quick.
+ *
+ * **Hidden**: the browser is throttling the beat and we cannot tell a
+ * backgrounded tab from a closed one, so we wait long enough that looking at
+ * something else does not throw you out of your friend's game.
+ */
+export const PRESENCE_TTL_VISIBLE_MS = LIVENESS_BEAT_MS * 3
+export const PRESENCE_TTL_HIDDEN_MS = 300_000

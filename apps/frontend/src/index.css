@@ -1489,13 +1489,19 @@
     --land-ease: cubic-bezier(0.22, 1.35, 0.36, 1);
   }
 
-  .piece-leaving {
+  /* Scoped under `.assemble` for specificity, not for tidiness — a piece only
+     ever exists inside it, so the descendant selector costs nothing and buys
+     the (0,2,0) needed to beat `.stage-prop[data-sway='leaves']`, which carries
+     its own `animation`. Unscoped, every swaying prop in the room — the palm,
+     the hanging bulb, the chain — would keep swaying and simply never fly in,
+     with nothing anywhere to say why. */
+  .assemble .piece-leaving {
     animation:
       piece-unink 340ms ease-in var(--fly-delay, 0ms) both,
       piece-recede 340ms cubic-bezier(0.55, 0, 0.85, 0.35) var(--fly-delay, 0ms) both;
   }
 
-  .piece-arriving {
+  .assemble .piece-arriving {
     animation:
       piece-appear 1ms linear var(--fly-delay, 0ms) both,
       piece-land 560ms var(--land-ease) var(--fly-delay, 0ms) both;

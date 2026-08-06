@@ -8,7 +8,7 @@ import {
   type RoomId,
 } from '@escape-room/shared'
 import { GameConflictError, type GameRepository } from '../repositories/game.repository.js'
-import type { PartyRepository } from '../repositories/party.repository.js'
+import type { LiveStore } from './live-store.js'
 import type { PlayerProfile } from '../http/authenticator.js'
 import { ApiError } from '../http/api-error.js'
 
@@ -31,7 +31,7 @@ export class GameService {
   constructor(
     private readonly repository: GameRepository,
     /** Absent means solo play only — every player is their own host. */
-    private readonly party?: PartyRepository,
+    private readonly party?: LiveStore,
   ) {}
 
   /**
@@ -42,8 +42,7 @@ export class GameService {
    * gets the party's, without knowing a party exists. See ADR-0028.
    */
   async hostFor(userId: string): Promise<string> {
-    const membership = await this.party?.find(userId)
-    return membership?.hostUserId ?? userId
+    return this.party?.hostOf(userId) ?? userId
   }
 
   /**
@@ -62,7 +61,7 @@ export class GameService {
       // The host left or reset since we joined. Falling back to our own game is
       // better than reporting an error nobody can act on — but it has to be
       // the game we already had, not a new one written over the top of it.
-      await this.party?.remove(userId)
+      this.party?.release(userId)
 
       const own = await this.repository.findByUserId(userId)
       if (own) return own
@@ -106,7 +105,7 @@ export class GameService {
    * they cannot delete the progress of everybody else playing with them.
    */
   async reset(userId: string): Promise<void> {
-    await this.party?.remove(userId)
+    this.party?.release(userId)
     await this.repository.deleteByUserId(userId)
   }
 
@@ -116,11 +115,7 @@ export class GameService {
    * Only the first — this runs on a read path, and logging every refresh would
    * both spam the history and turn a GET into a write.
    */
-  async recordRoomEntered(
-    game: GameSession,
-    roomId: RoomId,
-    actor?: Actor,
-  ): Promise<GameSession> {
+  async recordRoomEntered(game: GameSession, roomId: RoomId, actor?: Actor): Promise<GameSession> {
     const alreadySeen = game.events.some(
       (event) => event.type === 'room_entered' && event.roomId === roomId,
     )
@@ -178,12 +173,15 @@ export class GameService {
 
   async recordHintUsed(game: GameSession, roomId: RoomId, actor?: Actor): Promise<GameSession> {
     return this.#mutate(game, (current) =>
-      append({ ...current, hintsUsed: current.hintsUsed + 1 }, {
-        at: now(),
-        type: 'hint_taken',
-        roomId,
-        ...by(actor),
-      }),
+      append(
+        { ...current, hintsUsed: current.hintsUsed + 1 },
+        {
+          at: now(),
+          type: 'hint_taken',
+          roomId,
+          ...by(actor),
+        },
+      ),
     )
   }
 
@@ -266,7 +264,7 @@ function describeAnswer(answer: unknown): string {
       ? answer
       : typeof answer === 'number' || typeof answer === 'boolean'
         ? String(answer)
-        : JSON.stringify(answer) ?? String(answer)
+        : (JSON.stringify(answer) ?? String(answer))
 
   return text.slice(0, MAX_LOGGED_ANSWER_LENGTH)
 }

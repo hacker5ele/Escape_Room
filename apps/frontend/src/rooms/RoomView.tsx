@@ -7,7 +7,7 @@ import { play } from '../audio/sfx'
 import { Stage, type Actor } from '../stage/Stage'
 import { useMovement } from '../stage/useMovement'
 import { usePresence, toActor } from '../stage/usePresence'
-import { setPhase, useRegisterStageAuth } from '../api/stage'
+import { leaveStage, setPhase, useRegisterStageAuth } from '../api/stage'
 import { spawnPoint } from '../stage/scenes'
 import { EmoteBar } from '../lobby/EmoteBar'
 import { type EmoteName, emoteDuration, emoteSound } from '../character/emotes'
@@ -73,6 +73,13 @@ export function RoomView({
     character,
     ready: false,
   })
+
+  // Your character leaves the room the moment you walk out of it, rather than
+  // standing there until the timeout notices. This is the one departure that is
+  // a real click rather than a guess about an unloading page, so it is the one
+  // that can be immediate — and it leaves your claim on the party alone, since
+  // opening the leaderboard is not leaving your friend's game (ADR-0045).
+  useEffect(() => () => void leaveStage(), [])
 
   // The host being here is what puts the party here — so a reload straight into
   // a room, or a guest arriving later, finds the party already in it.
@@ -194,11 +201,7 @@ export function RoomView({
             {state.kind === 'ready' ? state.room.title : definition.title}
           </h1>
         </div>
-        <button
-          type="button"
-          onClick={onLeave}
-          className="btn btn-ghost btn-sm"
-        >
+        <button type="button" onClick={onLeave} className="btn btn-ghost btn-sm">
           Leave the room
         </button>
       </header>

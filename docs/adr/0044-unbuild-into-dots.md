@@ -69,6 +69,34 @@ Direction, distance, spin and delay are redrawn per navigation, so no two arriva
 distance is scaled to the viewport, because a fixed 400px throws a panel most of the way across a
 phone and barely anywhere on a desktop.
 
+### The room's scenery flies in too
+
+Every prop on the stage is a piece. The wall and the floor are not — they are the room rather than
+things in it, and a room whose walls fly in leaves the furniture nothing to arrive into. Characters
+are not either: `.stage-actor` has had its own `drop-in` since [ADR-0037](0037-lobby-stage-and-rooms.md),
+and it was the furniture standing perfectly still *beside* a character dropping in that made the room
+look pre-assembled.
+
+The stage frame stays a piece as well, so the room arrives as a room while its contents fly into
+place within it — the same two-layer parallax the panels get from their controls.
+
+**A swaying prop carries its own `animation`.** `.stage-prop[data-sway='leaves']` is `(0,2,0)`; a bare
+`.piece-arriving` is `(0,1,0)` and loses to it, so the palm, the hanging bulb and the chain would go
+on swaying and never fly in, with nothing anywhere to say why. The animation rules are scoped under
+`.assemble` — `(0,2,0)`, later in the file, and true by construction since a piece never exists
+outside one. A test pins it.
+
+### The wave is fixed; the gap between pieces is what gives
+
+A fixed 42ms per piece was fine at twenty and wrong at forty: the last prop would not set off for a
+second and a half, so the wave outlasted the animation it belonged to. Now the whole wave is capped
+and the spacing tightens to fit, which is what a crowd does anyway. Below the crossover nothing
+changes.
+
+The same applies leaving, where the ceiling is tighter: the stagger may only use what is left after
+the dissolve itself, or the route changes while the last pieces are still half there and the new
+screen builds on top of them.
+
 ### Going home gathers; going anywhere else is thrown
 
 `/` uses short travel and an easing that settles without overshoot — the components coming back
