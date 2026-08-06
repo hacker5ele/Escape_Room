@@ -96,8 +96,13 @@ export function pieces(root: HTMLElement): HTMLElement[] {
 
   // A screen with no panels and no controls — a full-bleed stage — would
   // otherwise animate nothing at all. Its direct children are the next guess.
+  // Still filtered by `wanted` — this fallback had been skipping the opt-out
+  // check entirely, so a `data-piece="no"` root only worked if the screen
+  // *also* had a `.pane` somewhere for the primary match to find first.
   if (moving.length > 0) return moving
-  return [...root.children].filter((child): child is HTMLElement => child instanceof HTMLElement)
+  return [...root.children]
+    .filter((child): child is HTMLElement => child instanceof HTMLElement)
+    .filter(wanted)
 }
 
 /**

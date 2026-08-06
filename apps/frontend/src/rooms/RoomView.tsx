@@ -154,16 +154,14 @@ export function RoomView({
       const result = await attemptRoom(roomId, value, await authRef.current())
       if (result.correct) {
         setSolved(true)
+        onSolved(result.session)
         // A room with its own ending has its own idea of what solving sounds
-        // like — playing the shared stamp/fanfare on top would just clash.
+        // and looks like — the shared stamp/fanfare/cheer would just clash.
         if (!definition.ownsEnding) {
           play('stamp')
           window.setTimeout(() => play('fanfare'), 180)
+          fire('cheer')
         }
-        // The character celebrates without being asked, which is the cheapest
-        // way to make solving feel like something happened.
-        fire('cheer')
-        onSolved(result.session)
       } else {
         play('slide')
         setFeedback(result.feedback ?? 'Not that. Try again.')
@@ -231,7 +229,7 @@ export function RoomView({
           busy,
         })}
 
-        <div className="fixed top-4 right-4 z-50">
+        <div data-piece="no" className="fixed top-4 right-4 z-50">
           <button type="button" onClick={onLeave} className="btn btn-ghost btn-sm">
             Leave the room
           </button>

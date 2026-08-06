@@ -522,7 +522,14 @@ export function Room02({ onSubmit }: RoomProps) {
         }
 
   return (
-    <div className={`room-02${shake ? ' shake' : ''}${state.lockdownActive ? ' lockdown' : ''}`}>
+    // Opted out of the route-change fly-in (see fx/Assemble.tsx): this room
+    // is built almost entirely from `position: fixed` overlays, and a
+    // transform on this root — which is what animating it would apply —
+    // becomes the containing block for all of them instead of the viewport.
+    <div
+      data-piece="no"
+      className={`room-02${shake ? ' shake' : ''}${state.lockdownActive ? ' lockdown' : ''}`}
+    >
       <div className="fx-layer flicker" />
       <div className="fx-layer lockdown-wash" />
       <div className="fx-layer vignette" />
