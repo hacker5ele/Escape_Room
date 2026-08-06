@@ -62,6 +62,7 @@ export class PresenceService {
       // through and still see it finish.
       emote: body.emote ?? previous?.emote ?? null,
       emoteStartedAt: body.emote ? now : (previous?.emoteStartedAt ?? null),
+      holding: body.holding,
     }
 
     this.live.stand(userId, body.hidden, standing, now)
@@ -89,8 +90,13 @@ export class PresenceService {
     // when the cadences match. The water changes twice a second and so does
     // this. Anywhere else, the hall drains: leaving a room and dying in one
     // cost the same, so there is no half-finished flood to come back to.
+    // `acted` is an event and belongs to *this* caller — it is consumed by the
+    // beat that carries it, unlike `holding`, which is state and is read back
+    // out of the store for everybody in the party.
     const room =
-      phase.kind === 'room' ? this.halls.beat(host, phase.roomId, now) : this.#drain(host)
+      phase.kind === 'room'
+        ? this.halls.beat(host, phase.roomId, now, { userId, stations: body.acted })
+        : this.#drain(host)
 
     return {
       now: new Date(now).toISOString(),

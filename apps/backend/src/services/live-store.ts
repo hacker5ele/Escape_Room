@@ -33,6 +33,15 @@ export interface Standing {
   ready: boolean
   emote: EmoteName | null
   emoteStartedAt: number | null
+  /**
+   * The station in the room this player has hold of, or null.
+   *
+   * Stored rather than derived, because having hold of something is a choice
+   * and a choice cannot be read off a position. Stored *unverified* — whoever
+   * reads it checks it is a station this player could actually reach, the same
+   * way `x` and `y` are clamped rather than trusted.
+   */
+  holding: string | null
 }
 
 interface Live {

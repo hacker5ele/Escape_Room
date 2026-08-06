@@ -99,6 +99,35 @@ export const heartbeatRequestSchema = z.object({
   /** Same meaning as on `aliveRequestSchema` — a heartbeat is an alive beat that also has a position. */
   hidden: z.boolean(),
   /**
+   * Stations this player has acted on since the last beat, oldest first.
+   *
+   * An *event*, consumed by the beat that carries it: pressing E is a thing you
+   * did once, not a state you are in.
+   *
+   * A room used to derive this from where somebody was standing, and that was
+   * the right call while standing *was* the input — deriving a fact costs
+   * nothing and leaves nothing to forge. Acting is now a choice, and a choice
+   * cannot be derived from a position, so it has to be sent. It is still
+   * **verified**: a station named from the other end of the room, or one this
+   * player is nowhere near, is ignored.
+   *
+   * **Defaulted rather than required**, and that is not politeness. This beat
+   * goes out twice a second from every open tab, so the moment a deploy lands
+   * every player who has not reloaded is running the previous script. Required
+   * fields would 400 all of them until they did, and vanishing out of your
+   * friends' lobby is a strange way to find out a release happened. An old
+   * client simply never acts, which is exactly right.
+   */
+  acted: z.array(z.string().max(32)).max(8).default([]),
+  /**
+   * The station this player is holding onto, or null.
+   *
+   * *State*, unlike `acted` — a wheel is turned for as long as somebody has
+   * hold of it, so this is re-sent on every beat and stored, which is what lets
+   * everybody else in the room see it turning.
+   */
+  holding: z.string().max(32).nullable().default(null),
+  /**
    * An emote just started, or null. Sent once rather than held: peers are told
    * when it began and play it from that offset, so a dance looks synchronised
    * even though the message arrived late.

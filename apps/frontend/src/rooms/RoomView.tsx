@@ -71,7 +71,16 @@ export function RoomView({
   const leave = useEvent(onLeave)
   const { position, walkTo, stopWalking, current } = useMovement(spawnPoint(0, 1))
   useRegisterStageAuth()
-  const { actors, phase, isHost, room: live, sendEmote } = usePresence({
+  const {
+    actors,
+    phase,
+    isHost,
+    room: live,
+    holding,
+    sendEmote,
+    act,
+    hold,
+  } = usePresence({
     position: current,
     character,
     ready: false,
@@ -249,6 +258,9 @@ export function RoomView({
     busy,
     live,
     actors: everybody,
+    onAct: act,
+    onHold: hold,
+    holding,
   })
 
   // A custom-scene room takes the entire viewport, not just the column
