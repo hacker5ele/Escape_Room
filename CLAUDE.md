@@ -208,8 +208,8 @@ registration wall rather than a link ([ADR-0024](docs/adr/0024-friend-graph-and-
 | `GET` | `/api/rooms/:roomId` | — | `{ room }` or `403` if locked |
 | `POST` | `/api/rooms/:roomId/attempt` | `{ answer }` | `{ correct, session, feedback? }` |
 | `POST` | `/api/rooms/:roomId/hint` | — | `{ hint, hintsUsed }` |
-| `POST` | `/api/rooms/:roomId/reset` | — | `{ session }` — wipes only this room's progress ([ADR-0048](docs/adr/0048-room-03-hearts-system.md)) |
-| `POST` | `/api/rooms/:roomId/complete` | — | `{ session }` — marks the room solved with no answer, if `canComplete()` allows it ([ADR-0052](docs/adr/0052-olympus-carpet-race.md)) |
+| `POST` | `/api/rooms/:roomId/reset` | — | `{ session }` — wipes only this room's progress ([ADR-0066](docs/adr/0066-room-03-hearts-system.md)) |
+| `POST` | `/api/rooms/:roomId/complete` | — | `{ session }` — marks the room solved with no answer, if `canComplete()` allows it ([ADR-0070](docs/adr/0070-olympus-carpet-race.md)) |
 
 The social layer, added by ADRs 0023–0029:
 
@@ -348,12 +348,13 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
-| 2026-08-05 | [0052](docs/adr/0052-olympus-carpet-race.md) | Olympus becomes a carpet-racing coin challenge, not a riddle sequence; new `POST /api/rooms/:roomId/complete` | Proposed |
-| 2026-08-05 | [0051](docs/adr/0051-room-owns-its-own-finale.md) | A room decides when it's done showing its own finale, via a new `onRoomFinished` callback | Proposed |
-| 2026-08-05 | [0050](docs/adr/0050-room-completion-vs-attempt-correctness.md) | A correct attempt and a finished room are different things — fixes players being bounced out of room-03 mid-run | Proposed |
-| 2026-08-05 | [0049](docs/adr/0049-olympus-second-act.md) | A third beat after Atlantis: Mount Olympus, a second server-checked riddle act | Proposed, superseded by 0052 |
-| 2026-08-05 | [0048](docs/adr/0048-room-03-hearts-system.md) | A shared 3-hearts system across the Sphinx and Atlantis, plus a room-scoped reset endpoint | Proposed |
-| 2026-08-04 | [0047](docs/adr/0047-room-03-sphinx-riddles.md) | Room 3 is a five-riddle sequence staged from the event log; frontend gets its room shell | Proposed |
+| 2026-08-05 | [0070](docs/adr/0070-olympus-carpet-race.md) | Olympus becomes a carpet-racing coin challenge, not a riddle sequence; new `POST /api/rooms/:roomId/complete` | Proposed |
+| 2026-08-05 | [0069](docs/adr/0069-room-owns-its-own-finale.md) | A room decides when it's done showing its own finale, via a new `onRoomFinished` callback | Proposed |
+| 2026-08-05 | [0068](docs/adr/0068-room-completion-vs-attempt-correctness.md) | A correct attempt and a finished room are different things — fixes players being bounced out of room-03 mid-run | Proposed |
+| 2026-08-05 | [0067](docs/adr/0067-olympus-second-act.md) | A third beat after Atlantis: Mount Olympus, a second server-checked riddle act | Proposed, superseded by 0070 |
+| 2026-08-05 | [0066](docs/adr/0066-room-03-hearts-system.md) | A shared 3-hearts system across the Sphinx and Atlantis, plus a room-scoped reset endpoint | Proposed |
+| 2026-08-04 | [0065](docs/adr/0065-room-03-sphinx-riddles.md) | Room 3 is a five-riddle sequence staged from the event log; frontend gets its room shell | Proposed |
+| 2026-08-06 | [0047](docs/adr/0047-art-arrives-before-the-animation.md) | Fetch a screen's art before it arrives; hold any piece that still has none | Accepted |
 | 2026-08-06 | [0046](docs/adr/0046-email-an-absent-friend.md) | Invite a friend who is not on the app and they get an email, with your character in it | Accepted |
 | 2026-08-06 | [0045](docs/adr/0045-membership-is-liveness.md) | Being in a game is a claim you keep alive; close the tab and you leave both | Accepted |
 | 2026-08-05 | [0044](docs/adr/0044-unbuild-into-dots.md) | Screens unbuild into their own halftone dots and rebuild out of them | Accepted |
@@ -402,7 +403,7 @@ approved the corresponding ADR.
 | 2026-08-03 | [0001](docs/adr/0001-project-choice.md) | We build Projekt A, the digital escape room | Accepted |
 
 All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03, the rest as they were written —
-except 0047–0052 (room-03's Sphinx build), which are `Proposed` and still await his review.
+except 0065–0070 (room-03's Sphinx build), which are `Proposed` and still await his review.
 
 ### Where the code stands
 
@@ -515,10 +516,10 @@ except 0047–0052 (room-03's Sphinx build), which are `Proposed` and still awai
 - **The game** — **Start** on the Rooms tab runs an ink-flood transition into the **lobby**: a
   printed 1950s room your character stands in the middle of and walks around, with an emote bar, a
   room picker and PLAY ([ADR-0037](docs/adr/0037-lobby-stage-and-rooms.md)). PLAY counts down and
-  drops you into the room. **Room 01 is deliberately empty and walkable**; rooms 02 and 04 are stubs
-  wired to the real `attempt` and `hint` endpoints — a sub-team writes the puzzle in
-  `rooms/room-0N.tsx` and touches nothing else (ADR-0007). **Room 03 is a full build**, "The Sphinx's
-  Reckoning" (ADR-0047–0052, `Proposed`, pending Nepomuk's review): five ancient riddles in a walkable
+  drops you into the room. **Room 01 is a full build** (ADR-0046, its own scene rather than the shared
+  `Stage`); rooms 02 and 04 are stubs wired to the real `attempt` and `hint` endpoints — a sub-team
+  writes the puzzle in `rooms/room-0N.tsx` and touches nothing else (ADR-0007). **Room 03 is a full
+  build**, "The Sphinx's Reckoning" (ADR-0065–0070, `Proposed`, pending Nepomuk's review): five ancient riddles in a walkable
   corridor, an Atlantis artifact-recovery quest, and a top-down Olympus carpet race. It needs the
   richer, room-owned `RoomProps` contract the other rooms don't (hints inline in its own dialogue, a
   hearts system, a room-scoped reset, and a `complete` step for stages with no server-checked answer),
@@ -563,6 +564,16 @@ except 0047–0052 (room-03's Sphinx build), which are `Proposed` and still awai
     beats from *every* screen, not just the stage — you can be in a friend's game while reading the
     leaderboard. Walking out of the lobby takes your character off the stage at once and leaves you
     in the party, which is the one departure that is a real click rather than a guess.
+  - **A piece does not fly in until it has something to fly in with**
+    ([ADR-0047](docs/adr/0047-art-arrives-before-the-animation.md)). A scene is about a megabyte of
+    scenery and nothing used to fetch it until the stage painted, so on a cold cache the wave
+    animated **empty boxes** and the furniture popped in afterwards. Now the Rooms tab pulls down the
+    lobby (Start is the button on it), the lobby pulls down whichever room is selected, and your own
+    character comes with it — `decode()`, not just `load`, because otherwise the hitch just moves to
+    the frame that draws it. One promise per URL, so flicking along the room row costs one download
+    each. And any piece whose art still has not arrived is **held invisible** rather than animated
+    empty, released the moment it can be drawn, with a 2.5s ceiling because an image that 404s never
+    fires `load`.
   - **Screens unbuild themselves into dots** ([ADR-0044](docs/adr/0044-unbuild-into-dots.md)). The
     whole app is printed as a halftone, so a panel leaving does not slide or fade: an animated dot
     mask at the page's own 6px pitch takes its ink away until only its dots are left, those fade into

@@ -108,7 +108,7 @@ type Overlay =
  *   -> poseidon-greeting -> poseidon-free -> poseidon-exiting
  *   -> olympus (a top-down carpet race: 10 coins, 30s, reach the finish
  *      gate — entirely client-side, same as Atlantis; POST .../complete
- *      is what actually finishes the room once it's won, see ADR-0027)
+ *      is what actually finishes the room once it's won, see ADR-0070)
  *   -> won
  */
 type EndingPhase =
@@ -187,7 +187,7 @@ export function Room03({ room, onSubmit, onHint, onResetRoom, onCompleteRoom, on
   // call resolves, same spirit as Atlantis's resettingRoom guard.
   const [completingRoom, setCompletingRoom] = useState(false)
 
-  // The shared 3-hearts pool (ADR-0023): starts in sync with the server's
+  // The shared 3-hearts pool (ADR-0066): starts in sync with the server's
   // own count for the Sphinx corridor, and is spent locally by Atlantis
   // mistakes, which have no server counterpart of their own. Whichever side
   // loses the last heart is responsible for calling resetWholeRoom().
@@ -537,7 +537,7 @@ export function Room03({ room, onSubmit, onHint, onResetRoom, onCompleteRoom, on
 
   /**
    * The third heart lost, anywhere in room-03 — resets the WHOLE room, not
-   * just whichever half was active (ADR-0023). Wipes the server's room-03
+   * just whichever half was active (ADR-0066). Wipes the server's room-03
    * progress via onResetRoom(), then puts both the corridor's local engine
    * state and the Atlantis quest state back to their own starting points, so
    * whichever one the player lands in next (the corridor, always — a full
@@ -703,7 +703,7 @@ export function Room03({ room, onSubmit, onHint, onResetRoom, onCompleteRoom, on
       attackStartRef.current = performance.now()
       window.setTimeout(() => {
         // A wrong answer costs a heart and re-asks the SAME riddle now
-        // (ADR-0023) — solvedZones is left alone here. The effect below
+        // (ADR-0066) — solvedZones is left alone here. The effect below
         // watches the server's own riddleIndex and is what actually clears
         // it, and only when the server reports a genuine restart to riddle 1
         // (the third heart lost), not on every miss.
@@ -755,10 +755,10 @@ export function Room03({ room, onSubmit, onHint, onResetRoom, onCompleteRoom, on
   /**
    * All ten coins collected and the finish gate reached — the race is won.
    * Tells the server room-03 is actually done now (POST .../complete,
-   * ADR-0027 — there is no more server-checked answer to hang this off of,
+   * ADR-0070 — there is no more server-checked answer to hang this off of,
    * since Atlantis and this race are both entirely client-side), then moves
    * to the waiting room. `onRoomFinished()` is NOT called here — per
-   * ADR-0026 that's reserved for the waiting room's own "Finish" button, so
+   * ADR-0069 that's reserved for the waiting room's own "Finish" button, so
    * the app doesn't advance past room-03 until the player has actually seen
    * the closing scene.
    */

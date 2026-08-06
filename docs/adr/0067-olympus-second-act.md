@@ -1,15 +1,15 @@
-# ADR-0049: A second riddle act — Mount Olympus — after the Atlantis quest
+# ADR-0067: A second riddle act — Mount Olympus — after the Atlantis quest
 
 - **Status:** Proposed
 - **Date:** 2026-08-05
 - **Deciders:** Inaam Ahmed
 - **Approved-by:** _(pending — awaiting Nepomuk Crhonek's review)_
-- **Superseded by:** [ADR-0052](0052-olympus-carpet-race.md)
+- **Superseded by:** [ADR-0070](0070-olympus-carpet-race.md)
 
 > **Superseded 2026-08-05.** Olympus is a carpet-racing coin challenge, not a riddle sequence — see
-> ADR-0052. `OLYMPUS_RIDDLES` and the two-act (`sphinx` | `olympus`) split described below no longer
+> ADR-0070. `OLYMPUS_RIDDLES` and the two-act (`sphinx` | `olympus`) split described below no longer
 > exist in `room-03.ts`. This document is kept for the reasoning trail (in particular, the event-log
-> replay technique it built on top of, which ADR-0050 and ADR-0052 both still rely on for the Sphinx's
+> replay technique it built on top of, which ADR-0068 and ADR-0070 both still rely on for the Sphinx's
 > own five riddles).
 
 ## Context
@@ -19,7 +19,7 @@ riddles, see the Atlantis-quest ADR). The request was for a third beat after tha
 artifacts are all restored, the player is sent back into the light and arrives at Mount Olympus — a
 grand hall where the assembled Greek gods pose their own puzzle before the room is truly finished.
 
-Two things had to be decided, both interface-shaped for the same reason ADR-0047 and ADR-0048 already
+Two things had to be decided, both interface-shaped for the same reason ADR-0065 and ADR-0066 already
 established for this room — a new stage needs somewhere to live without a `GameSession` schema change:
 
 **Where does "which act, and which riddle within it" live?** Same answer as before: nowhere new.
@@ -54,7 +54,7 @@ more, posed by Zeus, Hermes, Ares, Hera, and the Council in turn) are two separa
 change needed there.
 
 **Losing the last heart on Olympus resets all the way back to the Sphinx's riddle 1, not just to
-Olympus's own riddle 1.** This matches "you lost this run" from ADR-0048: Olympus is only reachable by
+Olympus's own riddle 1.** This matches "you lost this run" from ADR-0066: Olympus is only reachable by
 going through the Sphinx and Atlantis again, same as the first time. `currentProgress()`'s reset branch
 sets `act` back to `'sphinx'` regardless of which act the miss happened in.
 
@@ -87,10 +87,10 @@ answer — the same standard that fixed the earlier "Silence"/"Time" riddles' br
 - A player who reaches Olympus, then opens a second tab and replays the Sphinx from scratch in it, could
   produce a `session.events` history where the "5 sphinx riddles then N more" inference gets confused
   about which N belong to which run — an accepted edge case in the same class already named in
-  ADR-0048 (Atlantis's own local-vs-server drift under a second tab), not worth solving for.
+  ADR-0066 (Atlantis's own local-vs-server drift under a second tab), not worth solving for.
 - `apps/frontend/src/rooms/preview.tsx`'s mock riddle set was updated to match the new Sphinx riddle
   text/answers exactly, since it's hand-synced and has no build-time check tying it to `room-03.ts`
-  (documented limitation, unchanged from ADR-0047).
+  (documented limitation, unchanged from ADR-0065).
 
 ## Alternatives considered
 

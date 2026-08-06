@@ -111,7 +111,7 @@ export class GameService {
 
   /**
    * Wipes one room's progress only — its events and its `solvedRooms` entry
-   * — leaving the rest of the game untouched. See ADR-0048: this exists so a
+   * — leaving the rest of the game untouched. See ADR-0066: this exists so a
    * client-only sub-mechanic (room-03's Atlantis quest) can trigger a true
    * "start this room over" without the server having any other way to learn
    * that happened.
@@ -148,7 +148,7 @@ export class GameService {
    * Logs an answer and, when the ROOM is actually finished, marks it solved
    * — in one save.
    *
-   * `correct` and `roomComplete` are deliberately separate (ADR-0050):
+   * `correct` and `roomComplete` are deliberately separate (ADR-0068):
    * `correct` is whether this one attempt was right (always logged, right
    * or wrong — the wrong ones are what show where players get stuck).
    * `roomComplete` is whether the whole room is now done. For a one-shot
@@ -199,7 +199,7 @@ export class GameService {
 
   /**
    * Marks a room solved directly, with no attempt/answer involved — for a
-   * room whose later stages are entirely client-side (ADR-0052: room-03's
+   * room whose later stages are entirely client-side (ADR-0070: room-03's
    * Atlantis quest and Olympus carpet race), so there is no further
    * server-checked answer left to hang `roomComplete` off of. The room
    * itself decides when this is allowed to succeed — see

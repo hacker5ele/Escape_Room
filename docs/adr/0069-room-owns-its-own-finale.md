@@ -1,4 +1,4 @@
-# ADR-0051: A room decides when it is done showing its own finale
+# ADR-0069: A room decides when it is done showing its own finale
 
 - **Status:** Proposed
 - **Date:** 2026-08-05
@@ -14,13 +14,13 @@ actually shown.
 
 Root cause: `App.tsx`'s `CurrentRoom` advances to the next room the instant the server marks the current
 one solved. `onSubmit`'s handler compared `currentRoomId(result.session)` against the room currently
-displayed — the moment they differed (because the last attempt made the room `roomComplete`, ADR-0050),
+displayed — the moment they differed (because the last attempt made the room `roomComplete`, ADR-0068),
 it called `setState({ kind: 'loading' })`, which unmounts whatever `RoomComponent` was on screen and
 starts loading the next one. For room-03 specifically, the Olympus finale's own last correct answer
 *is* the moment the room becomes solved — so the entire post-Olympus sequence (the waiting room, the
 "Finish" button) could never render at all; the app was already tearing the room down mid-celebration.
 
-This is a second, distinct bug from ADR-0050's — that one was about *when the server* considers a room
+This is a second, distinct bug from ADR-0068's — that one was about *when the server* considers a room
 solved; this one is about *when the app* acts on that fact. Both had to be fixed for a multi-stage room
 to actually finish the way it's built to.
 
@@ -53,13 +53,13 @@ catching the displayed room up to whatever the server already thinks is current.
 - Every room that gets a real frontend component from here on must remember to call `onRoomFinished`.
   A room that never calls it will show its last screen forever even after the server has moved on — the
   mirror-image failure mode of the bug this fixes. This is now the one thing a room author must
-  remember, the same way ADR-0050 made `roomComplete` the one thing a multi-stage room's `check()` must
+  remember, the same way ADR-0068 made `roomComplete` the one thing a multi-stage room's `check()` must
   set correctly. Both are called out in `room-props.ts`'s own doc comment for the next room owner to read
   before they build against it.
 - `apps/frontend/src/rooms/preview.tsx`'s mock `RoomProps` gained a no-op `onRoomFinished` to keep
   compiling; the preview never needs it to do anything, since it isn't wired to real session/room
   advancement at all.
-- Room 3's actual finale, once this and ADR-0050 were both fixed, is: Sphinx's five riddles → Atlantis
+- Room 3's actual finale, once this and ADR-0068 were both fixed, is: Sphinx's five riddles → Atlantis
   quest → Poseidon's throne room (a seated greeting, then a walk into the light, on the player's own
   button press) → Olympus's five riddles → a waiting room with three memory-windows onto the pyramid,
   Atlantis, and Olympus, and a closing word from an unnamed luminous figure → "Finish."

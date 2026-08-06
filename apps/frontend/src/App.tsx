@@ -40,6 +40,7 @@ import { ROOM_COMPONENTS } from './rooms/room-03-registry'
 import { previewRoomIdFromLocation, RoomPreview } from './rooms/preview'
 import { unlockAudio } from './audio/sfx'
 import { useLiveness } from './stage/useLiveness'
+import { preloadCharacter, preloadScene } from './stage/preload'
 import { Assemble, LEAVE_TOTAL_MS, unbuild } from './fx/Assemble'
 import { isInviteToken } from './routing'
 
@@ -422,7 +423,22 @@ function GameLayout() {
  * arranged around it, which is why it is `/` and opens by default.
  */
 function RoomsRoute() {
-  const { game, travel } = useGame()
+  const { game, travel, character } = useGame()
+
+  // The lobby's scenery, fetched while somebody is still reading this page.
+  // Start is the button on this tab, so this is the last screen before the
+  // stage — and a room cannot fly in if its furniture has not arrived
+  // (ADR-0047).
+  useEffect(() => {
+    void preloadScene('lobby')
+  }, [])
+
+  // And the four parts you are wearing. Yours is the one character certain to
+  // be standing on that stage, and the picker probably cached it already — but
+  // not for somebody who signed up on another device and came back.
+  useEffect(() => {
+    if (character) void preloadCharacter(character)
+  }, [character])
 
   return (
     <section className="pane p-5">
@@ -542,9 +558,9 @@ function RoomRoute() {
   // room-03 owns its whole screen instead of playing through the shared
   // Stage/RoomView shell every other room uses: it needs hints inline in
   // its own dialogue, a hearts system, a room-scoped reset, and a
-  // `complete` step for stages with no server-checked answer (ADR-0048,
-  // ADR-0052) — none of which RoomView's contract (onAnswer/busy, an
-  // external hint list, an instant "Solved" swap) supports. See ADR-0047.
+  // `complete` step for stages with no server-checked answer (ADR-0066,
+  // ADR-0070) — none of which RoomView's contract (onAnswer/busy, an
+  // external hint list, an instant "Solved" swap) supports. See ADR-0065.
   if (roomId === 'room-03') {
     return <Room03Route game={game} onLeave={() => travel('/lobby')} onGameChange={setGame} />
   }
@@ -567,7 +583,7 @@ type RoomState =
 
 /**
  * room-03, full-screen — the one room that opts out of the shared
- * Stage/RoomView shell (see `RoomRoute` above and ADR-0047). Everything
+ * Stage/RoomView shell (see `RoomRoute` above and ADR-0065). Everything
  * every *other* room gets from `RoomView` — entering, hints, submitting,
  * leaving on solve — is reimplemented here against room-03's own richer
  * `RoomProps` contract instead (onHint/onResetRoom/onCompleteRoom/
@@ -592,11 +608,11 @@ function Room03Route({
 
   // The room actually on screen can lag behind the server's own idea of
   // "solved" on purpose: the server may already consider room-03 solved
-  // (its last attempt marked roomComplete, see ADR-0050) while the room's
+  // (its last attempt marked roomComplete, see ADR-0068) while the room's
   // own component is still showing an on-screen finale (a congratulations
   // scene, a walk through a door) that hasn't finished yet. `finished`
   // becomes true only once the room itself calls `onRoomFinished` — see
-  // ADR-0051 — at which point this route hands back to the lobby exactly
+  // ADR-0069 — at which point this route hands back to the lobby exactly
   // like RoomView's own "Onward" button does.
   const [finished, setFinished] = useState(false)
   const [state, setState] = useState<RoomState>({ kind: 'loading' })
@@ -670,7 +686,7 @@ function Room03Route({
           onGameChange(result.session)
 
           // Deliberately does NOT set `finished` here, even if this attempt
-          // just solved the room server-side — see ADR-0051. The room being
+          // just solved the room server-side — see ADR-0069. The room being
           // solved and the player being ready to leave it are different
           // moments; only onRoomFinished (below) does that. `state.room`
           // may now be stale (this room's own publicData() has moved on,

@@ -1,7 +1,7 @@
 import { Suspense, useState } from 'react'
 import type { RoomId, RoomPublicData } from '@escape-room/shared'
 import { isRoomId } from '@escape-room/shared'
-import { ROOM_COMPONENTS } from './registry'
+import { ROOM_COMPONENTS } from './room-03-registry'
 
 /**
  * Dev-only preview mode: `?preview=room-03` renders that room directly, with
@@ -184,6 +184,7 @@ export function RoomPreview({ roomId }: { roomId: RoomId }) {
                 finishedAt: null,
                 hintsUsed: 0,
                 events: [],
+                version: 0,
               },
             })
           }}
@@ -202,6 +203,7 @@ export function RoomPreview({ roomId }: { roomId: RoomId }) {
                 finishedAt: null,
                 hintsUsed: 0,
                 events: [],
+                version: 0,
               },
             })
           }}
@@ -217,6 +219,7 @@ export function RoomPreview({ roomId }: { roomId: RoomId }) {
                 finishedAt: null,
                 hintsUsed: 0,
                 events: [],
+                version: 0,
               },
             })
           }

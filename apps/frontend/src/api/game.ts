@@ -61,7 +61,7 @@ export async function requestHint(
   return hintResponseSchema.parse(await response.json())
 }
 
-/** Wipes one room's progress only, leaving the rest of the game untouched. See ADR-0048. */
+/** Wipes one room's progress only, leaving the rest of the game untouched. See ADR-0066. */
 export async function resetRoom(
   authHeaders: Record<string, string>,
   roomId: RoomId,
@@ -70,7 +70,7 @@ export async function resetRoom(
   return roomResetResponseSchema.parse(await response.json())
 }
 
-/** Marks a room solved with no answer involved, for a room whose final stage(s) are client-side. See ADR-0052. */
+/** Marks a room solved with no answer involved, for a room whose final stage(s) are client-side. See ADR-0070. */
 export async function completeRoom(
   authHeaders: Record<string, string>,
   roomId: RoomId,

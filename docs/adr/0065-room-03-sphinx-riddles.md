@@ -1,4 +1,4 @@
-# ADR-0047: Room 3 is a five-riddle sequence, staged from the event log; the frontend gets its room shell
+# ADR-0065: Room 3 is a five-riddle sequence, staged from the event log; the frontend gets its room shell
 
 - **Status:** Proposed
 - **Date:** 2026-08-04

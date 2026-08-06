@@ -31,8 +31,16 @@ export interface RoomDefinition {
   title: string
   /** One line of atmosphere for the lobby tile. */
   tagline: string
-  /** Which scenery set the stage dresses itself with. */
+  /** Which scenery set the stage dresses itself with. Unused when `customScene` is set. */
   scene: 'vault' | 'lobby'
+  /**
+   * This room draws its own backdrop instead of standing on the shared
+   * walkable Stage — `render` gets the whole scene, not just the chrome on
+   * top of it. The trade is real: no co-op walking or emotes in this room.
+   * The Reading Hall is the one room that makes it, because its puzzle *is*
+   * a place to be scattered through — see the note on `RoomOne`.
+   */
+  customScene?: boolean
   render: (props: RoomProps) => React.ReactNode
 }
 
@@ -43,9 +51,10 @@ import { RoomFour } from './room-04'
 const DEFINITIONS: Record<RoomId, RoomDefinition> = {
   'room-01': {
     id: 'room-01',
-    title: 'The Waiting Room',
-    tagline: 'Nothing here yet. Walk about.',
+    title: 'The Reading Hall',
+    tagline: 'Ten marks, out of Rome, Greece, Egypt and Troy.',
     scene: 'vault',
+    customScene: true,
     render: (props) => <RoomOne {...props} />,
   },
   'room-02': {
@@ -59,7 +68,7 @@ const DEFINITIONS: Record<RoomId, RoomDefinition> = {
   // out of the shared Stage/RoomView shell entirely and is rendered
   // full-screen by App.tsx's `Room03Route` instead, since it needs a richer
   // RoomProps contract (hints inline, hearts, reset, complete — see
-  // ADR-0047) than this registry's onAnswer/busy shape supports. This entry
+  // ADR-0065) than this registry's onAnswer/busy shape supports. This entry
   // exists only so `Record<RoomId, RoomDefinition>` stays total and
   // `roomDefinition('room-03')` has something to return if it is ever
   // reached — App.tsx's `RoomRoute` intercepts room-03 before RoomView

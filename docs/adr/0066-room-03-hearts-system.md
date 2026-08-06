@@ -1,4 +1,4 @@
-# ADR-0048: A shared 3-hearts system for room-03, and a room-scoped reset endpoint
+# ADR-0066: A shared 3-hearts system for room-03, and a room-scoped reset endpoint
 
 - **Status:** Proposed
 - **Date:** 2026-08-05
@@ -8,13 +8,13 @@
 ## Context
 
 Room 3 is two back-to-back challenges: the Sphinx's five-riddle corridor (server-authoritative, see
-ADR-0047), then — once all five are answered — an Atlantis palace quest where the player finds and
+ADR-0065), then — once all five are answered — an Atlantis palace quest where the player finds and
 places three of Poseidon's artifacts against a 60-second clock (frontend-only state, no server
-counterpart, added directly after ADR-0047 shipped).
+counterpart, added directly after ADR-0065 shipped).
 
 Until now the two halves failed independently and harshly:
 
-- **Sphinx:** any wrong answer sent the player back to riddle 1 immediately (ADR-0047's
+- **Sphinx:** any wrong answer sent the player back to riddle 1 immediately (ADR-0065's
   `currentStage()` — an unbroken streak of correct attempts, reset to 0 on any miss).
 - **Atlantis:** a wrong pedestal placement cost 10 seconds; running out the clock silently restarted
   just the Atlantis quest.
@@ -29,7 +29,7 @@ progress and the Atlantis quest both — back to riddle 1 with a fresh three hea
 
 This is interface-shaped for two reasons:
 
-1. **Where do Sphinx hearts live?** Same question ADR-0047 already answered for riddle stage: no new
+1. **Where do Sphinx hearts live?** Same question ADR-0065 already answered for riddle stage: no new
    `GameSession` field. `session.events` already has everything needed — hearts are derived the same
    way stage is, by replaying the player's room-03 attempts.
 2. **How does a full reset get triggered from Atlantis?** Atlantis is frontend-only; it has no way to

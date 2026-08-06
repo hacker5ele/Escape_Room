@@ -92,7 +92,7 @@ export function createRoomRoutes(
   })
 
   // POST /api/rooms/:roomId/reset — wipes this room's progress only, leaving
-  // the rest of the game untouched. See ADR-0048: used by room-03's Atlantis
+  // the rest of the game untouched. See ADR-0066: used by room-03's Atlantis
   // quest, which has no other way to tell the server its own run failed.
   router.post('/:roomId/reset', async (req, res) => {
     const roomId = readRoomId(req)
@@ -103,7 +103,7 @@ export function createRoomRoutes(
 
   // POST /api/rooms/:roomId/complete — marks a room solved with no answer
   // involved, for a room whose final stage(s) are entirely client-side. See
-  // ADR-0052: used once room-03's Olympus carpet race is won.
+  // ADR-0070: used once room-03's Olympus carpet race is won.
   router.post('/:roomId/complete', async (req, res) => {
     const roomId = readRoomId(req)
     const { userId, game } = await requirePlayer(req, authenticator, games)

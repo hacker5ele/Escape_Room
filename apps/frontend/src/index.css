@@ -625,6 +625,116 @@
     letter-spacing: 0;
     line-height: 1.62;
   }
+
+  /* Room 1 — the Reading Hall, a dark scene built from the stock ramp's own
+     dark end rather than a second palette: stock-950/900 standing in for
+     stone and old wood until Inaam's Figma has a real backdrop. Anything
+     actually readable inside it — a clue panel, the answer field — stays
+     ordinary Overprint paper (`.pane`, `.field`), the same way a lit page
+     would in a dark room, rather than inventing dark-mode versions of them.
+
+     This room opts out of the shared walkable Stage — see `customScene` in
+     `registry.tsx` — and takes the whole viewport instead: no paper, no
+     halftone screen, nothing of the page showing anywhere around it. Leaving,
+     feedback and hints still work — `RoomView` floats them above this on
+     their own, since there is no page flow left for them to sit in. */
+  .room1-scene {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    overflow-y: auto;
+    /* A shaft of light through the collapsed roof (the narrow cone), the
+       shelving on either side falling into shadow (the wide low-opacity
+       wash at the edges), and a floor that darkens as it recedes. */
+    background:
+      radial-gradient(18% 60% at 50% -4%, rgb(232 69 46 / 0.16) 0%, rgb(232 69 46 / 0) 78%),
+      radial-gradient(60% 45% at 50% 0%, rgb(24 22 15 / 0) 0%, rgb(14 13 8 / 0.55) 85%),
+      linear-gradient(
+        180deg,
+        rgb(14 13 8 / 0) 55%,
+        rgb(14 13 8 / 0.7) 92%,
+        rgb(14 13 8 / 0.92) 100%
+      ),
+      var(--color-stock-950);
+    color: var(--color-stock-200);
+  }
+
+  /* The floor: faint flagstone joints, denser toward the bottom edge so it
+     reads as receding rather than tiled flat. */
+  .room1-scene::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 26vh;
+    min-height: 170px;
+    background-image:
+      repeating-linear-gradient(
+        100deg,
+        rgb(230 224 208 / 0.05) 0px,
+        rgb(230 224 208 / 0.05) 1px,
+        transparent 1px,
+        transparent 74px
+      ),
+      repeating-linear-gradient(
+        80deg,
+        rgb(230 224 208 / 0.04) 0px,
+        rgb(230 224 208 / 0.04) 1px,
+        transparent 1px,
+        transparent 96px
+      );
+    -webkit-mask-image: linear-gradient(180deg, transparent, black 55%);
+    mask-image: linear-gradient(180deg, transparent, black 55%);
+    pointer-events: none;
+  }
+
+  .room1-hotspot {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 1rem;
+    border: 1px solid rgb(246 242 230 / 0.16);
+    background: rgb(24 22 15 / 0.55);
+    color: var(--color-stock-200);
+    text-align: left;
+    cursor: pointer;
+    transition:
+      border-color 0.16s ease,
+      background-color 0.16s ease;
+  }
+
+  .room1-hotspot:hover,
+  .room1-hotspot:focus-visible {
+    border-color: var(--color-signal-500);
+    background: rgb(24 22 15 / 0.8);
+  }
+
+  /* A stage not reached yet — the veil inside does the visual telling; this
+     just stops it pretending to be clickable. */
+  .room1-hotspot:disabled {
+    cursor: not-allowed;
+  }
+
+  .room1-hotspot:disabled:hover {
+    border-color: rgb(246 242 230 / 0.16);
+    background: rgb(24 22 15 / 0.55);
+  }
+
+  .room1-hotspot[data-visited='true'] {
+    border-color: rgb(11 127 191 / 0.6);
+  }
+
+  .room1-hotspot[data-visited='true']::after {
+    content: 'read';
+    position: absolute;
+    top: 0.6rem;
+    right: 0.7rem;
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-solved-300);
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -1468,6 +1578,17 @@
   /* The JS refuses to mark anything in the first place, so these classes never
      appear. Belt and braces for a preference changed mid-flight. */
   .piece-leaving,
+  /* Waiting for its own pictures.
+     ---------------------------------------------------------------------
+     Invisible rather than early. A piece whose artwork is still downloading
+     would otherwise animate as an empty box and have the picture appear
+     afterwards with no animation at all — which is the one thing the whole
+     transition exists to avoid. Held here until it has something to show, then
+     released into the same arrival everything else got (ADR-0047). */
+  .assemble .piece-held {
+    opacity: 0;
+  }
+
   .piece-arriving {
     animation: none !important;
     mask-image: none !important;

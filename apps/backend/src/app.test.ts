@@ -287,9 +287,9 @@ describe('attempts', () => {
     }
 
     // room-03's five riddles are real progress but no longer finish the
-    // room by themselves (ADR-0025) — Atlantis and the Olympus carpet race
+    // room by themselves (ADR-0068) — Atlantis and the Olympus carpet race
     // both follow, entirely client-side, and only POST .../complete
-    // (ADR-0027) actually marks the room solved once those are cleared too.
+    // (ADR-0070) actually marks the room solved once those are cleared too.
     const SPHINX_ANSWERS = ['A', 'C', 'D', 'D', 'B']
     for (const answer of SPHINX_ANSWERS) {
       const response = await as(app, ALICE).post('/api/rooms/room-03/attempt').send({ answer })
@@ -323,7 +323,7 @@ describe('attempts', () => {
     expect(blocked.body.error.code).toBe('RATE_LIMITED')
   })
 
-  describe('room-03 hearts (ADR-0023)', () => {
+  describe('room-03 hearts (ADR-0066)', () => {
     async function unlockRoom03(app: Express) {
       await startGame(app, ALICE)
       await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
@@ -369,7 +369,7 @@ describe('attempts', () => {
     })
   })
 
-  describe('room completion without an answer (ADR-0027)', () => {
+  describe('room completion without an answer (ADR-0070)', () => {
     async function unlockRoom03(app: Express) {
       await startGame(app, ALICE)
       await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })

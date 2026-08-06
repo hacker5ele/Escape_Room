@@ -35,7 +35,7 @@ export function Hourglass({ fraction }: { fraction: number }) {
 
 /**
  * The shared 3-hearts strip — one pool spanning both the Sphinx corridor and
- * the Atlantis quest that follows it (see ADR-0023). Full hearts glow
+ * the Atlantis quest that follows it (see ADR-0066). Full hearts glow
  * amber/gold to match whichever half of the room is active; lost hearts sit
  * as a dim outline so the player can see exactly how much room for error is
  * left without it feeling like a second, separate counter.

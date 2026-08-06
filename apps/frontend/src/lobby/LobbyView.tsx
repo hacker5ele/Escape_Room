@@ -6,6 +6,7 @@ import { play, type SoundName } from '../audio/sfx'
 import { Stage, type Actor } from '../stage/Stage'
 import { useMovement } from '../stage/useMovement'
 import { usePresence, toActor } from '../stage/usePresence'
+import { preloadScene } from '../stage/preload'
 import { leaveStage, setPhase, useRegisterStageAuth } from '../api/stage'
 import { spawnPoint } from '../stage/scenes'
 import { EmoteBar } from './EmoteBar'
@@ -89,6 +90,13 @@ export function LobbyView({
     [game.solvedRooms],
   )
   const [selected, setSelected] = useState<RoomId>(suggested)
+
+  // The room somebody is about to press PLAY on, fetched while they are still
+  // choosing it. Re-run on every change, and each URL is only ever asked for
+  // once, so flicking along the row costs one download per room (ADR-0047).
+  useEffect(() => {
+    void preloadScene(roomDefinition(selected).scene)
+  }, [selected])
 
   const fire = useCallback(
     (name: EmoteName) => {

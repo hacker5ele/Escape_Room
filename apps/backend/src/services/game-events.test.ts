@@ -112,7 +112,7 @@ describe('activity log', () => {
     }
 
     // room-03's five riddles are real progress but no longer finish the
-    // room by themselves (ADR-0025) — only POST .../complete (ADR-0027)
+    // room by themselves (ADR-0068) — only POST .../complete (ADR-0070)
     // actually marks it solved, once Atlantis and the Olympus carpet race
     // (both client-side) are cleared too.
     for (const answer of ['A', 'C', 'D', 'D', 'B']) {

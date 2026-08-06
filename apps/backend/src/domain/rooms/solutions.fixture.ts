@@ -15,7 +15,7 @@ import type { RoomId } from '@escape-room/shared'
  * `MULTIPLE_CHOICE_ROOMS` note in rooms.test.ts.
  */
 export const SOLUTIONS: Record<RoomId, unknown> = {
-  'room-01': 90,
+  'room-01': '7931473781',
   'room-02': 'ESCAPE ROOM',
   'room-03': 'A',
   'room-04': 108,

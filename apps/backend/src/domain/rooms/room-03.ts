@@ -105,7 +105,7 @@ const LETTERS = ['A', 'B', 'C', 'D'] as const
 /**
  * Three hearts, shared across this room's whole run — the Sphinx riddles,
  * the Atlantis quest, and the Olympus carpet race that follow it in the
- * frontend (see ADR-0048, ADR-0052). Losing the last one anywhere sends the
+ * frontend (see ADR-0066, ADR-0070). Losing the last one anywhere sends the
  * player back to riddle 1 here, the only place hearts are tracked
  * server-side.
  */
@@ -121,7 +121,7 @@ interface Progress {
 /**
  * Replays this player's whole room-03 attempt history to derive where they
  * are now — the "no dedicated progress field, derive it from the event
- * log" approach ADR-0047 established, still tracking hearts (ADR-0048).
+ * log" approach ADR-0065 established, still tracking hearts (ADR-0066).
  *
  * A wrong answer costs a heart and the player retries the SAME riddle —
  * losing a heart is a real, felt setback without being a full restart. Only
@@ -169,7 +169,7 @@ export const room03: RoomDefinition = {
   // clamps `stage` at the last index once they're all correct, and only a
   // full heart-loss reset ever moves it back — can the client-only tail
   // (Atlantis, then the Olympus carpet race) legitimately claim room-03 is
-  // complete via POST /api/rooms/:roomId/complete. See ADR-0052.
+  // complete via POST /api/rooms/:roomId/complete. See ADR-0070.
   canComplete(session) {
     const { stage } = currentProgress(session)
     return stage === SPHINX_RIDDLES.length - 1
@@ -186,7 +186,7 @@ export const room03: RoomDefinition = {
       riddleText: riddle.text,
       choices: riddle.choices.map((choice, index) => ({ letter: LETTERS[index], text: choice })),
       // Exposed so the frontend's hearts HUD (shared with Atlantis and
-      // Olympus, both client-only from here — see ADR-0048, ADR-0052) can
+      // Olympus, both client-only from here — see ADR-0066, ADR-0070) can
       // start in sync with the server's own count instead of guessing.
       hearts,
       maxHearts: MAX_HEARTS,
@@ -213,7 +213,7 @@ export const room03: RoomDefinition = {
         correct: true,
         // The five riddles are no longer the whole room — Atlantis and the
         // Olympus carpet race both follow, entirely client-side, and only
-        // POST /api/rooms/:roomId/complete (ADR-0052) actually finishes the
+        // POST /api/rooms/:roomId/complete (ADR-0070) actually finishes the
         // room once those are cleared too.
         roomComplete: false,
         feedback: isLastRiddle

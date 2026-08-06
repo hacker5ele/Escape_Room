@@ -1,4 +1,4 @@
-# ADR-0050: A correct attempt and a finished room are not the same thing
+# ADR-0068: A correct attempt and a finished room are not the same thing
 
 - **Status:** Proposed
 - **Date:** 2026-08-05
@@ -14,7 +14,7 @@ Root cause: `GameService.applyAttempt(game, roomId, answer, correct)` has, since
 of this room system, added `roomId` to `solvedRooms` on **any** `correct: true` outcome from that room's
 `check()`. That was a safe assumption when every room was one question, one answer — "correct" and
 "the room is finished" were the same event by construction. Room 3 broke that assumption the moment it
-became multi-stage (five Sphinx riddles, ADR-0047) and nobody updated `applyAttempt` to match; ADR-0049
+became multi-stage (five Sphinx riddles, ADR-0065) and nobody updated `applyAttempt` to match; ADR-0067
 made it worse by adding five more Olympus riddles on top.
 
 The actual behavior in production: the player's very first correct Sphinx riddle answer marked

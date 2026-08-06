@@ -196,8 +196,8 @@ export function renderEndingScene(ctx: CanvasRenderingContext2D, state: EndingSc
 // ============================================================================
 // Atlantis — Poseidon's palace. Reached through the ending chamber's golden
 // door. The player finds three hidden artifacts and returns each to its own
-// pedestal, against a countdown clock — entirely client-side (ADR-0023,
-// ADR-0027), since nothing about "did you find and place three artifacts"
+// pedestal, against a countdown clock — entirely client-side (ADR-0066,
+// ADR-0070), since nothing about "did you find and place three artifacts"
 // needs server verification.
 // ============================================================================
 
@@ -893,7 +893,7 @@ export { POSEIDON_GROUND_Y }
 // Olympus — a top-down carpet race. Reached through Poseidon's own door:
 // fly freely in every direction, collect ten coins, reach the finish gate,
 // against a countdown clock. Entirely client-side, same as Atlantis
-// (ADR-0027) — there is no server-checked answer here at all.
+// (ADR-0070) — there is no server-checked answer here at all.
 // ============================================================================
 
 export const OLYMPUS_CANVAS_WIDTH = 1280
