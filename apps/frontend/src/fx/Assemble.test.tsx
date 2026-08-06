@@ -4,7 +4,7 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Assemble, pieces, unbuild } from './Assemble'
+import { Assemble, pieces, stagger, unbuild } from './Assemble'
 
 /**
  * The design system, as text.
@@ -91,6 +91,16 @@ describe('a piece in flight is the same panel, moved', () => {
     expect(transition).not.toMatch(/--pane-(blur|alpha|ink)\s*:/)
   })
 
+  it('is specific enough to beat a prop that carries its own animation', () => {
+    // `.stage-prop[data-sway='leaves']` is (0,2,0) and sets `animation`. A bare
+    // `.piece-arriving` is (0,1,0) and loses to it, so the palm, the hanging
+    // bulb and the chain would go on swaying and simply never fly in — with
+    // nothing anywhere to say why. Scoping under `.assemble` costs nothing,
+    // because a piece never exists outside one.
+    expect(transition).toMatch(/\.assemble\s+\.piece-arriving\s*\{[^}]*animation:/)
+    expect(transition).toMatch(/\.assemble\s+\.piece-leaving\s*\{[^}]*animation:/)
+  })
+
   it('never clips the container, in either axis', () => {
     // `overflow` other than `visible` above a `.pane` silently disables its
     // `backdrop-filter` — the first rule at the top of index.css. Doing it
@@ -163,6 +173,53 @@ describe('choosing what moves', () => {
   it('falls back to direct children when a screen has no panels or controls', () => {
     const root = markup(`<div id="only-child">a full-bleed screen</div>`)
     expect(pieces(root).map((node) => node.id)).toEqual(['only-child'])
+  })
+
+  it('takes the scenery as well as the stage holding it', () => {
+    // The room used to arrive with its furniture already standing in it, which
+    // read as the objects having been there all along — especially next to the
+    // characters, who have always dropped in.
+    const root = markup(`
+      <div data-piece id="frame">
+        <img class="stage-wall" id="wall">
+        <img class="stage-floor" id="floor">
+        <img class="stage-prop" data-piece id="sofa">
+        <img class="stage-prop" data-piece data-sway="leaves" id="palm">
+        <div class="stage-actor" id="player"></div>
+      </div>
+    `)
+
+    const ids = pieces(root).map((node) => node.id)
+    expect(ids).toContain('sofa')
+    expect(ids).toContain('palm')
+    // The frame comes too, so the scenery flies *within* a stage that is itself
+    // arriving — the same two-layer parallax the panels get.
+    expect(ids).toContain('frame')
+    // Surfaces are the room, not things in it, and a character already has
+    // `drop-in` of its own.
+    expect(ids).not.toContain('wall')
+    expect(ids).not.toContain('floor')
+    expect(ids).not.toContain('player')
+  })
+})
+
+describe('the wave, not the gap, is what is held fixed', () => {
+  it('keeps the leisurely spacing while a screen is small', () => {
+    expect(stagger(8, 720, 42)).toBe(42)
+  })
+
+  it('tightens up rather than running long once the scenery joins in', () => {
+    // A fixed 42ms was fine at twenty pieces and not at forty: the last one
+    // would not set off for a second and a half, so the wave outlasted the
+    // animation it was part of.
+    const forty = stagger(40, 720, 42)
+    expect(forty).toBeLessThan(42)
+    expect((40 - 1) * forty).toBeLessThanOrEqual(720)
+  })
+
+  it('survives a screen with one piece, or none', () => {
+    expect(stagger(1, 720, 42)).toBe(42)
+    expect(stagger(0, 720, 42)).toBe(42)
   })
 })
 

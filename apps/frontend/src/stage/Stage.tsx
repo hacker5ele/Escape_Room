@@ -2,14 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Character } from '../character/parts'
 import { CharacterFigure } from '../character/CharacterFigure'
 import type { EmoteName } from '../character/emotes'
-import {
-  HORIZON,
-  SCENES,
-  STAGE,
-  type SceneName,
-  pieceSize,
-  pieceUrl,
-} from './scenes'
+import { HORIZON, SCENES, STAGE, type SceneName, pieceSize, pieceUrl } from './scenes'
 
 /**
  * The room everybody stands in.
@@ -131,11 +124,14 @@ export function Stage({
   return (
     <div
       ref={frame}
-      /* One piece in the screen transition, so the stage comes apart and
-         rebuilds as a single sheet. Without this the transition would find no
-         `.pane` here and start throwing the scenery and the players around
-         individually, which reads as the room breaking rather than as the page
-         turning (ADR-0044). */
+      /* The stage is a piece, and so is every prop inside it — so the room
+         arrives as a room while its furniture flies into place within it. The
+         transforms compound, which is the same two-layer parallax the panels
+         and their controls get (ADR-0044).
+
+         The wall and the floor stay out of it deliberately: they are the room
+         rather than things in it, and a room whose walls fly in has nothing left
+         for the furniture to arrive into. */
       data-piece=""
       className="stage-frame"
       onPointerDown={(event) => {
@@ -174,6 +170,16 @@ export function Stage({
               alt=""
               draggable={false}
               data-sway={prop.sway}
+              /* Every piece of scenery flies in on its own, so the room builds
+                 itself rather than being there when you arrive. The characters
+                 already did this — `.stage-actor` has `drop-in` — which is what
+                 made the furniture standing still look wrong beside them.
+
+                 The frame is a piece too, so the stage arrives as a stage *and*
+                 its contents arrive within it. The transforms compound, which is
+                 the same two-layer parallax the panels and their controls get
+                 (ADR-0044). */
+              data-piece=""
               className="stage-prop"
               style={{
                 left: prop.x - size.w / 2,
