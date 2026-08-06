@@ -1200,6 +1200,67 @@
      So on a narrow screen the readout stops being a gauge and becomes a chip.
      The tube is the first thing to go — it is the most expensive 7rem in the
      room and it says exactly what the word beside it says. */
+  /* Room 4 — the Lost Archive, a dark scene built from the stock ramp's own
+     dark end rather than a second palette: stock-950/900 standing in for
+     stone and old wood until Inaam's Figma has a real backdrop. Anything
+     actually readable inside it — a clue panel, the answer field — stays
+     ordinary Overprint paper (`.pane`, `.field`), the same way a lit page
+     would in a dark room, rather than inventing dark-mode versions of them.
+
+     This room opts out of the shared walkable Stage — see `customScene` in
+     `registry.tsx` — and takes the whole viewport instead: no paper, no
+     halftone screen, nothing of the page showing anywhere around it. Leaving,
+     feedback and hints still work — `RoomView` floats them above this on
+     their own, since there is no page flow left for them to sit in. */
+  .room4-scene {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    overflow-y: auto;
+    /* A shaft of light through the collapsed roof (the narrow cone), the
+       shelving on either side falling into shadow (the wide low-opacity
+       wash at the edges), and a floor that darkens as it recedes. */
+    background:
+      radial-gradient(18% 60% at 50% -4%, rgb(232 69 46 / 0.16) 0%, rgb(232 69 46 / 0) 78%),
+      radial-gradient(60% 45% at 50% 0%, rgb(24 22 15 / 0) 0%, rgb(14 13 8 / 0.55) 85%),
+      linear-gradient(
+        180deg,
+        rgb(14 13 8 / 0) 55%,
+        rgb(14 13 8 / 0.7) 92%,
+        rgb(14 13 8 / 0.92) 100%
+      ),
+      var(--color-stock-950);
+    color: var(--color-stock-200);
+  }
+
+  /* The floor: faint flagstone joints, denser toward the bottom edge so it
+     reads as receding rather than tiled flat. */
+  .room4-scene::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 26vh;
+    min-height: 170px;
+    background-image:
+      repeating-linear-gradient(
+        100deg,
+        rgb(230 224 208 / 0.05) 0px,
+        rgb(230 224 208 / 0.05) 1px,
+        transparent 1px,
+        transparent 74px
+      ),
+      repeating-linear-gradient(
+        80deg,
+        rgb(230 224 208 / 0.04) 0px,
+        rgb(230 224 208 / 0.04) 1px,
+        transparent 1px,
+        transparent 96px
+      );
+    -webkit-mask-image: linear-gradient(180deg, transparent, black 55%);
+    mask-image: linear-gradient(180deg, transparent, black 55%);
+    pointer-events: none;
+  }
+
   @media (width < 30rem) {
     .hall-readouts {
       flex-direction: row;

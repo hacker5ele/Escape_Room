@@ -348,6 +348,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-06 | [0050](docs/adr/0050-the-lost-archive-returns-as-room-four.md) | The Lost Archive comes back as room four, from Eleonora's own commits | Accepted |
 | 2026-08-06 | [0048](docs/adr/0048-the-hall-floods.md) | Room 01 is a place you play by walking, it is filling up, and it changes shape when a friend is in it | Accepted |
 | 2026-08-05 | [0070](docs/adr/0070-olympus-carpet-race.md) | Olympus becomes a carpet-racing coin challenge, not a riddle sequence; new `POST /api/rooms/:roomId/complete` | Proposed |
 | 2026-08-05 | [0069](docs/adr/0069-room-owns-its-own-finale.md) | A room decides when it's done showing its own finale, via a new `onRoomFinished` callback | Proposed |
