@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useUser } from '@clerk/react'
+import { useAppAuth } from '../auth/useAppAuth'
 
 /**
  * Collects whatever the game needs and Clerk does not already have: a unique
@@ -16,14 +16,14 @@ import { useUser } from '@clerk/react'
  * mean a second index and a race between the check and the write.
  */
 export function ProfileForm({ onSaved }: { onSaved: () => void }) {
-  const { user } = useUser()
+  const { profile, updateProfile } = useAppAuth()
 
-  const needsUsername = !user?.username
-  const needsName = !user?.firstName || !user?.lastName
+  const needsUsername = !profile?.username
+  const needsName = !profile?.firstName || !profile?.lastName
 
   const [username, setUsername] = useState('')
-  const [firstName, setFirstName] = useState(user?.firstName ?? '')
-  const [lastName, setLastName] = useState(user?.lastName ?? '')
+  const [firstName, setFirstName] = useState(profile?.firstName ?? '')
+  const [lastName, setLastName] = useState(profile?.lastName ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,7 +31,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
   // deprecated in the React 19 types.
   async function handleSubmit(event: { preventDefault: () => void }) {
     event.preventDefault()
-    if (!user || saving) return
+    if (saving) return
 
     const handle = username.trim()
     const first = firstName.trim()
@@ -47,7 +47,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
     try {
       // Only send what we asked for — writing a field back unchanged would be
       // a pointless way to fail on an unrelated Clerk validation rule.
-      await user.update({
+      await updateProfile({
         ...(needsUsername ? { username: handle } : {}),
         ...(needsName ? { firstName: first, lastName: last } : {}),
       })
@@ -59,9 +59,9 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
   }
 
   return (
-    <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">
-      <h2 className="font-mono text-sm text-vault-100">Before you go in</h2>
-      <p className="mt-2 text-sm text-vault-300">
+    <section className="pane p-6">
+      <h2 className="font-mono text-sm text-stock-900">Before you go in</h2>
+      <p className="mt-2 text-sm text-stock-700">
         {needsUsername
           ? 'Pick a username — it has to be unique, and it is what other players will see.'
           : 'We just need a name to put on your game.'}
@@ -75,7 +75,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
       >
         {needsUsername && (
           <label className="block">
-            <span className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+            <span className="label">
               Username
             </span>
             <input
@@ -84,7 +84,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
               autoComplete="username"
               maxLength={32}
               required
-              className="mt-1 w-full rounded border border-vault-700 bg-vault-950 px-3 py-2 font-mono text-sm text-vault-100 outline-none focus:border-signal-400"
+              className="mt-1 w-full field"
             />
           </label>
         )}
@@ -92,7 +92,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
         {needsName && (
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+              <span className="label">
                 First name
               </span>
               <input
@@ -101,12 +101,12 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
                 autoComplete="given-name"
                 maxLength={50}
                 required
-                className="mt-1 w-full rounded border border-vault-700 bg-vault-950 px-3 py-2 font-mono text-sm text-vault-100 outline-none focus:border-signal-400"
+                className="mt-1 w-full field"
               />
             </label>
 
             <label className="block">
-              <span className="font-mono text-xs tracking-[0.2em] text-vault-500 uppercase">
+              <span className="label">
                 Last name
               </span>
               <input
@@ -115,14 +115,14 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
                 autoComplete="family-name"
                 maxLength={50}
                 required
-                className="mt-1 w-full rounded border border-vault-700 bg-vault-950 px-3 py-2 font-mono text-sm text-vault-100 outline-none focus:border-signal-400"
+                className="mt-1 w-full field"
               />
             </label>
           </div>
         )}
 
         {error && (
-          <p role="alert" className="font-mono text-sm text-alarm-400">
+          <p role="alert" className="font-mono text-sm text-signal-600">
             {error}
           </p>
         )}
@@ -130,7 +130,7 @@ export function ProfileForm({ onSaved }: { onSaved: () => void }) {
         <button
           type="submit"
           disabled={saving}
-          className="rounded bg-signal-400 px-4 py-2 font-mono text-sm font-semibold text-vault-950 transition hover:bg-signal-300 disabled:opacity-50"
+          className="btn"
         >
           {saving ? 'Saving…' : 'Enter the first room'}
         </button>
@@ -155,5 +155,21 @@ function describeClerkError(caught: unknown): string {
   if (first.code === 'form_identifier_exists') {
     return 'That username is taken. Pick another.'
   }
+
+  // Clerk rejects the parameter outright when the instance does not have
+  // usernames switched on — and its own wording ("username is not a valid
+  // parameter for this request") reads like the player typed something wrong,
+  // so they retype it for ever. The setting is per instance, so a development
+  // instance can have it off while production has it on.
+  //
+  // The game cannot start without a username (ADR-0021), so there is nothing to
+  // do but say plainly whose problem this is.
+  if (first.code === 'form_param_unknown') {
+    return (
+      'This site is not set up to accept usernames yet, so your profile cannot be saved. ' +
+      'Whoever administers it needs to enable Username for this Clerk instance.'
+    )
+  }
+
   return first.longMessage ?? first.message ?? 'Could not save that. Try again.'
 }

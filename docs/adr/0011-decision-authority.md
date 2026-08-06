@@ -13,7 +13,7 @@ will pick a library, invent a data shape, or quietly widen an interface, and the
 result compiles and passes tests, so nobody notices until the choice is load
 bearing and expensive to undo.
 
-That is a bad fit for this project week in particular. The assignment makes
+That is a bad fit for this project in particular. The assignment makes
 architecture a graded deliverable, requires interface changes to be agreed by
 the whole team in advance, and gives us four people who each need to understand
 why the system looks the way it does. A decision nobody made is a decision

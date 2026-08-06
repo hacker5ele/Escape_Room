@@ -8,19 +8,79 @@ import {
   InMemoryGameRepository,
   type GameRepository,
 } from './repositories/game.repository.js'
+import {
+  DynamoProfileRepository,
+  InMemoryProfileRepository,
+  type ProfileRepository,
+} from './repositories/profile.repository.js'
+import {
+  DynamoFriendshipRepository,
+  InMemoryFriendshipRepository,
+  type FriendshipRepository,
+} from './repositories/friendship.repository.js'
+import {
+  DynamoInviteRepository,
+  InMemoryInviteRepository,
+  type InviteRepository,
+} from './repositories/invite.repository.js'
+import {
+  DynamoNotificationRepository,
+  InMemoryNotificationRepository,
+  type NotificationRepository,
+} from './repositories/notification.repository.js'
+import {
+  DynamoMessageRepository,
+  InMemoryMessageRepository,
+  type MessageRepository,
+} from './repositories/message.repository.js'
 import { GameService } from './services/game.service.js'
+import { ChatService } from './services/chat.service.js'
+import { LeaderboardService } from './services/leaderboard.service.js'
+import { PartyService } from './services/party.service.js'
+import { LiveStore } from './services/live-store.js'
+import { InviteMailService } from './mail/invite-mail.service.js'
+import { NoMailer, SesMailer, type Mailer } from './mail/mail.service.js'
+import { NoDirectory, createClerkDirectory, type Directory } from './http/directory.js'
+import { NotificationService } from './services/notification.service.js'
+import { FriendService } from './services/friend.service.js'
+import { InviteService } from './services/invite.service.js'
+import { ProfileService } from './services/profile.service.js'
 import { RoomService } from './services/room.service.js'
 import { createClerkAuthenticator, type Authenticator } from './http/authenticator.js'
+import { createLocalAuthenticator } from './http/local-authenticator.js'
 import { createHealthRoutes } from './routes/health.routes.js'
 import { createSessionRoutes } from './routes/sessions.routes.js'
+import { createProfileRoutes } from './routes/profiles.routes.js'
+import { createFriendRoutes, createInviteRoutes } from './routes/friends.routes.js'
+import { createSyncRoutes } from './routes/sync.routes.js'
+import { createChatRoutes } from './routes/chat.routes.js'
+import { createLeaderboardRoutes } from './routes/leaderboard.routes.js'
+import { createPartyRoutes } from './routes/party.routes.js'
+import { createPresenceRoutes } from './routes/presence.routes.js'
+import { PresenceService } from './services/presence.service.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
-import { createAttemptRateLimiter } from './http/rate-limit.js'
+import {
+  createAttemptRateLimiter,
+  createLookupRateLimiter,
+  createRateLimiter,
+} from './http/rate-limit.js'
 import { createOriginGuard } from './http/origin-guard.js'
 import { errorHandler, notFoundHandler } from './http/error-handler.js'
 
 export interface AppOptions {
   /** Injected by tests so each test gets an isolated store. */
   gameRepository?: GameRepository
+  profileRepository?: ProfileRepository
+  friendshipRepository?: FriendshipRepository
+  inviteRepository?: InviteRepository
+  notificationRepository?: NotificationRepository
+  messageRepository?: MessageRepository
+  /** Injected by tests that need to age it; a fresh one otherwise. */
+  liveStore?: LiveStore
+  /** Injected by tests to assert what would have been sent. Absent means nothing is. */
+  mailer?: Mailer
+  /** Injected by tests. Absent means nobody has a reachable address. */
+  directory?: Directory
   /** Injected by tests so the suite needs no Clerk key and makes no network calls. */
   authenticator?: Authenticator
   /** Attempts per IP per minute. Tests lower it to assert the limiter fires. */
@@ -44,10 +104,116 @@ export function createApp(options: AppOptions = {}): Express {
       ? new DynamoGameRepository(config.gamesTableName, config.awsRegion)
       : new InMemoryGameRepository())
 
-  const usingClerk = options.authenticator === undefined
-  const authenticator = options.authenticator ?? createClerkAuthenticator()
+  // The local authenticator lets anyone claim any identity by typing a name.
+  // That is the point on a laptop and a disaster anywhere else, so refuse to
+  // build at all rather than start and serve traffic. Throwing here means a
+  // misconfigured deployment fails its health check and never takes traffic,
+  // instead of quietly running wide open.
+  if (options.authenticator === undefined && config.authMode === 'local' && config.isProduction) {
+    throw new Error(
+      'AUTH_MODE=local is a development-only backdoor and cannot be used with NODE_ENV=production. ' +
+        'Unset AUTH_MODE to use Clerk.',
+    )
+  }
 
-  const gameService = new GameService(repository, authenticator)
+  const authenticator =
+    options.authenticator ??
+    (config.authMode === 'local' ? createLocalAuthenticator() : createClerkAuthenticator())
+
+  // Clerk's middleware is only mounted when Clerk is actually in use: it needs
+  // a secret key to construct, which local development does not have.
+  const usingClerk = options.authenticator === undefined && config.authMode === 'clerk'
+
+  const profileRepository =
+    options.profileRepository ??
+    (config.profilesTableName
+      ? new DynamoProfileRepository(config.profilesTableName, config.awsRegion)
+      : new InMemoryProfileRepository())
+
+  const friendshipRepository =
+    options.friendshipRepository ??
+    (config.friendshipsTableName
+      ? new DynamoFriendshipRepository(config.friendshipsTableName, config.awsRegion)
+      : new InMemoryFriendshipRepository())
+
+  const inviteRepository =
+    options.inviteRepository ??
+    (config.invitesTableName
+      ? new DynamoInviteRepository(config.invitesTableName, config.awsRegion)
+      : new InMemoryInviteRepository())
+
+  const notificationRepository =
+    options.notificationRepository ??
+    (config.notificationsTableName
+      ? new DynamoNotificationRepository(config.notificationsTableName, config.awsRegion)
+      : new InMemoryNotificationRepository())
+
+  const messageRepository =
+    options.messageRepository ??
+    (config.messagesTableName
+      ? new DynamoMessageRepository(config.messagesTableName, config.awsRegion)
+      : new InMemoryMessageRepository())
+
+  // The whole of the lobby and co-op, in one map that empties itself. Being in
+  // somebody's party is a claim you keep alive by beating rather than a row
+  // anybody has to remember to delete, so closing a tab leaves the game the
+  // same way it leaves the lobby — by going quiet (ADR-0045).
+  const live = options.liveStore ?? new LiveStore()
+
+  const gameService = new GameService(repository, live)
+  const profileService = new ProfileService(profileRepository)
+  const notificationService = new NotificationService(notificationRepository, profileService)
+  const friendService = new FriendService(friendshipRepository, profileService, notificationService)
+  const leaderboardService = new LeaderboardService(repository, friendService, profileService)
+  // Email is off unless it is configured, which is what local development, the
+  // test suite and `docker compose up` all run with. There is no key to forget:
+  // SES is reached with the instance role (ADR-0046).
+  const mailer =
+    options.mailer ??
+    (config.mailFrom ? new SesMailer(config.mailFrom, config.awsRegion) : new NoMailer())
+  const directory =
+    options.directory ?? (config.authMode === 'clerk' ? createClerkDirectory() : new NoDirectory())
+
+  // `inviteService` is referenced here and constructed below — the closure is
+  // only *called* when somebody sends an invitation, long after both exist.
+  // That is what unties the knot: the invite service needs the party service to
+  // describe a party, and the party service needs this to send an email.
+  const invitations: InviteMailService | undefined =
+    config.mailFrom || options.mailer
+      ? new InviteMailService(
+          (userId) => inviteService.create(userId, { forParty: true }),
+          directory,
+          mailer,
+          config.publicOrigin,
+        )
+      : undefined
+
+  const partyService: PartyService = new PartyService(
+    live,
+    repository,
+    friendService,
+    profileService,
+    notificationService,
+    invitations,
+  )
+
+  // Reads the same map as the party service rather than asking it, which is
+  // what makes "I left the lobby" and "I left the game" one expiry instead of
+  // two things that can disagree.
+  const presenceService = new PresenceService(live, profileService)
+  const chatService = new ChatService(
+    messageRepository,
+    friendService,
+    profileService,
+    notificationService,
+  )
+  // The party is passed so a link minted from the lobby can describe it — and
+  // is constructed above, so the order here matters.
+  const inviteService: InviteService = new InviteService(
+    inviteRepository,
+    profileService,
+    partyService,
+  )
   const roomService = new RoomService(gameService)
 
   const app = express()
@@ -76,14 +242,105 @@ export function createApp(options: AppOptions = {}): Express {
     app.use('/api', clerkMiddleware())
   }
 
-  app.use('/api/sessions', createSessionRoutes(gameService, authenticator))
+  app.use('/api/sessions', createSessionRoutes(gameService, profileService, authenticator))
+  app.use(
+    '/api/profiles',
+    createProfileRoutes(profileService, authenticator, createLookupRateLimiter(30, authenticator)),
+  )
+  // Social writes share one budget: creating links, sending requests and
+  // accepting are all cheap individually and all worth capping together.
+  const socialWriteLimiter = createRateLimiter({
+    limit: 30,
+    authenticator,
+    message: 'Slow down a moment.',
+  })
+
+  // Polled every few seconds by every open tab, so its budget is much larger
+  // than the write limiter's — and still bounded, because a client stuck in a
+  // retry loop should not be able to saturate the one container.
+  app.use(
+    '/api/sync',
+    createSyncRoutes(
+      notificationService,
+      authenticator,
+      createRateLimiter({ limit: 240, authenticator, message: 'Polling too fast. Slow down.' }),
+    ),
+  )
+
+  app.use('/api/party', createPartyRoutes(partyService, authenticator, socialWriteLimiter))
+
+  app.use(
+    '/api/stage',
+    createPresenceRoutes(
+      presenceService,
+      live,
+      partyService,
+      gameService,
+      authenticator,
+      // Its own limiter, generous because this is polled twice a second while
+      // somebody is on the stage: 240/minute is two per second with headroom,
+      // and it is deliberately not shared with `/api/sync`, which is polled
+      // twenty times more slowly and would be starved by the same budget.
+      createRateLimiter({ limit: 240, authenticator, message: 'Slow down.' }),
+    ),
+  )
+
+  app.use(
+    '/api/leaderboard',
+    createLeaderboardRoutes(
+      leaderboardService,
+      authenticator,
+      // One read per friend, so this is the most expensive endpoint here.
+      createRateLimiter({ limit: 60, authenticator, message: 'Slow down a moment.' }),
+    ),
+  )
+
+  app.use(
+    '/api/chat',
+    createChatRoutes(
+      chatService,
+      authenticator,
+      // Sending is capped tighter than reading: a burst of messages is the one
+      // social action that costs somebody else attention.
+      createRateLimiter({
+        limit: 60,
+        authenticator,
+        message: 'You are sending messages too quickly.',
+      }),
+      // An open conversation polls faster than the bell does, so its read
+      // budget has to be larger than the shared write budget.
+      createRateLimiter({ limit: 300, authenticator, message: 'Polling too fast. Slow down.' }),
+    ),
+  )
+
+  app.use(
+    '/api/friends',
+    createFriendRoutes(friendService, profileService, authenticator, socialWriteLimiter),
+  )
+  app.use(
+    '/api/invites',
+    createInviteRoutes(
+      inviteService,
+      friendService,
+      authenticator,
+      socialWriteLimiter,
+      // The only unauthenticated endpoint that reads the database, so it gets
+      // the tightest budget of anything here — and it is the one limiter that
+      // stays keyed by IP, because a caller with no account offers nothing else
+      // to key on.
+      createRateLimiter({ limit: 20, message: 'Too many requests. Wait a moment.' }),
+      // So a link minted from the lobby can join the party as well as befriend.
+      partyService,
+    ),
+  )
   app.use(
     '/api/rooms',
     createRoomRoutes(
       gameService,
       roomService,
       authenticator,
-      createAttemptRateLimiter(options.attemptRateLimit ?? config.attemptRateLimit),
+      createAttemptRateLimiter(options.attemptRateLimit ?? config.attemptRateLimit, authenticator),
+      profileService,
     ),
   )
 

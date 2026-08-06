@@ -19,11 +19,18 @@ export class ApiError extends Error {
   }
 
   static profileIncomplete(): ApiError {
-    return new ApiError(
-      409,
-      'PROFILE_INCOMPLETE',
-      'Choose a username before you start playing.',
-    )
+    return new ApiError(409, 'PROFILE_INCOMPLETE', 'Choose a username before you start playing.')
+  }
+
+  /**
+   * One error for unknown, revoked and expired links alike.
+   *
+   * Deliberately indistinguishable: reporting them separately would let
+   * somebody probing tokens learn which ones once existed, and telling a
+   * blocked person their link was revoked invites a second account.
+   */
+  static inviteInvalid(): ApiError {
+    return new ApiError(404, 'INVITE_INVALID', 'That invite link is no longer valid.')
   }
 
   static sessionNotFound(): ApiError {

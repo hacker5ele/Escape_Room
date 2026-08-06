@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
-import type { Express } from 'express'
-import { createApp } from './app.js'
+import type { Server } from 'node:http'
+import { createTestApp as createApp } from './test/server.js'
 import {
   createTestAuthenticator,
   TEST_USER_HEADER,
@@ -14,12 +14,12 @@ const ALICE = 'user_alice'
 const BOB = 'user_bob'
 
 /** A fresh app per test: `createApp` builds its own store, so games never leak between cases. */
-function buildApp(attemptRateLimit = 1000): Express {
+function buildApp(attemptRateLimit = 1000): Server {
   return createApp({ authenticator: createTestAuthenticator(), attemptRateLimit })
 }
 
 /** Signed-in request helper. */
-function as(app: Express, user: string) {
+function as(app: Server, user: string) {
   return {
     get: (path: string) => request(app).get(path).set(TEST_USER_HEADER, user),
     post: (path: string) => request(app).post(path).set(TEST_USER_HEADER, user),
@@ -27,7 +27,7 @@ function as(app: Express, user: string) {
   }
 }
 
-async function startGame(app: Express, user: string) {
+async function startGame(app: Server, user: string) {
   const response = await as(app, user).post('/api/sessions').send({})
   expect(response.status).toBe(201)
   return response.body.session
@@ -64,9 +64,7 @@ describe('authentication', () => {
 
 describe('usernames', () => {
   it('refuses to start a game for an account with no username', async () => {
-    const response = await as(buildApp(), TEST_USER_WITHOUT_USERNAME)
-      .post('/api/sessions')
-      .send({})
+    const response = await as(buildApp(), TEST_USER_WITHOUT_USERNAME).post('/api/sessions').send({})
 
     // Enforced by the server, not the form — skipping the UI achieves nothing.
     expect(response.status).toBe(409)
@@ -118,9 +116,7 @@ describe('sessions', () => {
     const app = buildApp()
     const first = await startGame(app, ALICE)
 
-    await as(app, ALICE)
-      .post('/api/rooms/room-01/attempt')
-      .send({ answer: SOLUTIONS['room-01'] })
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
 
     const second = await startGame(app, ALICE)
     expect(second.id).toBe(first.id)
@@ -146,9 +142,7 @@ describe('sessions', () => {
   it('can be reset to replay from the first room', async () => {
     const app = buildApp()
     await startGame(app, ALICE)
-    await as(app, ALICE)
-      .post('/api/rooms/room-01/attempt')
-      .send({ answer: SOLUTIONS['room-01'] })
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
 
     expect((await as(app, ALICE).delete('/api/sessions/me')).status).toBe(204)
     expect((await as(app, ALICE).get('/api/sessions/me')).status).toBe(404)
@@ -319,8 +313,7 @@ describe('attempts', () => {
     const app = buildApp(2)
     await startGame(app, ALICE)
 
-    const attempt = () =>
-      as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: 1 })
+    const attempt = () => as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: 1 })
 
     expect((await attempt()).status).toBe(200)
     expect((await attempt()).status).toBe(200)
@@ -429,6 +422,59 @@ describe('hints', () => {
     const second = await as(app, ALICE).post('/api/rooms/room-01/hint').send({})
     expect(second.body.hintsUsed).toBe(2)
     expect(second.body.hint).not.toBe(first.body.hint)
+  })
+
+  it('counts hints per room, not across the whole game', async () => {
+    // The bug this replaces: a per-room hints array was indexed by
+    // `session.hintsUsed`, which counts the whole game. Spend a room's worth of
+    // hints anywhere and every other room reported none left — while still
+    // offering three. See ADR-0043.
+    const app = buildApp()
+    await startGame(app, ALICE)
+
+    // Empty room one's hints, then open room two.
+    let taken = 0
+    for (;;) {
+      const response = await as(app, ALICE).post('/api/rooms/room-01/hint').send({})
+      if (response.status !== 200) break
+      taken += 1
+      if (taken > 20) throw new Error('room-01 has suspiciously many hints')
+    }
+    expect(taken).toBeGreaterThan(0)
+
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
+
+    // Room two starts with its own hints, untouched by what room one cost.
+    const fresh = await as(app, ALICE).post('/api/rooms/room-02/hint').send({})
+    expect(fresh.status).toBe(200)
+    expect(fresh.body.hint).toBeTruthy()
+  })
+
+  it('tells you how many are left in this room, not how many it has', async () => {
+    const app = buildApp()
+    await startGame(app, ALICE)
+
+    const before = (await as(app, ALICE).get('/api/rooms/room-01')).body.room.hintsAvailable
+    expect(before).toBeGreaterThan(0)
+
+    await as(app, ALICE).post('/api/rooms/room-01/hint').send({})
+
+    // The count the player sees has to fall — this is the number that used to
+    // stay at three while the server refused to give any more.
+    const after = (await as(app, ALICE).get('/api/rooms/room-01')).body.room.hintsAvailable
+    expect(after).toBe(before - 1)
+  })
+
+  it('agrees with itself about what is left', async () => {
+    const app = buildApp()
+    await startGame(app, ALICE)
+
+    const taken = await as(app, ALICE).post('/api/rooms/room-01/hint').send({})
+    const room = await as(app, ALICE).get('/api/rooms/room-01')
+
+    // Two endpoints, one truth. They disagreed before, which is exactly what
+    // the player saw.
+    expect(room.body.room.hintsAvailable).toBe(taken.body.hintsRemaining)
   })
 
   it('refuses hints for a locked room', async () => {

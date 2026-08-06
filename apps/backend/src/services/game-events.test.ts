@@ -1,29 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
-import type { Express } from 'express'
+import type { Server } from 'node:http'
 import { MAX_GAME_EVENTS, MAX_LOGGED_ANSWER_LENGTH, type GameEvent } from '@escape-room/shared'
-import { createApp } from '../app.js'
+import { createTestApp as createApp } from '../test/server.js'
 import { createTestAuthenticator, TEST_USER_HEADER } from '../http/test-authenticator.js'
 import { SOLUTIONS } from '../domain/rooms/solutions.fixture.js'
 
 const USER = 'user_alice'
 
-function buildApp(attemptRateLimit = 10_000): Express {
+function buildApp(attemptRateLimit = 10_000): Server {
   return createApp({ authenticator: createTestAuthenticator(), attemptRateLimit })
 }
 
-function as(app: Express) {
+function as(app: Server) {
   return {
     get: (path: string) => request(app).get(path).set(TEST_USER_HEADER, USER),
     post: (path: string) => request(app).post(path).set(TEST_USER_HEADER, USER),
   }
 }
 
-async function start(app: Express) {
+async function start(app: Server) {
   await as(app).post('/api/sessions').send({})
 }
 
-async function events(app: Express): Promise<GameEvent[]> {
+async function events(app: Server): Promise<GameEvent[]> {
   const response = await as(app).get('/api/sessions/me')
   return response.body.session.events
 }
