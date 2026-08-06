@@ -37,7 +37,7 @@ const KEYS: Record<string, [number, number]> = {
   KeyD: [1, 0],
 }
 
-function isTypingTarget(target: EventTarget | null): boolean {
+export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
 }

@@ -6,9 +6,11 @@ import {
   publicHall,
   tickHall,
   tideTrend,
+  type Acted,
   type HallState,
   type Occupant,
 } from '../domain/rooms/hall/hall.js'
+import { isNear, stationById } from '../domain/rooms/hall/layout.js'
 
 /**
  * The halls currently under water, one per party.
@@ -36,7 +38,12 @@ export class HallService {
    * ticking, which is both the cheap answer and the correct one: the water
    * should not rise in a room that no longer has anybody to drown.
    */
-  beat(hostUserId: string, roomId: RoomId, now: number = Date.now()): LiveRoom | null {
+  beat(
+    hostUserId: string,
+    roomId: RoomId,
+    now: number = Date.now(),
+    acted?: Acted,
+  ): LiveRoom | null {
     if (!isFloodable(roomId)) {
       this.clear(hostUserId)
       return null
@@ -53,7 +60,7 @@ export class HallService {
     const state = existing ?? beginHall(now, this.#partySize(hostUserId, now))
     if (!existing) this.#halls.set(hostUserId, state)
 
-    tickHall(state, now, occupants)
+    tickHall(state, now, occupants, acted)
 
     return {
       roomId,
@@ -122,6 +129,11 @@ export class HallService {
         y: standing.y,
         facing: standing.facing,
         walking: standing.walking,
+        // Verified here rather than where it was stored. A client that claims
+        // to have hold of a winch at the other end of the hall is holding
+        // nothing — the same stance the position itself has always had, which
+        // is clamped rather than trusted.
+        holding: heldWithinReach(standing.holding, standing),
       })
     }
 
@@ -132,4 +144,11 @@ export class HallService {
 /** Only the Reading Hall has a clock in it. Everything else is a question and a box. */
 function isFloodable(roomId: RoomId): boolean {
   return roomId === 'room-01'
+}
+
+/** A station somebody claims to be holding, if they are close enough to hold it. */
+function heldWithinReach(holding: string | null, at: { x: number; y: number }): string | null {
+  if (!holding) return null
+  const station = stationById(holding)
+  return station && isNear(station, at) ? holding : null
 }

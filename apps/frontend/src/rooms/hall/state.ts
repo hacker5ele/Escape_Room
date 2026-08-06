@@ -22,6 +22,7 @@ export interface Spot {
 
 export interface HallLayout {
   wheels: Spot[]
+  winches: Spot[]
   lamps: Spot[]
   pedestals: Spot[]
   tablets: Spot[]
@@ -30,27 +31,43 @@ export interface HallLayout {
   radius: number
 }
 
+export interface Turn {
+  wheel: string
+  dir: number
+}
+
 export interface HallDetail {
-  lamps: Record<string, boolean>
-  wheels: Record<string, boolean>
+  /** Milliseconds of flame left in each lamp, so it can be drawn burning down. */
+  lamps: Record<string, number>
+  /** And how long a full one lasts, so the arc knows what a full one looks like. */
+  lampLife: number
+  /** Milliseconds of ratchet left in each wheel. */
+  wheels: Record<string, number>
   /** Act I with two players: the pair the hall is asking for right now. */
   pair: [string, string] | null
   pairsDone: number
+  pairsNeeded: number
   /** Act II: the seating order, painted on the depth staff. Null until the act begins. */
   order: string[] | null
   seated: string[]
   carrying: Record<string, string>
   channel: boolean
-  turns: number
-  /** Act III with two players: what the plaque at *this* end says about the far wheel. */
+  /** Act III alone: the whole pattern, stamped on the gearbox. */
+  sequence: Turn[] | null
+  step: number
+  steps: number
+  /** Act III together: what the plaque at *this* end says about the far wheel. */
   signWest: number | null
   signEast: number | null
-  ratchetAt: string | null
-  ratchetHeld: number
+  /** Act IV: how far the gate is wound shut, 0 to 1. */
+  wound: number
+  gateShut: boolean
   fragments: string[]
   keypadDrowned: boolean
   /** Things that just happened and want a noise. */
   flash: string[]
+  /** What each player should be shown saying, this beat. */
+  says: Record<string, string>
 }
 
 const NO_SPOT: Spot = { id: '', x: 0, y: 0 }
@@ -61,6 +78,7 @@ export function readLayout(data: RoomPublicData['data']): HallLayout | null {
 
   return {
     wheels: spots(hall.wheels),
+    winches: spots(hall.winches),
     lamps: spots(hall.lamps),
     pedestals: spots(hall.pedestals),
     tablets: spots(hall.tablets),
@@ -77,22 +95,27 @@ export function readDetail(live: LiveRoom | null): HallDetail {
   const detail = live?.detail ?? {}
 
   return {
-    lamps: flags(detail.lamps),
-    wheels: flags(detail.wheels),
+    lamps: numbers(detail.lamps),
+    lampLife: num(detail.lampLife, 16_000),
+    wheels: numbers(detail.wheels),
     pair: pairOf(detail.pair),
     pairsDone: num(detail.pairsDone, 0),
+    pairsNeeded: num(detail.pairsNeeded, 4),
     order: Array.isArray(detail.order) ? detail.order.filter(isText) : null,
     seated: Array.isArray(detail.seated) ? detail.seated.filter(isText) : [],
     carrying: strings(detail.carrying),
     channel: detail.channel === true,
-    turns: num(detail.turns, 0),
+    sequence: turns(detail.sequence),
+    step: num(detail.step, 0),
+    steps: num(detail.steps, 4),
     signWest: facing(detail.signWest),
     signEast: facing(detail.signEast),
-    ratchetAt: isText(detail.ratchetAt) ? detail.ratchetAt : null,
-    ratchetHeld: num(detail.ratchetHeld, 0),
+    wound: num(detail.wound, 0),
+    gateShut: detail.gateShut === true,
     fragments: Array.isArray(detail.fragments) ? detail.fragments.filter(isText) : [],
     keypadDrowned: detail.keypadDrowned === true,
     flash: Array.isArray(detail.flash) ? detail.flash.filter(isText) : [],
+    says: strings(detail.says),
   }
 }
 
@@ -110,17 +133,26 @@ function spots(value: unknown): Spot[] {
     .map((entry) => ({ id: String(entry.id), x: num(entry.x, 0), y: num(entry.y, 0) }))
 }
 
+function turns(value: unknown): Turn[] | null {
+  if (!Array.isArray(value)) return null
+  return value
+    .map((entry) => asRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => entry !== null)
+    .filter((entry) => isText(entry.wheel))
+    .map((entry) => ({ wheel: String(entry.wheel), dir: num(entry.dir, 1) }))
+}
+
 function pairOf(value: unknown): [string, string] | null {
   if (!Array.isArray(value) || value.length !== 2) return null
   const [first, second] = value
   return isText(first) && isText(second) ? [first, second] : null
 }
 
-function flags(value: unknown): Record<string, boolean> {
+function numbers(value: unknown): Record<string, number> {
   const record = asRecord(value)
   if (!record) return {}
-  const out: Record<string, boolean> = {}
-  for (const [key, entry] of Object.entries(record)) out[key] = entry === true
+  const out: Record<string, number> = {}
+  for (const [key, entry] of Object.entries(record)) out[key] = num(entry, 0)
   return out
 }
 

@@ -149,8 +149,8 @@ function narrate(act: number, counted: number, detail: HallDetail): string {
   const paired = counted >= 2
 
   if (act === 1) {
-    if (!paired) return 'FIVE LAMPS. EACH BURNS TWELVE SECONDS. ALL FIVE AT ONCE, OR NOTHING.'
-    return `THE HALL WAS WORKED BY A PAIR AND HAS NOT FORGOTTEN. TWO LAMPS, TWO OF YOU, AT ONCE. ${detail.pairsDone} OF 4.`
+    if (!paired) return 'FIVE LAMPS. EACH BURNS SIXTEEN SECONDS. ALL FIVE AT ONCE, OR NOTHING.'
+    return `THE HALL WAS WORKED BY A PAIR AND HAS NOT FORGOTTEN. TWO LAMPS, TWO OF YOU, TOGETHER. ${detail.pairsDone} OF ${detail.pairsNeeded}.`
   }
 
   if (act === 2) {
@@ -159,11 +159,18 @@ function narrate(act: number, counted: number, detail: HallDetail): string {
   }
 
   if (act === 3) {
-    if (!paired) return `THE RATCHET TAKES FOUR NOTCHES, AND ONLY EVER AT THE FAR WHEEL. ${detail.turns} OF 4.`
-    return `THE PLAQUE AT YOUR END IS NOT FOR YOU. READ IT OUT. ${detail.turns} OF 4.`
+    if (!paired)
+      return `THE GEARBOX REMEMBERS A PATTERN. FOLLOW IT, OR IT SLIPS BACK. ${detail.step} OF ${detail.steps}.`
+    return `THE PLAQUE AT YOUR END IS NOT FOR YOU. READ IT OUT. ${detail.step} OF ${detail.steps}.`
   }
 
-  if (detail.keypadDrowned) return 'SIX FIGURES — AND THE DIAL IS UNDER WATER. GET IT DOWN FIRST.'
+  if (act === 4) {
+    const done = Math.round(detail.wound * 100)
+    if (!paired) return `THE SEA IS COMING IN THROUGH THE SLUICE. WIND IT SHUT — IT IS A LONG HOLD. ${done}%.`
+    return `TWO WINCHES, AND IT ONLY MOVES WHILE BOTH ARE HELD. ${done}%.`
+  }
+
+  if (detail.keypadDrowned) return 'SIX FIGURES — AND THE DRUMS ARE UNDER WATER. GET IT DOWN FIRST.'
   return 'SIX FIGURES. THE DOOR IS THE LAST THING IN HERE STILL WORKING.'
 }
 
@@ -174,19 +181,29 @@ function narrate(act: number, counted: number, detail: HallDetail): string {
  * is what lets the pressure run for eight minutes without turning into a timer
  * nagging in the corner.
  */
-export function TideGauge({ depth, trend }: { depth: number; trend: string }) {
+export function TideGauge({
+  depth,
+  trend,
+  shut,
+}: {
+  depth: number
+  trend: string
+  /** The sluice is shut, so the sea comes in at half the rate. Worth saying. */
+  shut: boolean
+}) {
   const height = Math.min(100, Math.max(0, depth))
 
   return (
-    <div className="hall-gauge" data-piece="" data-trend={trend}>
+    <div className="hall-gauge" data-piece="" data-trend={trend} data-shut={shut ? '' : undefined}>
       <span className="hall-gauge-label">TIDE</span>
       <div className="hall-gauge-tube">
         <div className="hall-gauge-fill" style={{ height: `${height}%` }} />
         <span className="hall-gauge-danger" />
       </div>
       <span className="hall-gauge-trend">
-        {trend === 'falling' ? '▼ FALLING' : trend === 'holding' ? '— HOLDING' : '▲ RISING'}
+        {trend === 'falling' ? '▼ FALLING' : trend === 'holding' ? '▼ EASING' : '▲ RISING'}
       </span>
+      {shut && <span className="hall-gauge-shut">SLUICE SHUT</span>}
     </div>
   )
 }
