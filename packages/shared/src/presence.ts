@@ -129,6 +129,58 @@ export const peerSchema = z.object({
 
 export type Peer = z.infer<typeof peerSchema>
 
+/**
+ * A room that is happening rather than waiting to be answered.
+ *
+ * Most rooms are a question and a box: the browser has everything it needs the
+ * moment it enters, and nothing changes until somebody submits. A room with a
+ * clock in it is not like that — the water rises whether anybody types or not,
+ * and both players have to be looking at the *same* water or co-operating about
+ * it is meaningless.
+ *
+ * So it rides the heartbeat rather than taking an endpoint of its own. That is
+ * the rule `presence.routes.ts` already states — split when the cadences
+ * differ, share when they match — and a room that changes twice a second wants
+ * exactly the cadence presence already runs at.
+ */
+export const liveRoomSchema = z.object({
+  roomId: roomIdSchema,
+  /**
+   * How high the water is: 0 dry, 100 over everybody's head.
+   *
+   * The clock, the enemy and the gate in one number, which is why the room
+   * needs no separate countdown widget.
+   */
+  depth: z.number(),
+  /** Which way it is going right now, so the room can say so without doing arithmetic. */
+  trend: z.enum(['rising', 'holding', 'falling']),
+  /** Which act the hall is in, 1-based. */
+  act: z.number().int().nonnegative(),
+  /**
+   * How many players the room counts.
+   *
+   * Mechanisms change shape on this: what one person can work alone, two people
+   * have to work together. Locked while an act is running so nothing changes
+   * under somebody's hands.
+   */
+  counted: z.number().int().nonnegative(),
+  /** Everybody went under. The shell plays the splash and takes the party back to the lobby. */
+  drowned: z.boolean(),
+  /**
+   * Whatever the current act needs drawn — lamps lit, tablets placed, which
+   * way the far wheel wants turning.
+   *
+   * A record rather than a union of every act, for the same reason
+   * `RoomPublicData.data` is one: it is the seam that lets a room own its own
+   * shape. Rooms 02 to 04 can grow a clock of their own without touching this
+   * package again, which is what ADR-0007 promised sub-teams. Narrow it inside
+   * the room, not here.
+   */
+  detail: z.record(z.string(), z.unknown()),
+})
+
+export type LiveRoom = z.infer<typeof liveRoomSchema>
+
 export const heartbeatResponseSchema = z.object({
   /** The server's clock, so a client with a wrong one still times emotes right. */
   now: z.string(),
@@ -138,6 +190,8 @@ export const heartbeatResponseSchema = z.object({
   phase: partyPhaseSchema,
   /** True when the caller is the host, which decides who sees PLAY. */
   isHost: z.boolean(),
+  /** The room's own state, when the party is standing in one that has a clock. */
+  room: liveRoomSchema.nullable(),
 })
 
 export type HeartbeatResponse = z.infer<typeof heartbeatResponseSchema>

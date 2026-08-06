@@ -234,7 +234,7 @@ The social layer, added by ADRs 0023–0029:
 | `GET` | `/api/leaderboard/friends` | — | `{ entries }` — you and your friends |
 | `GET` | `/api/leaderboard/global` | — | `{ entries }` — everybody who has started |
 | `GET` | `/api/party` | — | `{ party }` — host, members, `isHost` |
-| `POST` | `/api/stage/heartbeat` | position, emote, ready, hidden | `{ peers, phase, isHost }` — 2 Hz |
+| `POST` | `/api/stage/heartbeat` | position, emote, ready, hidden | `{ peers, phase, isHost, room }` — 2 Hz |
 | `POST` | `/api/stage/alive` | `{ hidden }` | `204` — "I still have the game open", 5 s, every screen |
 | `POST` | `/api/stage/phase` | `{ kind, roomId? }` | `204` — host only; moves the whole party |
 | `DELETE` | `/api/stage` | — | `204` — off the stage, still in the party |
@@ -348,6 +348,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-06 | [0048](docs/adr/0048-the-hall-floods.md) | Room 01 is a place you play by walking, it is filling up, and it changes shape when a friend is in it | Accepted |
 | 2026-08-05 | [0070](docs/adr/0070-olympus-carpet-race.md) | Olympus becomes a carpet-racing coin challenge, not a riddle sequence; new `POST /api/rooms/:roomId/complete` | Proposed |
 | 2026-08-05 | [0069](docs/adr/0069-room-owns-its-own-finale.md) | A room decides when it's done showing its own finale, via a new `onRoomFinished` callback | Proposed |
 | 2026-08-05 | [0068](docs/adr/0068-room-completion-vs-attempt-correctness.md) | A correct attempt and a finished room are different things — fixes players being bounced out of room-03 mid-run | Proposed |
@@ -516,15 +517,40 @@ except 0065–0070 (room-03's Sphinx build), which are `Proposed` and still awai
 - **The game** — **Start** on the Rooms tab runs an ink-flood transition into the **lobby**: a
   printed 1950s room your character stands in the middle of and walks around, with an emote bar, a
   room picker and PLAY ([ADR-0037](docs/adr/0037-lobby-stage-and-rooms.md)). PLAY counts down and
-  drops you into the room. **Room 01 is a full build** (ADR-0046, its own scene rather than the shared
-  `Stage`); rooms 02 and 04 are stubs wired to the real `attempt` and `hint` endpoints — a sub-team
-  writes the puzzle in `rooms/room-0N.tsx` and touches nothing else (ADR-0007). **Room 03 is a full
-  build**, "The Sphinx's Reckoning" (ADR-0065–0070, `Proposed`, pending Nepomuk's review): five ancient riddles in a walkable
-  corridor, an Atlantis artifact-recovery quest, and a top-down Olympus carpet race. It needs the
-  richer, room-owned `RoomProps` contract the other rooms don't (hints inline in its own dialogue, a
-  hearts system, a room-scoped reset, and a `complete` step for stages with no server-checked answer),
-  so it renders full-screen rather than through the shared `Stage`/`RoomView` shell every other room
-  uses — see its own component for how that seam works.
+  drops you into the room. **Rooms 01 and 03 are full builds**; rooms 02 and 04 are stubs wired to
+  the real `attempt` and `hint` endpoints — a sub-team writes the puzzle in `rooms/room-0N.tsx` and
+  touches nothing else (ADR-0007).
+- **Room 03 is "The Sphinx's Reckoning"** (ADR-0065–0070, `Proposed`, pending Nepomuk's review): five
+  ancient riddles in a walkable corridor, an Atlantis artifact-recovery quest, and a top-down Olympus
+  carpet race. It needs a richer, room-owned `RoomProps` contract than the others (hints inline in its
+  own dialogue, a hearts system, a room-scoped reset, and a `complete` step for stages with no
+  server-checked answer), so it renders full-screen rather than through the shared `Stage`/`RoomView`
+  shell — see its own component for how that seam works.
+- **Room 01 — the Reading Hall — is a place, not a question**
+  ([ADR-0048](docs/adr/0048-the-hall-floods.md)). It is under the harbour and filling up, and
+  **everything in it is done by walking somewhere and stopping**: the lamps, the tablets, the two
+  sluice wheels. The only thing anybody types is the six figures at the vault. That is why the co-op
+  cost nothing — positions have been on the heartbeat twice a second since ADR-0038, so a second
+  player is another set of coordinates in the same list.
+  - **Standing, not passing.** Being near a station is not enough; you have to have stopped. That is
+    what makes a 2 Hz position sample sufficient — somebody who stopped is still there next beat —
+    and what makes *"you can stop the water, but only by standing still and doing nothing else"*
+    literally true.
+  - **The water is the clock, the enemy and the gate**, so there is no countdown anywhere in the
+    room. One wheel held holds the level exactly; both push it back; a wheel keeps turning 5 s after
+    you step off, which is the whole solo game — the crossing is 3.5 s.
+  - **The hall counts you: I or II.** What one person works alone, two have to work together — the
+    lamps stop taking a flame singly, the floor opens down the middle and takes what you carry into
+    it, and the plaque saying which way to turn your wheel is at the *other* player's end. The count
+    is locked while an act runs and re-forms if a partner leaves.
+  - **Nothing is sent before it is earned.** `publicData()` is a floor plan; the code arrives a
+    fragment at a time as acts finish, so the network tab tells you what playing tells you and no
+    sooner. Stronger than merely omitting the answer — there is nothing to work backwards from.
+  - **Drowning is the whole party**, sticky on the wire so everyone sees the splash, then back to the
+    lobby with the hall thrown away. A room you can leave halfway through and return to is a room
+    whose clock means nothing.
+  - The halls are one in-memory map keyed by host, **ticked from whichever heartbeat arrives** — no
+    timer, so a hall nobody is in is not rising.
   - **Depth is `z-index`, never DOM order.** Sorting the stage's children by
     position made React reorder keyed nodes as people walked, and **moving a DOM node restarts its
     CSS animations** — the drop-in replayed dozens of times a minute. A test pins the DOM order as
