@@ -36,7 +36,9 @@ async function signIn(app: Server, ...users: string[]) {
 const usernameOf = (user: string) => `handle_${user}`
 
 async function befriend(app: Server, a: string, b: string) {
-  await as(app, a).post('/api/friends/by-username').send({ username: usernameOf(b) })
+  await as(app, a)
+    .post('/api/friends/by-username')
+    .send({ username: usernameOf(b) })
   await as(app, b).post(`/api/friends/${a}/accept`)
 }
 
@@ -96,7 +98,9 @@ describe('the friends leaderboard', () => {
   it('does not include somebody who has only sent a request', async () => {
     const { app } = buildApp()
     await signIn(app, ALICE, BOB)
-    await as(app, BOB).post('/api/friends/by-username').send({ username: usernameOf(ALICE) })
+    await as(app, BOB)
+      .post('/api/friends/by-username')
+      .send({ username: usernameOf(ALICE) })
 
     expect((await board(app, ALICE)).map((e) => e.profile.userId)).not.toContain(BOB)
   })
@@ -319,7 +323,10 @@ describe('the global leaderboard', () => {
 describe('the global board is a top ten', () => {
   /** Signs in `count` players and gives each strictly worse progress than the last. */
   async function crowd(app: Server, repository: InMemoryGameRepository, count: number) {
-    const users = Array.from({ length: count }, (_, index) => `user_p${String(index).padStart(2, '0')}`)
+    const users = Array.from(
+      { length: count },
+      (_, index) => `user_p${String(index).padStart(2, '0')}`,
+    )
     await signIn(app, ...users)
     for (const [index, user] of users.entries()) {
       // Same room count, increasing hints — so the order is fully determined.

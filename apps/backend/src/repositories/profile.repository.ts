@@ -7,11 +7,7 @@ import {
   QueryCommand,
   ScanCommand,
 } from '@aws-sdk/lib-dynamodb'
-import {
-  normalizeUsername,
-  publicProfileSchema,
-  type PublicProfile,
-} from '@escape-room/shared'
+import { normalizeUsername, publicProfileSchema, type PublicProfile } from '@escape-room/shared'
 
 /**
  * Where the public face of each player is kept.

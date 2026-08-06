@@ -36,7 +36,9 @@ async function sync(app: Server, user: string, since?: string): Promise<SyncResp
 
 /** Alice asks Bob to be her friend. */
 async function askToBeFriends(app: Server) {
-  await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(BOB) })
+  await as(app, ALICE)
+    .post('/api/friends/by-username')
+    .send({ username: usernameOf(BOB) })
 }
 
 describe('the sync endpoint', () => {
@@ -108,7 +110,9 @@ describe('the sync endpoint', () => {
 
     // Bob's request is silently one-sided. Notifying Alice would defeat the
     // block; notifying Bob that it failed would tell him he is blocked.
-    await as(app, BOB).post('/api/friends/by-username').send({ username: usernameOf(ALICE) })
+    await as(app, BOB)
+      .post('/api/friends/by-username')
+      .send({ username: usernameOf(ALICE) })
 
     expect((await sync(app, ALICE)).notifications).toHaveLength(0)
     expect((await sync(app, BOB)).notifications).toHaveLength(0)
@@ -283,9 +287,8 @@ describe('the first poll of a session', () => {
 
 describe('the in-memory repository is as strict as DynamoDB', () => {
   it('refuses an empty-string cursor rather than quietly accepting it', async () => {
-    const { InMemoryNotificationRepository } = await import(
-      '../repositories/notification.repository.js'
-    )
+    const { InMemoryNotificationRepository } =
+      await import('../repositories/notification.repository.js')
     const repository = new InMemoryNotificationRepository()
 
     // The whole point: a stand-in that is more permissive than the real thing

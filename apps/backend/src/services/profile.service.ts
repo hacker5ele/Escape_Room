@@ -20,10 +20,7 @@ export class ProfileService {
   async recordFromIdentity(userId: string, identity: PlayerProfile): Promise<PublicProfile | null> {
     if (!identity.username) return null
 
-    const displayName = [identity.firstName, identity.lastName]
-      .filter(Boolean)
-      .join(' ')
-      .trim()
+    const displayName = [identity.firstName, identity.lastName].filter(Boolean).join(' ').trim()
 
     return this.repository.save({
       userId,

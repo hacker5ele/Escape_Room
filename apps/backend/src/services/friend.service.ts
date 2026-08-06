@@ -1,8 +1,5 @@
 import type { Friend, FriendListResponse } from '@escape-room/shared'
-import type {
-  FriendshipEdge,
-  FriendshipRepository,
-} from '../repositories/friendship.repository.js'
+import type { FriendshipEdge, FriendshipRepository } from '../repositories/friendship.repository.js'
 import type { ProfileService } from './profile.service.js'
 import type { NotificationService } from './notification.service.js'
 import { ApiError } from '../http/api-error.js'
@@ -98,7 +95,12 @@ export class FriendService {
     // They asked first — treat this as saying yes.
     if (mine?.status === 'pending_in') {
       await this.#writePair(userId, targetUserId, 'accepted', 'accepted')
-      await this.#tell(targetUserId, userId, 'friend_accepted', (who) => `${who} is now your friend.`)
+      await this.#tell(
+        targetUserId,
+        userId,
+        'friend_accepted',
+        (who) => `${who} is now your friend.`,
+      )
       return this.list(userId)
     }
 

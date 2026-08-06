@@ -1,5 +1,9 @@
 import { Router, type RequestHandler } from 'express'
-import { sendMessageRequestSchema, type Message, type MessageListResponse } from '@escape-room/shared'
+import {
+  sendMessageRequestSchema,
+  type Message,
+  type MessageListResponse,
+} from '@escape-room/shared'
 import type { ChatService } from '../services/chat.service.js'
 import type { Authenticator } from '../http/authenticator.js'
 import { requireUserId } from '../http/require-auth.js'

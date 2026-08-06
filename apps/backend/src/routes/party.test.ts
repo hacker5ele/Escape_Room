@@ -413,3 +413,165 @@ describe('closing the tab', () => {
     expect((await as(app, ERIN).post(`/api/party/join/${ALICE}`)).status).toBe(201)
   })
 })
+
+/**
+ * Emailing somebody who is not there to see the bell (ADR-0046).
+ *
+ * The gate is three questions and every one of them has a test, because each
+ * failure mode is invisible: an email that does not arrive looks the same as a
+ * friend who did not answer, and one that arrives twice looks like a bug in
+ * somebody else's inbox.
+ */
+describe('inviting a friend who is not on the app', () => {
+  function buildMailApp() {
+    const live = new LiveStore()
+    const sent: { to: string; subject: string; html: string }[] = []
+    const mailer = {
+      async send(mail: { to: string; subject: string; html: string }) {
+        sent.push(mail)
+      },
+      cid: (label: string) => `${label}@test`,
+    }
+    const app = createApp({
+      authenticator: createTestAuthenticator(),
+      liveStore: live,
+      mailer,
+      directory: {
+        async emailFor(userId: string) {
+          return `${userId}@example.com`
+        },
+      },
+    })
+    return { app, live, sent }
+  }
+
+  async function beFriends(app: Server) {
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+  }
+
+  it('emails them, because the bell is going to sit there unread', async () => {
+    const { app, sent } = buildMailApp()
+    await beFriends(app)
+
+    expect((await as(app, ALICE).post(`/api/party/invite/${BOB}`)).status).toBe(204)
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.to).toBe(`${BOB}@example.com`)
+    expect(sent[0]?.subject).toContain('door open')
+  })
+
+  it('does not email somebody who is looking at the app right now', async () => {
+    const { app, live, sent } = buildMailApp()
+    await beFriends(app)
+    live.alive(BOB, false)
+
+    await as(app, ALICE).post(`/api/party/invite/${BOB}`)
+
+    expect(sent).toEqual([])
+  })
+
+  it('sends one email, not one per press', async () => {
+    // Throttled on there already being an unread invitation from this person —
+    // no new state, and it clears itself the moment they read it.
+    const { app, sent } = buildMailApp()
+    await beFriends(app)
+
+    await as(app, ALICE).post(`/api/party/invite/${BOB}`)
+    await as(app, ALICE).post(`/api/party/invite/${BOB}`)
+    await as(app, ALICE).post(`/api/party/invite/${BOB}`)
+
+    expect(sent).toHaveLength(1)
+  })
+
+  it('says nothing to somebody with no verified address', async () => {
+    const live = new LiveStore()
+    const sent: unknown[] = []
+    const app = createApp({
+      authenticator: createTestAuthenticator(),
+      liveStore: live,
+      mailer: {
+        async send(m: unknown) {
+          sent.push(m)
+        },
+        cid: () => 'x@test',
+      },
+      // Nobody is reachable — which is also local development, where there is
+      // no identity provider holding addresses at all.
+      directory: {
+        async emailFor() {
+          return null
+        },
+      },
+    })
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+
+    expect((await as(app, ALICE).post(`/api/party/invite/${BOB}`)).status).toBe(204)
+    expect(sent).toEqual([])
+  })
+
+  it('still invites them when the mail fails', async () => {
+    // The bell notification has already been written by the time anything is
+    // sent. A courtesy that did not arrive must not fail the action.
+    const live = new LiveStore()
+    const app = createApp({
+      authenticator: createTestAuthenticator(),
+      liveStore: live,
+      mailer: {
+        async send() {
+          throw new Error('SES is having an afternoon')
+        },
+        cid: () => 'x@test',
+      },
+      directory: {
+        async emailFor() {
+          return 'friend@example.com'
+        },
+      },
+    })
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+
+    expect((await as(app, ALICE).post(`/api/party/invite/${BOB}`)).status).toBe(204)
+    const bell = (await as(app, BOB).get('/api/sync')).body
+    expect(bell.notifications.some((n: { type: string }) => n.type === 'party_invite')).toBe(true)
+  })
+
+  it('draws the character of whoever is inviting', async () => {
+    const { app, sent } = buildMailApp()
+    await beFriends(app)
+
+    // Alice is standing in the lobby as she invites, which is when the stage
+    // knows what she looks like.
+    await as(app, ALICE)
+      .post('/api/stage/heartbeat')
+      .send({
+        x: 800,
+        y: 800,
+        facing: 1,
+        walking: false,
+        hidden: false,
+        ready: false,
+        emote: null,
+        character: { head: 'head-04', body: 'body-07', arm: 'arm-11', leg: 'leg-03' },
+      })
+
+    await as(app, ALICE).post(`/api/party/invite/${BOB}`)
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.html).toContain('cid:character@test')
+  })
+
+  it('sends an email with no picture rather than none at all', async () => {
+    // Alice never opened the stage, so nothing knows her character. The
+    // invitation is still worth sending.
+    const { app, sent } = buildMailApp()
+    await beFriends(app)
+
+    await as(app, ALICE).post(`/api/party/invite/${BOB}`)
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.html).not.toContain('cid:')
+  })
+})
