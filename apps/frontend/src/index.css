@@ -141,6 +141,12 @@
     background-color: var(--color-stock-100);
   }
 
+  /* Deliberately NOT `overflow-x: hidden` here, however tempting.
+     `overflow` other than `visible` on an ancestor of a `.pane` disables its
+     `backdrop-filter` — that is the first rule in ADR-0032, and `html` is an
+     ancestor of every pane in the app. Anything genuinely wider than the screen
+     carries its own scroller instead; nothing else is allowed to overflow. */
+
   body {
     margin: 0;
     min-height: 100svh;
@@ -294,6 +300,10 @@
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
+    /* 44px is the smallest thing a finger hits reliably. The label is only
+       0.76rem, so without a floor these come out around 32px and are fiddly on
+       a phone — which is where somebody will be playing this. */
+    min-height: 2.75rem;
     padding: 0.6rem 1.05rem;
     border: 1px solid var(--color-stock-900);
     background: var(--color-signal-500);
@@ -338,6 +348,7 @@
   }
 
   .btn-sm {
+    min-height: 2.25rem;
     padding: 0.4rem 0.7rem;
     font-size: 0.68rem;
   }
@@ -346,6 +357,11 @@
      field is unmistakable even mid-form. */
   .field {
     width: 100%;
+    min-height: 2.75rem;
+    /* At least 16px, always. iOS Safari zooms the whole page when a field
+       smaller than that takes focus, and it does not zoom back out — so a
+       0.85rem input turns the first tap on a form into a broken layout. */
+    font-size: max(1rem, 0.85rem);
     padding: 0.55rem 0.7rem;
     border: 1px solid var(--color-stock-900);
     background: rgb(247 243 232 / 0.72);
@@ -403,16 +419,34 @@
   /* Tabs. The selected one is printed solid: on paper, the strongest available
      statement of "you are here" is full ink coverage, and it needs no arrow,
      no underline animation and no colour anybody has to learn. */
+  /* Scrolls sideways rather than wrapping.
+     Wrapped, the first row's tabs lose the strip's bottom border — each tab
+     sets `border-bottom: 0` on the assumption the container draws it — so a
+     second row reads as broken rather than as more tabs. Scrolling keeps the
+     strip one line at any width, which is also what a phone user expects.
+
+     `overflow-x` is safe here specifically because the strip contains buttons
+     and no `.pane`; see the note by `html` above. */
   .tabs {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
     border-bottom: 1px solid var(--color-stock-900);
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .tab {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.45rem;
+    /* Never squeezed by a crowded strip — it scrolls instead. */
+    flex: none;
+    min-height: 2.75rem;
     padding: 0.6rem 1rem;
     /* The shared edge is collapsed, so a row of tabs reads as one printed
        strip rather than a line of separate buttons. */
@@ -456,6 +490,130 @@
     font-size: 0.6rem;
     font-weight: 600;
     letter-spacing: 0;
+  }
+
+  /* ---- the character (ADR-0033) ----------------------------------
+     Six layers hung on a rig. Positions, sizes and transform origins are all
+     written as inline styles by CharacterFigure, because they are computed
+     from the manifest — the only thing that belongs here is the motion. */
+
+  /* Sized entirely by the caller's width plus the inline `aspect-ratio`. Every
+     layer inside is placed in percentages, so there is no measuring step and
+     no pixel height to keep in step with the layout. */
+  .character {
+    position: relative;
+    width: 100%;
+  }
+
+  .character > span {
+    position: absolute;
+    display: block;
+    /* Promote each limb once, rather than letting the compositor decide part
+       way through an animation and flicker on the first frame. */
+    will-change: transform;
+  }
+
+  .character img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* Nearest-neighbour would alias the halftone into moiré at odd scales. */
+    image-rendering: auto;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  /* Deliberately mismatched periods. Equal ones land back on themselves every
+     cycle and the figure starts reading as a mechanism. */
+  @keyframes limb-swing {
+    0%,
+    100% {
+      transform: rotate(6deg);
+    }
+    50% {
+      transform: rotate(-6deg);
+    }
+  }
+
+  @keyframes limb-step {
+    0%,
+    100% {
+      transform: rotate(-4.5deg);
+    }
+    50% {
+      transform: rotate(4.5deg);
+    }
+  }
+
+  @keyframes torso-bob {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+
+  .character-live [data-motion='arm'] {
+    animation: limb-swing 2.9s ease-in-out infinite;
+  }
+
+  .character-live [data-motion='leg'] {
+    animation: limb-step 3.3s ease-in-out infinite;
+  }
+
+  .character-live [data-motion='body'] {
+    animation: torso-bob 2.5s ease-in-out infinite;
+  }
+
+  /* The far arm and far leg run the same keyframes backwards, which is what
+     makes it a walk instead of a march. */
+  .character-live [data-motion][data-mirror] {
+    animation-direction: reverse;
+  }
+
+  /* The head is driven from JavaScript by the pointer, not by a keyframe. The
+     easing is what makes it feel like it noticed you rather than snapped. */
+  .character [data-part='head'] {
+    transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  /* ---- the picker ---- */
+
+  .part-tile {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    padding: 0.35rem;
+    border: 1px solid rgb(24 22 15 / 0.28);
+    background: rgb(247 243 232 / 0.5);
+    cursor: pointer;
+    transition:
+      background-color 0.14s ease,
+      border-color 0.14s ease,
+      transform 0.14s cubic-bezier(0.16, 0.84, 0.24, 1);
+  }
+
+  .part-tile img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .part-tile:hover {
+    border-color: var(--color-stock-900);
+    transform: translateY(-1px);
+  }
+
+  /* Selected is a full key border plus a shadow — the same "printed solid"
+     logic the tabs use, so selection means one thing across the whole app. */
+  .part-tile[data-selected='true'] {
+    border-color: var(--color-stock-900);
+    background: rgb(255 255 255 / 0.85);
+    box-shadow: var(--shadow-print-sm);
   }
 
   /* Prose. Syne 400 for the few places that hold an actual sentence. Martian
@@ -604,5 +762,568 @@
   /* The veil still has to resolve, just without the travel. */
   .veil {
     transition: none;
+  }
+}
+
+/* ==========================================================================
+   The stage (ADR-0037)
+
+   A fixed 1600×900 coordinate space scaled once to fit its box, so a position
+   on the wire means the same thing on a phone and a laptop. Everything below
+   is laid out in those units; nothing reads the window.
+   ========================================================================== */
+
+@layer components {
+  .stage-frame {
+    position: relative;
+    width: 100%;
+    /* Reserves the height the scaled stage will occupy. Without it the frame
+       collapses — a scaled element still claims its unscaled layout box. */
+    aspect-ratio: 1600 / 900;
+    border: 1px solid var(--color-stock-900);
+    box-shadow: var(--shadow-print);
+    /* Deliberately NOT `overflow: hidden`, which would flatten any `.pane`
+       drawn over the stage. Props are placed inside the bounds instead. */
+    background: var(--color-stock-100);
+  }
+
+  .stage {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: top left;
+  }
+
+  .stage-wall,
+  .stage-floor {
+    position: absolute;
+    left: 0;
+    width: 1600px;
+    user-select: none;
+  }
+
+  .stage-wall {
+    top: 0;
+    height: 600px;
+  }
+
+  .stage-floor {
+    top: 560px;
+    height: 340px;
+  }
+
+  .stage-prop,
+  .stage-actor {
+    position: absolute;
+    user-select: none;
+  }
+
+  .stage-prop {
+    -webkit-user-drag: none;
+  }
+
+  /* A player who has stopped sending heartbeats. Faded rather than removed —
+     somebody checking their email should not vanish from the room. */
+  .stage-actor[data-away] {
+    opacity: 0.45;
+    filter: saturate(0.4);
+  }
+
+  .stage-nameplate {
+    position: absolute;
+    top: -1.6rem;
+    left: 50%;
+    translate: -50% 0;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--color-stock-900);
+    background: rgb(246 242 230 / 0.92);
+    font-size: 0.72rem;
+    white-space: nowrap;
+    /* The actor is mirrored to face left; the label must not be. */
+    transform-origin: center;
+    animation: plate-pop 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  }
+
+  .stage-actor[data-me] .stage-nameplate {
+    background: var(--color-signal-500);
+    color: var(--color-stock-50);
+  }
+
+  /* Chrome sits over the stage but must not swallow clicks meant for it. */
+  .stage-chrome {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 1rem;
+    pointer-events: none;
+  }
+
+  /* ---- props that would move in a real room ---- */
+
+  .stage-prop[data-sway='leaves'] {
+    transform-origin: 50% 100%;
+    animation: sway 6s ease-in-out infinite;
+  }
+
+  .stage-prop[data-sway='swing'] {
+    transform-origin: 50% 0%;
+    animation: swing 5.5s ease-in-out infinite;
+  }
+
+  /* ==== cartoon motion =====================================================
+     Every one of these is anticipation, squash/stretch or overshoot. None is a
+     fade — a fade is the motion that reads as machine-made, and this is the
+     part that makes the thing feel like a game. */
+
+  @keyframes plate-pop {
+    0% {
+      opacity: 0;
+      scale: 0.6;
+    }
+    100% {
+      opacity: 1;
+      scale: 1;
+    }
+  }
+
+  @keyframes sway {
+    0%,
+    100% {
+      rotate: -1.5deg;
+    }
+    50% {
+      rotate: 1.5deg;
+    }
+  }
+
+  @keyframes swing {
+    0%,
+    100% {
+      rotate: -4deg;
+    }
+    50% {
+      rotate: 4deg;
+    }
+  }
+
+  /* Arrival: dropped in from above, squashing as it lands, then settling. */
+  @keyframes drop-in {
+    0% {
+      translate: 0 -60%;
+      scale: 0.9 1.15;
+      opacity: 0;
+    }
+    55% {
+      translate: 0 0;
+      opacity: 1;
+    }
+    70% {
+      scale: 1.18 0.82;
+    }
+    85% {
+      scale: 0.94 1.06;
+    }
+    100% {
+      scale: 1 1;
+    }
+  }
+
+  .stage-actor {
+    animation: drop-in 0.62s cubic-bezier(0.3, 1.2, 0.5, 1) both;
+  }
+
+  /* ---- the walk cycle ----
+     The same rig as the idle, run faster, with the body leaning into it. */
+
+  .character[data-walking] [data-motion='arm'] {
+    animation-duration: 0.55s;
+  }
+
+  .character[data-walking] [data-motion='leg'] {
+    animation-duration: 0.55s;
+  }
+
+  .character[data-walking] [data-motion='body'] {
+    animation-duration: 0.275s;
+  }
+
+  /* ---- emotes ----
+     Each one drives parts that already rotate about real joints, so a dance
+     costs a block of CSS and no artwork at all. */
+
+  .character[data-emote] [data-motion] {
+    animation: none;
+  }
+
+  @keyframes emote-wave {
+    0%,
+    100% {
+      rotate: -140deg;
+    }
+    50% {
+      rotate: -105deg;
+    }
+  }
+
+  .character[data-emote='wave'] [data-part='armA'] {
+    animation: emote-wave 0.32s ease-in-out infinite;
+  }
+
+  @keyframes emote-dance-arm {
+    0%,
+    100% {
+      rotate: -55deg;
+    }
+    50% {
+      rotate: 40deg;
+    }
+  }
+
+  @keyframes emote-dance-leg {
+    0%,
+    100% {
+      rotate: 18deg;
+    }
+    50% {
+      rotate: -18deg;
+    }
+  }
+
+  @keyframes emote-dance-body {
+    0%,
+    100% {
+      translate: 0 0;
+      rotate: -3deg;
+    }
+    50% {
+      translate: 0 -8px;
+      rotate: 3deg;
+    }
+  }
+
+  .character[data-emote='dance'] [data-part='armA'],
+  .character[data-emote='dance'] [data-part='armB'] {
+    animation: emote-dance-arm 0.36s ease-in-out infinite;
+  }
+
+  .character[data-emote='dance'] [data-part='armB'] {
+    animation-direction: reverse;
+  }
+
+  .character[data-emote='dance'] [data-part='legA'],
+  .character[data-emote='dance'] [data-part='legB'] {
+    animation: emote-dance-leg 0.36s ease-in-out infinite;
+  }
+
+  .character[data-emote='dance'] [data-part='legB'] {
+    animation-direction: reverse;
+  }
+
+  .character[data-emote='dance'] [data-part='body'],
+  .character[data-emote='dance'] [data-part='head'] {
+    animation: emote-dance-body 0.72s ease-in-out infinite;
+  }
+
+  @keyframes emote-jump {
+    0%,
+    100% {
+      translate: 0 0;
+      scale: 1 1;
+    }
+    15% {
+      scale: 1.15 0.85;
+    }
+    45% {
+      translate: 0 -70px;
+      scale: 0.9 1.12;
+    }
+    80% {
+      translate: 0 0;
+      scale: 1.15 0.85;
+    }
+  }
+
+  .character[data-emote='jump'] {
+    animation: emote-jump 0.9s cubic-bezier(0.3, 0.9, 0.4, 1) both;
+  }
+
+  @keyframes emote-spin {
+    0% {
+      rotate: 0deg;
+    }
+    100% {
+      rotate: 360deg;
+    }
+  }
+
+  .character[data-emote='spin'] {
+    animation: emote-spin 0.6s linear 2;
+  }
+
+  @keyframes emote-cheer-arm {
+    0%,
+    100% {
+      rotate: -155deg;
+    }
+    50% {
+      rotate: -170deg;
+    }
+  }
+
+  @keyframes emote-cheer-hop {
+    0%,
+    100% {
+      translate: 0 0;
+    }
+    50% {
+      translate: 0 -18px;
+    }
+  }
+
+  .character[data-emote='cheer'] [data-part='armA'] {
+    animation: emote-cheer-arm 0.3s ease-in-out infinite;
+  }
+
+  .character[data-emote='cheer'] [data-part='armB'] {
+    animation: emote-cheer-arm 0.3s ease-in-out infinite reverse;
+  }
+
+  .character[data-emote='cheer'] {
+    animation: emote-cheer-hop 0.3s ease-in-out infinite;
+  }
+
+  .character[data-emote='shrug'] [data-part='armA'] {
+    rotate: -68deg;
+  }
+
+  .character[data-emote='shrug'] [data-part='armB'] {
+    rotate: 68deg;
+  }
+
+  @keyframes emote-sit {
+    0% {
+      translate: 0 0;
+    }
+    100% {
+      translate: 0 42px;
+    }
+  }
+
+  .character[data-emote='sit'] {
+    animation: emote-sit 0.3s ease-out both;
+  }
+
+  .character[data-emote='sit'] [data-part='legA'] {
+    rotate: 78deg;
+  }
+
+  .character[data-emote='sit'] [data-part='legB'] {
+    rotate: -78deg;
+  }
+
+  @keyframes emote-faint {
+    0% {
+      rotate: 0deg;
+      translate: 0 0;
+    }
+    100% {
+      rotate: 84deg;
+      translate: -18% 12%;
+    }
+  }
+
+  .character[data-emote='faint'] {
+    animation: emote-faint 0.5s cubic-bezier(0.6, 0, 0.9, 0.4) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Emotes still *happen* — they hold their pose instead of moving. Removing
+     them entirely would take a feature away rather than calm it down. */
+  .stage-actor,
+  .stage-prop[data-sway],
+  .stage-nameplate,
+  .character[data-emote],
+  .character[data-emote] [data-part] {
+    animation: none !important;
+  }
+}
+
+@layer components {
+  /* ---- the emote bar ---- */
+
+  .emote-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .emote-key {
+    flex: 1 1 auto;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-stock-900);
+    background: rgb(246 242 230 / 0.9);
+    box-shadow: var(--shadow-print-sm);
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+      transform 0.14s cubic-bezier(0.2, 1.6, 0.4, 1),
+      background-color 0.14s ease;
+  }
+
+  .emote-key:hover {
+    background: var(--color-signal-500);
+    color: var(--color-stock-50);
+    transform: translateY(-2px);
+  }
+
+  /* Squash on press, overshoot on release — the whole cartoon vocabulary in
+     two rules, and the reason these do not feel like form controls. */
+  .emote-key:active {
+    transform: translateY(1px) scale(0.94, 1.06);
+  }
+
+  /* Cooling down drains rather than disables: a control that greys out for
+     three-quarters of a second reads as broken, one that refills reads as a
+     rule you are being shown. */
+  .emote-bar[data-cooling] .emote-key {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .stage-frame {
+    touch-action: none;
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  /* ---- the lobby ---- */
+
+  .room-tile {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    border: 1px solid var(--color-stock-900);
+    background: rgb(246 242 230 / 0.85);
+    box-shadow: var(--shadow-print-sm);
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+      transform 0.16s cubic-bezier(0.2, 1.6, 0.4, 1),
+      background-color 0.16s ease;
+  }
+
+  .room-tile:hover:not(:disabled) {
+    /* A degree of rotation is the difference between a control and a card
+       somebody printed and pinned up. */
+    transform: translateY(-3px) rotate(-1.5deg);
+  }
+
+  .room-tile[data-selected='true'] {
+    background: var(--color-stock-900);
+    color: var(--color-stock-50);
+  }
+
+  /* Locked rooms use the same frost as everywhere else in the app, because it
+     already means exactly this (ADR-0032). */
+  .room-tile[data-locked] {
+    cursor: not-allowed;
+    filter: blur(1.4px);
+    opacity: 0.55;
+  }
+
+  .room-tile[data-locked]:active {
+    animation: refuse 0.3s ease-in-out;
+  }
+
+  @keyframes refuse {
+    0%, 100% { translate: 0 0; }
+    25% { translate: -4px 0; }
+    75% { translate: 4px 0; }
+  }
+
+  /* Ready stamps rather than toggles — scale down from oversized with a
+     rotation settle, the way a rubber stamp hits paper. */
+  .ready-toggle[data-on] {
+    background: var(--color-solved-500);
+    border-color: var(--color-solved-700);
+    color: var(--color-stock-50);
+    animation: stamp-down 0.34s cubic-bezier(0.2, 1.5, 0.4, 1);
+  }
+
+  @keyframes stamp-down {
+    0% { scale: 1.4; rotate: -6deg; opacity: 0.4; }
+    60% { scale: 0.96; rotate: 1.5deg; }
+    100% { scale: 1; rotate: 0deg; }
+  }
+
+  .play-button {
+    font-size: 1rem;
+    letter-spacing: 0.16em;
+    padding-block: 0.9rem;
+    animation: play-breathe 2.4s ease-in-out infinite;
+  }
+
+  /* The one thing on the screen that is asking to be pressed. */
+  @keyframes play-breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.025); }
+  }
+
+  /* ---- the countdown ---- */
+
+  .countdown {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    background: rgb(24 22 15 / 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+
+  .countdown-number {
+    font-family: var(--font-display);
+    font-size: clamp(6rem, 30vw, 16rem);
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    color: var(--color-stock-50);
+    -webkit-text-stroke: 4px var(--color-stock-900);
+    animation: count-stamp 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+
+  @keyframes count-stamp {
+    0% { scale: 3; opacity: 0; rotate: -12deg; }
+    35% { scale: 0.92; opacity: 1; rotate: 2deg; }
+    55% { scale: 1.04; rotate: 0deg; }
+    100% { scale: 1; opacity: 1; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-button,
+  .countdown-number,
+  .ready-toggle[data-on],
+  .room-tile[data-locked]:active {
+    animation: none !important;
+  }
+}
+
+@layer components {
+  .iris-wipe {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
   }
 }

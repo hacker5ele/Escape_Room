@@ -25,6 +25,23 @@ export interface AppAuth {
   /** Headers that identify the caller to the API. */
   authHeaders: () => Promise<Record<string, string>>
   updateProfile: (patch: Partial<AuthProfile>) => Promise<void>
+  /**
+   * Whatever the identity provider is holding as this player's character.
+   *
+   * Deliberately `unknown`. It comes from Clerk's `unsafeMetadata`, which any
+   * client can write, or from localStorage in development — so it is untrusted
+   * input, and it is validated where characters are actually understood rather
+   * than here. Auth has no business knowing what a character is.
+   */
+  storedCharacter: unknown
+  /**
+   * Save the character, and wear the composed picture as the profile photo.
+   *
+   * One call because the two must not drift apart: a stored character with a
+   * stale photograph would show one face in the header and another in a friend
+   * list (ADR-0033).
+   */
+  saveCharacter: (character: unknown, picture: Blob) => Promise<void>
   signOut: () => void
   /** Local mode only — Clerk's own components handle signing in. */
   signIn?: (profile: AuthProfile) => void

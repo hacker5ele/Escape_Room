@@ -90,7 +90,7 @@ export function FriendsPanel({
       <h2 className="label">Friends</h2>
 
       {error && (
-        <p role="alert" className="rounded border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
+        <p role="alert" className="border border-signal-500 bg-signal-100/70 p-3 text-sm text-signal-700">
           {error}
         </p>
       )}

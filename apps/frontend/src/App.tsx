@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SignInButton, SignUpButton, UserButton } from '@clerk/react'
-import type { GameSession } from '@escape-room/shared'
-import { currentRoomId, isRoomUnlocked, ROOM_IDS } from '@escape-room/shared'
+import type { GameSession, RoomId } from '@escape-room/shared'
+import { isRoomUnlocked, ROOM_IDS } from '@escape-room/shared'
 import { ApiRequestError, startOrResumeGame } from './api/game'
 import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
@@ -13,8 +13,14 @@ import { inviteTokenFromPath } from './routing'
 import { NotificationBell } from './sync/NotificationBell'
 import { LocalSignIn } from './auth/LocalSignIn'
 import { useAppAuth } from './auth/useAppAuth'
+import { CharacterPicker } from './character/CharacterPicker'
+import { composeCharacter } from './character/compose'
+import { isCharacter, type Character } from './character/parts'
 import { Tabs } from './ui/Tabs'
-import { CurrentRoom } from './rooms/CurrentRoom'
+import { LobbyView } from './lobby/LobbyView'
+import { RoomView } from './rooms/RoomView'
+import { unlockAudio } from './audio/sfx'
+import { IrisWipe } from './fx/IrisWipe'
 
 /**
  * The scaffold page, behind a sign-in gate.
@@ -44,7 +50,11 @@ export function App() {
             the one place the display face gets to be a poster. Deliberately
             not uppercase: German capitalises its nouns already, and setting
             it in caps loses that and shouts. */}
-        <h1 className="font-display text-5xl font-extrabold tracking-[-0.045em] text-stock-900 sm:text-6xl">
+        {/* Fluid rather than two fixed steps. "Der digitale Escape Room" set in
+            Syne extrabold is wide, and at a fixed 48px it ran off a 320px
+            phone; clamping to the viewport keeps it one confident block at
+            every width instead of breaking into ragged lines. */}
+        <h1 className="font-display text-[clamp(2rem,8.5vw,3.75rem)] leading-[0.98] font-extrabold tracking-[-0.045em] text-stock-900">
           Der digitale Escape Room
         </h1>
       </header>
@@ -99,11 +109,51 @@ type GameState =
   | { kind: 'error'; message: string }
 
 function GamePanel() {
-  const { authHeaders, mode, signOut, profile } = useAppAuth()
+  const { authHeaders, mode, signOut, profile, storedCharacter, saveCharacter } = useAppAuth()
   const [state, setState] = useState<GameState>({ kind: 'loading' })
-  // Whether the player is inside a room right now. Entering hides the tabbed
-  // shell entirely — see `CurrentRoom`, which takes over the whole viewport.
-  const [entered, setEntered] = useState(false)
+
+  // Draw the character, then hand the picture and the part ids over together.
+  // Composing here rather than inside the picker keeps the picker a pure
+  // chooser — it knows nothing about canvases or identity providers.
+  const [editingCharacter, setEditingCharacter] = useState(false)
+
+  /**
+   * Where the player is: the tabbed page, the lobby, or inside a room.
+   *
+   * Held in state rather than the URL hash, unlike the tabs. The hash already
+   * belongs to the tab strip, and a lobby is somewhere you *are* rather than
+   * somewhere you link to — a bookmark to a countdown is not a useful thing to
+   * be able to make.
+   */
+  const [place, setPlace] = useState<{ kind: 'page' } | { kind: 'lobby' } | { kind: 'room'; roomId: RoomId }>({
+    kind: 'page',
+  })
+
+  // The Start button is the first gesture in the flow by construction, which
+  // makes it the only place an AudioContext can be built without the browser
+  // refusing it. Every later sound depends on this one click.
+  const [flooding, setFlooding] = useState<null | (() => void)>(null)
+
+  /** Runs the ink flood, and changes the screen at the moment it is covered. */
+  const travel = useCallback((to: () => void) => {
+    setFlooding(() => to)
+  }, [])
+
+  const enterLobby = useCallback(() => {
+    // The first gesture in the flow by construction, which makes it the only
+    // place an AudioContext can be built without the browser refusing it.
+    unlockAudio()
+    travel(() => setPlace({ kind: 'lobby' }))
+  }, [travel])
+
+  const confirmCharacter = useCallback(
+    async (character: Character) => {
+      const picture = await composeCharacter(character)
+      await saveCharacter(character, picture)
+      setEditingCharacter(false)
+    },
+    [saveCharacter],
+  )
 
   // Held in a ref, and the effect runs on mount only.
   //
@@ -137,28 +187,88 @@ function GamePanel() {
     void open()
   }, [open])
 
+  /**
+   * Wraps whichever screen is current with the transition overlay.
+   *
+   * The panel has several early returns and the flood has to sit above all of
+   * them, so it is applied here rather than repeated. The screen swap happens
+   * at `onCovered` — full ink — which is what makes the change unseen rather
+   * than merely quick.
+   */
+  const withFlood = (content: React.ReactNode) => (
+    <>
+      {content}
+      {flooding && (
+        <IrisWipe
+          onCovered={() => flooding()}
+          onDone={() => setFlooding(null)}
+        />
+      )}
+    </>
+  )
+
   if (state.kind === 'needs-profile') {
-    return <ProfileForm onSaved={() => void open()} />
+    return withFlood(<ProfileForm onSaved={() => void open()} />)
   }
 
-  const game = state.kind === 'ready' ? state.game : null
-  const openRoomId = game ? currentRoomId(game) : null
-
-  if (entered && game && openRoomId) {
-    return (
-      <CurrentRoom
-        roomId={openRoomId}
-        onExit={() => setEntered(false)}
-        onGameChanged={(updated) => {
-          setState({ kind: 'ready', game: updated })
-          // The room just solved was the last one — nothing left to play.
-          if (currentRoomId(updated) === null) setEntered(false)
-        }}
-      />
+  // Everybody builds a character, not only new sign-ups. Checking what is
+  // stored rather than when the account was created means players who
+  // registered before this existed meet the same screen, and no separate
+  // backfill is needed (ADR-0033).
+  //
+  // A UX gate, not a security boundary: it runs in the browser and reads
+  // client-writable metadata. That is the right standing for something purely
+  // cosmetic — the same as the frontend room guard.
+  if (state.kind !== 'loading' && !isCharacter(storedCharacter)) {
+    return withFlood(
+      <CharacterPicker
+        onConfirm={confirmCharacter}
+        replacesExistingPhoto={profile?.imageUrl != null}
+      />,
     )
   }
 
-  return (
+  // The lobby and the rooms take the whole screen, so they replace the page
+  // rather than sitting inside it — which is also what lets the stage have the
+  // room it needs.
+  if (state.kind === 'ready' && isCharacter(storedCharacter) && place.kind === 'lobby') {
+    return withFlood(
+      <LobbyView
+        game={state.game}
+        character={storedCharacter}
+        onEnterRoom={(roomId) => travel(() => setPlace({ kind: 'room', roomId }))}
+        onLeave={() => travel(() => setPlace({ kind: 'page' }))}
+      />,
+    )
+  }
+
+  if (state.kind === 'ready' && isCharacter(storedCharacter) && place.kind === 'room') {
+    return withFlood(
+      <RoomView
+        roomId={place.roomId}
+        game={state.game}
+        character={storedCharacter}
+        onSolved={(session) => setState({ kind: 'ready', game: session })}
+        onLeave={() => travel(() => setPlace({ kind: 'lobby' }))}
+      />,
+    )
+  }
+
+  // Reopened deliberately, so it starts from who you already are and can be
+  // backed out of — neither of which is true of the gate above.
+  if (editingCharacter && isCharacter(storedCharacter)) {
+    return withFlood(
+      <CharacterPicker
+        onConfirm={confirmCharacter}
+        onCancel={() => setEditingCharacter(false)}
+        initial={storedCharacter}
+      />,
+    )
+  }
+
+  const game = state.kind === 'ready' ? state.game : null
+
+  return withFlood(
     <>
       <section className="pane flex flex-wrap items-center justify-between gap-4 p-5">
         <div className="flex items-center gap-4">
@@ -188,6 +298,13 @@ function GamePanel() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setEditingCharacter(true)}
+            className="btn btn-ghost btn-sm"
+          >
+            Change character
+          </button>
           <NotificationBell />
           {mode === 'clerk' ? (
             <UserButton />
@@ -208,11 +325,7 @@ function GamePanel() {
       <Tabs
         label="Your game"
         tabs={[
-          {
-            id: 'rooms',
-            label: 'Rooms',
-            render: () => <RoomsTab game={game} onEnterRoom={() => setEntered(true)} />,
-          },
+          { id: 'rooms', label: 'Rooms', render: () => <RoomsTab game={game} onStart={enterLobby} /> },
           ...(game
             ? [
                 {
@@ -236,7 +349,7 @@ function GamePanel() {
             : []),
         ]}
       />
-    </>
+    </>,
   )
 }
 
@@ -244,9 +357,7 @@ function GamePanel() {
  * The rooms — the only tab that is the game itself rather than something
  * arranged around it, which is why it comes first and opens by default.
  */
-function RoomsTab({ game, onEnterRoom }: { game: GameSession | null; onEnterRoom: () => void }) {
-  const openRoomId = game ? currentRoomId(game) : null
-
+function RoomsTab({ game, onStart }: { game: GameSession | null; onStart: () => void }) {
   return (
     <section className="pane p-5">
       <h2 className="label">Rooms</h2>
@@ -287,16 +398,17 @@ function RoomsTab({ game, onEnterRoom }: { game: GameSession | null; onEnterRoom
           )
         })}
       </ul>
-      <p className="prose mt-4 text-sm text-stock-600">
-        The rooms themselves are the team&apos;s work — this panel only proves the account and the
-        API agree about whose game this is.
+      <button
+        type="button"
+        onClick={onStart}
+        disabled={game === null}
+        className="btn play-button mt-5 w-full"
+      >
+        Start ▶
+      </button>
+      <p className="prose mt-3 text-sm text-stock-600">
+        Takes you to the waiting room. Friends can join you there — or press play and go in alone.
       </p>
-
-      {openRoomId && (
-        <button type="button" onClick={onEnterRoom} className="btn mt-5">
-          Start escape room
-        </button>
-      )}
     </section>
   )
 }

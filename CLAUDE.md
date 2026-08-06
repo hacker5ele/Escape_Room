@@ -37,6 +37,12 @@ These rules are not suggestions. They apply to every team member and to Claude.
    assignment itself.
 7. **Interface changes need agreement first.** Any change to the API surface or the data model
    requires an ADR *and* prior agreement with the whole team, before the code is written.
+8. **Everything new is fully responsive.** Every screen, panel and room works from a 320px phone up,
+   and "works" means usable rather than merely not broken: nothing overflows sideways, nothing is
+   clipped, controls are big enough to hit with a thumb, and text stays readable without zooming.
+   This is a condition of the work being finished, not a pass somebody makes afterwards — a room
+   that only works on a laptop is not done. Details and the specific traps are in
+   [ADR-0035](docs/adr/0035-responsive.md).
 
 ### The approval flow in practice
 
@@ -136,6 +142,11 @@ Where things belong:
 | A room's look & interaction | — | `apps/frontend/src/rooms/room-0N/` |
 | Colours, type, panels, buttons | — | `apps/frontend/src/index.css` — the design system |
 | Shared UI primitives (tabs, …) | — | `apps/frontend/src/ui/` |
+| Character parts & the picker | `scripts/characters/` — generation | `apps/frontend/src/character/` |
+| Scenery, props, backdrops | `scripts/scenery/` — generation | `apps/frontend/src/stage/scenes.ts` |
+| A room's puzzle UI | — | `apps/frontend/src/rooms/room-0N.tsx` |
+| The lobby | — | `apps/frontend/src/lobby/` |
+| Sound effects | — | `apps/frontend/src/audio/sfx.ts` |
 | Shared types / API shapes | `packages/shared/src/` | same file — one source |
 | Friends, invites, avatars | `apps/backend/src/{routes,services}/` | `apps/frontend/src/social/` |
 | Notifications / polling | `apps/backend/src/routes/sync.routes.ts` | `apps/frontend/src/sync/` |
@@ -217,7 +228,11 @@ The social layer, added by ADRs 0023–0029:
 | `GET` | `/api/chat/:userId/messages?since=` | — | `{ messages }` |
 | `POST` | `/api/chat/:userId/messages` | `{ body }` | `{ message }` |
 | `GET` | `/api/leaderboard/friends` | — | `{ entries }` — you and your friends |
+| `GET` | `/api/leaderboard/global` | — | `{ entries }` — everybody who has started |
 | `GET` | `/api/party` | — | `{ party }` — host, members, `isHost` |
+| `POST` | `/api/stage/heartbeat` | position, emote, ready | `{ peers, phase, isHost }` — 2 Hz |
+| `POST` | `/api/stage/phase` | `{ kind, roomId? }` | `204` — host only; moves the whole party |
+| `DELETE` | `/api/stage` | — | `204` — take me off the stage |
 | `POST` | `/api/party/invite/:userId` | — | `204` — notifies, moves nobody |
 | `POST` | `/api/party/join/:userId` | — | `{ party }` |
 | `DELETE` | `/api/party` | — | back to your own game |
@@ -328,6 +343,12 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0038](docs/adr/0038-presence-and-the-iris-wipe.md) | Presence in memory, polled and interpolated; the transition is an iris wipe | Accepted |
+| 2026-08-05 | [0037](docs/adr/0037-lobby-stage-and-rooms.md) | Start → lobby → room; one walkable stage, generated scenery, synthesised sound | Accepted |
+| 2026-08-05 | [0036](docs/adr/0036-global-board-is-a-top-ten.md) | The global board is a top ten plus your own row; games read in one batch | Accepted |
+| 2026-08-05 | [0035](docs/adr/0035-responsive.md) | Everything responsive from 320px up; never `overflow-x: hidden` on the root | Accepted |
+| 2026-08-05 | [0034](docs/adr/0034-global-leaderboard.md) | A global leaderboard beside the friends one; Friends stays the default | Accepted |
+| 2026-08-05 | [0033](docs/adr/0033-modular-characters.md) | Build-your-own character at sign-up; generated parts printed in the two inks | Accepted |
 | 2026-08-05 | [0032](docs/adr/0032-overprint-design-system.md) | Overprint: a design system of two spot inks on paper; glass panels are a third ink | Accepted |
 | 2026-08-04 | [0031](docs/adr/0031-drop-project-week-branding.md) | Drop the project-week branding; the assignment quotation stays verbatim | Accepted |
 | 2026-08-04 | [0030](docs/adr/0030-tests-own-one-server-per-app.md) | Tests start one HTTP server per app instead of one per request | Accepted |
@@ -382,6 +403,16 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   `overflow: hidden` above a `.pane`, never give a `.pane` its own stacking context, and never blend a
   panel *fill* with `multiply` — multiply cannot lighten, so the panel stops being a readable surface
   and the text ends up sitting on the background.
+- **Characters** — every player builds one at sign-up: head, body, arms and legs, twenty of each
+  ([ADR-0033](docs/adr/0033-modular-characters.md)). The parts are generated with `gpt-image-1` and
+  then *printed* — posterised to the four Overprint inks with a halftone screen, which is what stops
+  eighty separately generated images looking generated. `scripts/characters/generate_all.py` is
+  resumable; run it again for anything that failed. The composed still is a **head-and-shoulders
+  portrait** uploaded to Clerk, so every avatar surface in the app shows it **without any change to
+  `packages/shared` or the backend**. Two rules the catalogue depends on: the far limb is the near
+  limb mirrored, so **no part may have a handedness** (a V sign becomes a rude gesture reversed), and
+  the head hangs from `chin` rather than `neck` so it overlaps the torso instead of resting on it.
+  "Change character" in the game header reopens the picker.
 - **The signed-in page is tabbed** — Rooms · Friends · Leaderboard · Activity, via `src/ui/Tabs.tsx`.
   Only the open tab is mounted, because friends and chat poll on a timer. The selection lives in the
   URL hash, so `/#friends` is linkable and a reload keeps its place. A room's own UI belongs inside
@@ -401,14 +432,48 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   ids server-side and never accepted from a client, so no request can name a conversation the caller
   is not part of; friendship is re-checked on every read and write, so blocking closes an open
   window ([ADR-0026](docs/adr/0026-chat.md)).
-- **Leaderboard** — you and your friends, ranked by rooms solved, then finishing time, then hints.
-  Derived from what the game already records rather than a separate score table, and scoped to
-  friends — there is no global board ([ADR-0027](docs/adr/0027-friends-leaderboard.md)).
+- **Leaderboard** — ranked by rooms solved, then finishing time, then hints, and derived from what
+  the game already records rather than a separate score table
+  ([ADR-0027](docs/adr/0027-friends-leaderboard.md)). Two scopes: **Friends**, which is the default,
+  and **Everyone** ([ADR-0034](docs/adr/0034-global-leaderboard.md)). The global board shows only
+  players who have actually started, and is the one **table scan** in the app — capped at 200, and
+  the reason the instance role needs `dynamodb:Scan`. It returns a **top ten plus your own row** if
+  you are outside it, so nobody is missing from their own board
+  ([ADR-0036](docs/adr/0036-global-board-is-a-top-ten.md)). Position comes from `rank` on the wire,
+  never from the array index — the eleventh row may be the player in twenty-third place.
 - **Co-op play** — invite a friend into your game, or join theirs. Both see the same progress and
   either can solve; the log says who did what. A player points at the *host's* user id rather than a
   synthetic game id, so the games table never had to be re-keyed and no progress was thrown away,
   and every write is conditional on a version so two simultaneous solves cannot lose an update
   ([ADR-0028](docs/adr/0028-co-op-play.md)).
+- **The game** — **Start** on the Rooms tab runs an ink-flood transition into the **lobby**: a
+  printed 1950s room your character stands in the middle of and walks around, with an emote bar, a
+  room picker and PLAY ([ADR-0037](docs/adr/0037-lobby-stage-and-rooms.md)). PLAY counts down and
+  drops you into the room. **Room 01 is deliberately empty and walkable**; rooms 02–04 are stubs
+  wired to the real `attempt` and `hint` endpoints — a sub-team writes the puzzle in
+  `rooms/room-0N.tsx` and touches nothing else (ADR-0007).
+  - **The stage** (`src/stage/`) is one component used by the lobby *and* every room. It is a fixed
+    1600×900 space scaled once; everything is placed **by its feet** and sorted by `y`, which is what
+    lets you walk behind the sofa. Flat things (a rug) need a `depth` override or they draw over
+    people's feet.
+  - **Scenery** is 35 generated pieces put through the *character* pipeline unchanged, which is why
+    a potted palm and a player's head match. `scripts/scenery/generate_all.py` is resumable.
+  - **Sound** is synthesised in `audio/sfx.ts` — no files, nothing to license. The `AudioContext` is
+    built on the Start click and nowhere else, because that is the first gesture in the flow and a
+    context made any earlier is refused by Safari.
+  - **Motion is cartoon**: squash, stretch, overshoot. **Nothing fades in** — a linear fade is the
+    tell that reads as machine-made.
+  - **Multiplayer** ([ADR-0038](docs/adr/0038-presence-and-the-iris-wipe.md)) — friends stand in
+    the same lobby and the same room, walk about and emote at each other. Presence is polled at
+    500 ms and **interpolated**, which is the one technique that turns a twice-a-second update into
+    somebody walking. The host holds PLAY; guests follow on their next beat.
+  - **Presence is in memory, and that pins the API to one instance.** `min_size = max_size = 1` in
+    the Terraform is load-bearing now: raise it and friends will vanish for each other, because two
+    instances would each hold half the room. A deploy clears every lobby and drops nobody from their
+    party. The party is capped at **four**.
+  - **The transition is an iris wipe** — the circle that closes on the end of every 1950s cartoon,
+    with an overshoot, an inked rim and a wobble, because a perfect circle is what gives a machine
+    away.
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions

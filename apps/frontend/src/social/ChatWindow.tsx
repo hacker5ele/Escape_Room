@@ -126,7 +126,10 @@ export function ChatWindow({
   }
 
   return (
-    <section className="flex h-96 flex-col pane">
+    // Tall enough to hold a conversation, never taller than the screen. A
+    // fixed 24rem overflowed a phone held sideways, which is exactly when two
+    // people are most likely to be typing at each other.
+    <section className="pane flex h-[min(24rem,70svh)] flex-col">
       <header className="flex items-center gap-3 border-b border-stock-900/30 p-3">
         <Avatar subject={friend} size={32} />
         <div className="min-w-0 flex-1">
@@ -154,7 +157,7 @@ export function ChatWindow({
       </div>
 
       {error && (
-        <p role="alert" className="border-t border-red-900 bg-red-950/40 p-2 text-sm text-red-200">
+        <p role="alert" className="border-t border-signal-500 bg-signal-100/70 p-2 text-sm text-signal-700">
           {error}
         </p>
       )}

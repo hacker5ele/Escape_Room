@@ -175,7 +175,7 @@ function Inviter({ profile }: { profile: PublicProfile }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-8 px-6 py-16">
+    <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col gap-8 px-5 py-10 sm:px-6 sm:py-16">
       <header className="space-y-3">
         <p className="font-mono text-xs tracking-[0.3em] text-signal-600 uppercase">Invitation</p>
         <h1 className="font-mono text-3xl font-semibold text-stock-900">Der digitale Escape Room</h1>

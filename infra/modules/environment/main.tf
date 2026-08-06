@@ -517,6 +517,11 @@ data "aws_iam_policy_document" "apprunner_instance" {
       # profile lookup queries a secondary index.
       "dynamodb:Query",
       "dynamodb:BatchGetItem",
+      # Scan is granted for exactly one caller: the global leaderboard, which
+      # has to enumerate every player and has no key to follow. Nothing else
+      # scans, and nothing else should — a scan reads and bills for every row
+      # in the table. See ADR-0034.
+      "dynamodb:Scan",
     ]
     resources = [
       aws_dynamodb_table.games.arn,

@@ -1,4 +1,4 @@
-import type { Party, PublicProfile } from '@escape-room/shared'
+import { MAX_PARTY_SIZE, type Party, type PublicProfile } from '@escape-room/shared'
 import type { PartyRepository } from '../repositories/party.repository.js'
 import type { GameRepository } from '../repositories/game.repository.js'
 import type { FriendService } from './friend.service.js'
@@ -23,6 +23,23 @@ export class PartyService {
     private readonly profiles: ProfileService,
     private readonly notifications?: NotificationService,
   ) {}
+
+  /**
+   * Whose game this player is in — themselves, unless they have joined somebody.
+   *
+   * The same indirection `GameService.hostFor` uses (ADR-0028). Exposed here so
+   * presence can group a stage by party without reaching past the service into
+   * the repository.
+   */
+  async hostOf(userId: string): Promise<string> {
+    return (await this.repository.find(userId))?.hostUserId ?? userId
+  }
+
+  /** Everybody who has joined this host. Does not include the host. */
+  async memberIdsOf(hostUserId: string): Promise<string[]> {
+    const members = await this.repository.listMembers(hostUserId)
+    return members.map((record) => record.userId)
+  }
 
   async of(userId: string): Promise<Party> {
     const membership = await this.repository.find(userId)
@@ -121,6 +138,14 @@ export class PartyService {
 
     if (!(await this.games.findByUserId(hostUserId))) {
       throw new ApiError(404, 'SESSION_NOT_FOUND', 'They have not started a game yet.')
+    }
+
+    // Four is a party; thirty is a crowd, and on a stage it is a wall of
+    // overlapping characters. Counted as host plus guests, so the cap is the
+    // number of people in the room rather than the number who joined.
+    const existing = await this.repository.listMembers(hostUserId)
+    if (existing.length + 1 >= MAX_PARTY_SIZE) {
+      throw new ApiError(409, 'PARTY_FULL', 'That game is full.')
     }
 
     await this.repository.put({
