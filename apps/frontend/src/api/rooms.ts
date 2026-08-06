@@ -5,10 +5,6 @@ import { request } from './client'
 /**
  * The three calls that make a room playable.
  *
- * All three have existed and been tested on the server since the scaffold and
- * had never once been called from a browser — which is the only reason nothing
- * was playable. Nothing here is new API surface.
- *
  * Every response is parsed with the shared schema rather than cast. The server
  * is the authority on puzzle state (ADR-0006), so a payload that does not match
  * the contract should fail here, loudly, instead of halfway through rendering a
