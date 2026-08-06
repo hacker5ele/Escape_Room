@@ -219,42 +219,12 @@ resource "aws_dynamodb_table" "messages" {
   tags = var.tags
 }
 
-# Co-op membership. See ADR-0028.
+# Co-op membership used to be a table here. It is not any more.
 #
-# A row exists only while somebody is playing in *another* person's game; no row
-# means "playing my own", which is the common case and costs nothing.
-#
-# `hostUserId` is a user id rather than a synthetic game id, which is what lets
-# the games table stay keyed on the owner exactly as it always was — no
-# migration, and no game data thrown away to add co-op.
-resource "aws_dynamodb_table" "party" {
-  name         = "${local.prefix}-party"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "userId"
-
-  attribute {
-    name = "userId"
-    type = "S"
-  }
-
-  attribute {
-    name = "hostUserId"
-    type = "S"
-  }
-
-  # "Who is in my game?" — for the host's party list.
-  global_secondary_index {
-    name            = "by-host"
-    hash_key        = "hostUserId"
-    projection_type = "ALL"
-  }
-
-  point_in_time_recovery {
-    enabled = false
-  }
-
-  tags = var.tags
-}
+# Being in somebody's game is a claim a player keeps alive by beating, held in
+# memory beside their position, so it ends when they close the tab instead of
+# outliving them by however long it took somebody to press "leave". There is
+# nothing left to store, and so nothing left to expire. See ADR-0045.
 
 # --------------------------------------------------------------------------
 # Frontend: private S3 bucket, reachable only through CloudFront
@@ -530,13 +500,11 @@ data "aws_iam_policy_document" "apprunner_instance" {
       aws_dynamodb_table.invites.arn,
       aws_dynamodb_table.notifications.arn,
       aws_dynamodb_table.messages.arn,
-      aws_dynamodb_table.party.arn,
       # Querying a GSI requires the index ARN as well as the table's; granting
       # only the table is the usual way this fails at runtime rather than plan
       # time.
       "${aws_dynamodb_table.profiles.arn}/index/*",
       "${aws_dynamodb_table.invites.arn}/index/*",
-      "${aws_dynamodb_table.party.arn}/index/*",
     ]
   }
 
@@ -595,7 +563,6 @@ resource "aws_apprunner_service" "api" {
           INVITES_TABLE_NAME       = aws_dynamodb_table.invites.name
           NOTIFICATIONS_TABLE_NAME = aws_dynamodb_table.notifications.name
           MESSAGES_TABLE_NAME      = aws_dynamodb_table.messages.name
-          PARTY_TABLE_NAME         = aws_dynamodb_table.party.name
           AWS_REGION               = "us-east-1"
           # The backend needs this too, not just the browser — see the variable.
           CLERK_PUBLISHABLE_KEY = var.clerk_publishable_key

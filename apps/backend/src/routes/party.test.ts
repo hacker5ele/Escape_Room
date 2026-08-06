@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
 import type { Server } from 'node:http'
-import type { GameSession } from '@escape-room/shared'
+import { PRESENCE_TTL_VISIBLE_MS, type GameSession } from '@escape-room/shared'
 import { createTestApp as createApp } from '../test/server.js'
+import { LiveStore } from '../services/live-store.js'
 import { InMemoryGameRepository } from '../repositories/game.repository.js'
 import { createTestAuthenticator, TEST_USER_HEADER } from '../http/test-authenticator.js'
 import { SOLUTIONS } from '../domain/rooms/solutions.fixture.js'
@@ -10,6 +11,9 @@ import { SOLUTIONS } from '../domain/rooms/solutions.fixture.js'
 const ALICE = 'user_alice'
 const BOB = 'user_bob'
 const MALLORY = 'user_mallory'
+const CAROL = 'user_carol'
+const DAVE = 'user_dave'
+const ERIN = 'user_erin'
 
 function buildApp(gameRepository = new InMemoryGameRepository()) {
   const app = createApp({
@@ -35,7 +39,9 @@ async function signIn(app: Server, ...users: string[]) {
 const usernameOf = (user: string) => `handle_${user}`
 
 async function befriend(app: Server, a: string, b: string) {
-  await as(app, a).post('/api/friends/by-username').send({ username: usernameOf(b) })
+  await as(app, a)
+    .post('/api/friends/by-username')
+    .send({ username: usernameOf(b) })
   await as(app, b).post(`/api/friends/${a}/accept`)
 }
 
@@ -325,5 +331,85 @@ describe('inviting', () => {
     const response = await as(app, BOB).post(`/api/party/invite/${MALLORY}`)
     expect(response.status).toBe(409)
     expect(response.body.error.code).toBe('NOT_HOST')
+  })
+})
+
+/**
+ * The whole point of ADR-0045, exercised through the API.
+ *
+ * The store is aged rather than the clock moved. `vi.setSystemTime` is global
+ * to the worker, so a test travelling fifteen seconds into the future can be
+ * seen by whatever else is running and the failure lands somewhere unrelated —
+ * which is exactly what it did.
+ */
+describe('closing the tab', () => {
+  const alive = (app: Server, user: string, hidden = false) =>
+    as(app, user).post('/api/stage/alive').send({ hidden })
+
+  function buildPartyApp() {
+    const live = new LiveStore()
+    return { app: createApp({ authenticator: createTestAuthenticator(), liveStore: live }), live }
+  }
+
+  /** Long enough that a tab which last said it was visible has gone. */
+  const untilGone = () => PRESENCE_TTL_VISIBLE_MS + 1_000
+
+  it('takes you out of your friend\u2019s game, and frees the seat', async () => {
+    const { app, live } = buildPartyApp()
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+    await as(app, BOB).post(`/api/party/join/${ALICE}`)
+
+    expect((await as(app, ALICE).get('/api/party')).body.party.members).toHaveLength(1)
+
+    // Bob closes his tab: nothing is sent, he simply stops beating. Alice is
+    // still here, so only he ages past the timeout.
+    live.rewind(untilGone())
+    await alive(app, ALICE)
+
+    expect((await as(app, ALICE).get('/api/party')).body.party.members).toEqual([])
+    // And he is playing his own game again, so his solves are his own.
+    expect((await as(app, BOB).get('/api/party')).body.party.isHost).toBe(true)
+  })
+
+  it('leaves a reload completely untouched', async () => {
+    const { app, live } = buildPartyApp()
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+    await as(app, BOB).post(`/api/party/join/${ALICE}`)
+
+    // A page takes a second or two to come back, and beats again when it does.
+    live.rewind(2_000)
+    await alive(app, BOB)
+
+    expect((await as(app, BOB).get('/api/party')).body.party.isHost).toBe(false)
+    expect((await as(app, ALICE).get('/api/party')).body.party.members).toHaveLength(1)
+  })
+
+  it('is patient with a tab that said it was hidden', async () => {
+    const { app, live } = buildPartyApp()
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+    await as(app, BOB).post(`/api/party/join/${ALICE}`)
+
+    await alive(app, BOB, true)
+    live.rewind(60_000)
+
+    expect((await as(app, ALICE).get('/api/party')).body.party.members).toHaveLength(1)
+  })
+
+  it('frees a seat so somebody else can take it', async () => {
+    const { app, live } = buildPartyApp()
+    await signIn(app, ALICE, BOB, CAROL, DAVE, ERIN)
+    for (const guest of [BOB, CAROL, DAVE, ERIN]) await befriend(app, ALICE, guest)
+    for (const guest of [BOB, CAROL, DAVE]) {
+      expect((await as(app, guest).post(`/api/party/join/${ALICE}`)).status).toBe(201)
+    }
+    expect((await as(app, ERIN).post(`/api/party/join/${ALICE}`)).status).toBe(409)
+
+    // All three close their tabs. The seats were held for ever before this.
+    live.rewind(untilGone())
+
+    expect((await as(app, ERIN).post(`/api/party/join/${ALICE}`)).status).toBe(201)
   })
 })

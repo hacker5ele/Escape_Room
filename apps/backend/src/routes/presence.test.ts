@@ -38,7 +38,9 @@ async function signIn(app: Server, ...users: string[]) {
 const usernameOf = (user: string) => `handle_${user}`
 
 async function befriend(app: Server, a: string, b: string) {
-  await as(app, a).post('/api/friends/by-username').send({ username: usernameOf(b) })
+  await as(app, a)
+    .post('/api/friends/by-username')
+    .send({ username: usernameOf(b) })
   await as(app, b).post(`/api/friends/${a}/accept`)
 }
 
@@ -58,6 +60,7 @@ async function beat(
       character: CHARACTER,
       ready: false,
       emote: null,
+      hidden: false,
       ...overrides,
     })
   expect(response.status).toBe(200)
@@ -134,9 +137,16 @@ describe('the stage heartbeat', () => {
   it('refuses a position that is not a number at all', async () => {
     const app = buildApp()
     await signIn(app, ALICE)
-    const response = await as(app, ALICE)
-      .post('/api/stage/heartbeat')
-      .send({ x: Number.NaN, y: 800, facing: 1, walking: false, character: CHARACTER, ready: false, emote: null })
+    const response = await as(app, ALICE).post('/api/stage/heartbeat').send({
+      x: Number.NaN,
+      y: 800,
+      facing: 1,
+      walking: false,
+      character: CHARACTER,
+      ready: false,
+      emote: null,
+      hidden: false,
+    })
     // NaN fails every comparison, so it has to be rejected rather than clamped.
     expect(response.status).toBe(400)
   })
@@ -235,6 +245,53 @@ describe('leaving the stage', () => {
 
     expect((await as(app, BOB).delete('/api/stage')).status).toBe(204)
     expect((await beat(app, ALICE)).peers).toHaveLength(0)
+  })
+
+  it('does not take you out of the game as well', async () => {
+    // Walking to the leaderboard is not leaving your friend's game. Presence
+    // and membership share one expiry (ADR-0045), so this is the one place the
+    // two are deliberately pulled apart — and the one departure that is a real
+    // click rather than a guess about an unloading page.
+    const app = buildApp()
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+    await as(app, BOB).post(`/api/party/join/${ALICE}`)
+    await beat(app, BOB)
+
+    await as(app, BOB).delete('/api/stage')
+
+    const party = (await as(app, ALICE).get('/api/party')).body.party
+    expect(party.members).toHaveLength(1)
+    expect((await as(app, BOB).get('/api/party')).body.party.isHost).toBe(false)
+  })
+})
+
+describe('saying you are still here from somewhere else', () => {
+  it('keeps you in the party without putting you on the stage', async () => {
+    // `useLiveness` beats this from every screen. Somebody reading the
+    // leaderboard is in the game and standing nowhere.
+    const app = buildApp()
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+    await as(app, BOB).post(`/api/party/join/${ALICE}`)
+
+    expect((await as(app, BOB).post('/api/stage/alive').send({ hidden: false })).status).toBe(204)
+
+    expect((await as(app, ALICE).get('/api/party')).body.party.members).toHaveLength(1)
+    expect((await beat(app, ALICE)).peers).toHaveLength(0)
+  })
+
+  it('needs an account', async () => {
+    const app = buildApp()
+    expect((await request(app).post('/api/stage/alive').send({ hidden: false })).status).toBe(401)
+  })
+
+  it('refuses a beat that does not say whether the tab is hidden', async () => {
+    // The server cannot tell a closed tab from a throttled one; this flag is
+    // the only thing that can, so a beat without it is not a beat.
+    const app = buildApp()
+    await signIn(app, ALICE)
+    expect((await as(app, ALICE).post('/api/stage/alive').send({})).status).toBe(400)
   })
 })
 

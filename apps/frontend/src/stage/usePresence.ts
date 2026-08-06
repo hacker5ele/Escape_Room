@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HeartbeatResponse, PartyPhase, Peer } from '@escape-room/shared'
 import { heartbeatResponseSchema } from '@escape-room/shared'
 import { request } from '../api/client'
+import { markStageBeat } from '../api/stage'
 import { useAppAuth } from '../auth/useAppAuth'
 import type { EmoteName } from '../character/emotes'
 import type { Character } from '../character/parts'
@@ -99,6 +100,9 @@ export function usePresence({
 
     const beat = async () => {
       try {
+        // Tells `useLiveness` to stay quiet: this beat renews the same claim,
+        // so a player on the stage sends one request per interval, not two.
+        markStageBeat()
         const response = await request('/stage/heartbeat', await authRef.current(), {
           method: 'POST',
           body: JSON.stringify({
@@ -109,6 +113,9 @@ export function usePresence({
             character: characterRef.current,
             ready: readyRef.current,
             emote: pendingEmote.current,
+            // A closed tab and a throttled one look identical from the server,
+            // and only this side can tell them apart (ADR-0045).
+            hidden: document.visibilityState === 'hidden',
           }),
         })
 

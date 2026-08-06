@@ -6,7 +6,7 @@ import { play, type SoundName } from '../audio/sfx'
 import { Stage, type Actor } from '../stage/Stage'
 import { useMovement } from '../stage/useMovement'
 import { usePresence, toActor } from '../stage/usePresence'
-import { setPhase, useRegisterStageAuth } from '../api/stage'
+import { leaveStage, setPhase, useRegisterStageAuth } from '../api/stage'
 import { spawnPoint } from '../stage/scenes'
 import { EmoteBar } from './EmoteBar'
 import { InvitePanel } from './InvitePanel'
@@ -56,6 +56,13 @@ export function LobbyView({
     character,
     ready,
   })
+
+  // Your character leaves the room the moment you walk out of it, rather than
+  // standing there until the timeout notices. This is the one departure that is
+  // a real click rather than a guess about an unloading page, so it is the one
+  // that can be immediate — and it leaves your claim on the party alone, since
+  // opening the leaderboard is not leaving your friend's game (ADR-0045).
+  useEffect(() => () => void leaveStage(), [])
 
   /**
    * Who decides where the party is.
@@ -138,7 +145,12 @@ export function LobbyView({
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
         <div className="flex flex-col gap-3">
-          <Stage scene="lobby" actors={[me, ...actors.map(toActor)]} onWalkTo={walkTo} onWalkEnd={stopWalking} />
+          <Stage
+            scene="lobby"
+            actors={[me, ...actors.map(toActor)]}
+            onWalkTo={walkTo}
+            onWalkEnd={stopWalking}
+          />
           <EmoteBar onEmote={fire} disabled={counting} />
           <p className="prose text-xs text-stock-500">
             Arrow keys or WASD to walk — or just drag on the stage.
