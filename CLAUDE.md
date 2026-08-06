@@ -148,6 +148,7 @@ Where things belong:
 | A room's puzzle UI | — | `apps/frontend/src/rooms/room-0N.tsx` |
 | The lobby | — | `apps/frontend/src/lobby/` |
 | Sound effects | — | `apps/frontend/src/audio/sfx.ts` |
+| Invitation email | `apps/backend/src/mail/` | — |
 | Shared types / API shapes | `packages/shared/src/` | same file — one source |
 | Friends, invites, avatars | `apps/backend/src/{routes,services}/` | `apps/frontend/src/social/` |
 | Notifications / polling | `apps/backend/src/routes/sync.routes.ts` | `apps/frontend/src/sync/` |
@@ -345,6 +346,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-06 | [0046](docs/adr/0046-email-an-absent-friend.md) | Invite a friend who is not on the app and they get an email, with your character in it | Accepted |
 | 2026-08-06 | [0045](docs/adr/0045-membership-is-liveness.md) | Being in a game is a claim you keep alive; close the tab and you leave both | Accepted |
 | 2026-08-05 | [0044](docs/adr/0044-unbuild-into-dots.md) | Screens unbuild into their own halftone dots and rebuild out of them | Accepted |
 | 2026-08-05 | [0043](docs/adr/0043-hints-are-per-room.md) | Hints are counted per room, derived from the activity log | Accepted |
@@ -444,6 +446,27 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
     `index.html`, and the smoke test now checks seven routes rather than one.
 - **Accounts** — players register with Clerk before they can reach anything. Progress and an activity
   log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
+- **An invitation reaches somebody who is not here** ([ADR-0046](docs/adr/0046-email-an-absent-friend.md)).
+  Invite a friend with the app closed and they get an **email** instead of a bell nobody will read.
+  Three questions decide it, and any one of them false means the bell alone: are they live
+  (ADR-0045), do they already have an unread invitation from you (`hasUnreadFrom` — the throttle
+  chat already built, so no new state), and do they have a **verified** address. The link is the
+  party link from ADR-0042, unchanged. **Almost nothing here is new** — the only new parts are a
+  sender and a template.
+  - **No secret anywhere.** SES is reached with the instance role, so there is no API key to create,
+    store or rotate. `MAIL_FROM` empty turns email off entirely, which is what local development,
+    the tests and `docker compose up` run with.
+  - **SES starts in a sandbox** — it delivers only to *verified* addresses until AWS grants
+    production access, which is a support request. Verifying the team covers a demo completely.
+  - The email carries **your character**, composited on the server with `pngjs` from a PNG part set
+    that ships with the API. Not `sharp`: the image is alpine, and sharp on musl is a fight for
+    alpha-over blending of four flat pictures. The character and the starburst are baked into **one**
+    image, because overlapping two with a negative margin works in a browser and nowhere else.
+  - The **avatar is soft and it is not Clerk's fault**: the portrait is a 260-unit window blown up to
+    512, so it is upscaled ~2× at source. Drawing the whole figure sidesteps the crop, and at email
+    size the shipped parts are indistinguishable from the 1024px originals — so no re-export.
+  - An email must never break an invitation: the bell is written first, and everything after it is
+    best-effort.
 - **Invites** ([ADR-0042](docs/adr/0042-party-invites.md)) — from the lobby, the host can invite a
   friend (they get a notification with a **Join their game** button) or mint a **party link**.
   Following a party link makes you friends *and* puts you in the game in one step. The join is

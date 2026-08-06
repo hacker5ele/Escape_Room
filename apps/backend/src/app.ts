@@ -38,6 +38,9 @@ import { ChatService } from './services/chat.service.js'
 import { LeaderboardService } from './services/leaderboard.service.js'
 import { PartyService } from './services/party.service.js'
 import { LiveStore } from './services/live-store.js'
+import { InviteMailService } from './mail/invite-mail.service.js'
+import { NoMailer, SesMailer, type Mailer } from './mail/mail.service.js'
+import { NoDirectory, createClerkDirectory, type Directory } from './http/directory.js'
 import { NotificationService } from './services/notification.service.js'
 import { FriendService } from './services/friend.service.js'
 import { InviteService } from './services/invite.service.js'
@@ -74,6 +77,10 @@ export interface AppOptions {
   messageRepository?: MessageRepository
   /** Injected by tests that need to age it; a fresh one otherwise. */
   liveStore?: LiveStore
+  /** Injected by tests to assert what would have been sent. Absent means nothing is. */
+  mailer?: Mailer
+  /** Injected by tests. Absent means nobody has a reachable address. */
+  directory?: Directory
   /** Injected by tests so the suite needs no Clerk key and makes no network calls. */
   authenticator?: Authenticator
   /** Attempts per IP per minute. Tests lower it to assert the limiter fires. */
@@ -158,12 +165,36 @@ export function createApp(options: AppOptions = {}): Express {
   const notificationService = new NotificationService(notificationRepository, profileService)
   const friendService = new FriendService(friendshipRepository, profileService, notificationService)
   const leaderboardService = new LeaderboardService(repository, friendService, profileService)
-  const partyService = new PartyService(
+  // Email is off unless it is configured, which is what local development, the
+  // test suite and `docker compose up` all run with. There is no key to forget:
+  // SES is reached with the instance role (ADR-0046).
+  const mailer =
+    options.mailer ??
+    (config.mailFrom ? new SesMailer(config.mailFrom, config.awsRegion) : new NoMailer())
+  const directory =
+    options.directory ?? (config.authMode === 'clerk' ? createClerkDirectory() : new NoDirectory())
+
+  // `inviteService` is referenced here and constructed below — the closure is
+  // only *called* when somebody sends an invitation, long after both exist.
+  // That is what unties the knot: the invite service needs the party service to
+  // describe a party, and the party service needs this to send an email.
+  const invitations: InviteMailService | undefined =
+    config.mailFrom || options.mailer
+      ? new InviteMailService(
+          (userId) => inviteService.create(userId, { forParty: true }),
+          directory,
+          mailer,
+          config.publicOrigin,
+        )
+      : undefined
+
+  const partyService: PartyService = new PartyService(
     live,
     repository,
     friendService,
     profileService,
     notificationService,
+    invitations,
   )
 
   // Reads the same map as the party service rather than asking it, which is
@@ -178,7 +209,11 @@ export function createApp(options: AppOptions = {}): Express {
   )
   // The party is passed so a link minted from the lobby can describe it — and
   // is constructed above, so the order here matters.
-  const inviteService = new InviteService(inviteRepository, profileService, partyService)
+  const inviteService: InviteService = new InviteService(
+    inviteRepository,
+    profileService,
+    partyService,
+  )
   const roomService = new RoomService(gameService)
 
   const app = express()

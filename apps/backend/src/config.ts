@@ -55,6 +55,23 @@ export const config = {
   awsRegion: process.env.AWS_REGION ?? 'us-east-1',
 
   /**
+   * Who invitation emails come from — `Escape Room <noreply@cool.tf>`.
+   *
+   * **Empty turns email off entirely**, which is what local development, the
+   * test suite and `docker compose up` all run with. There is no key here to
+   * forget: SES is reached with the instance role (ADR-0046).
+   */
+  mailFrom: process.env.MAIL_FROM ?? '',
+
+  /**
+   * Where a link in an email points. `https://cool.tf`, no trailing slash.
+   *
+   * The browser builds its own links from `window.location`, but an email is
+   * read somewhere else entirely and has to be told.
+   */
+  publicOrigin: (process.env.PUBLIC_ORIGIN ?? '').replace(/\/$/, ''),
+
+  /**
    * Clerk's server-side key. Read by @clerk/express directly from the
    * environment; listed here only so a missing value is visible at start-up.
    */

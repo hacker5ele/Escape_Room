@@ -36,8 +36,7 @@ export class InviteService {
     lifetimeDays = DEFAULT_LIFETIME_DAYS,
   ): Promise<Invite> {
     const now = new Date()
-    const expires =
-      lifetimeDays > 0 ? new Date(now.getTime() + lifetimeDays * 86_400_000) : null
+    const expires = lifetimeDays > 0 ? new Date(now.getTime() + lifetimeDays * 86_400_000) : null
 
     const record: InviteRecord = {
       token: mintToken(),
@@ -82,9 +81,7 @@ export class InviteService {
 
     // Only a size and whether it is full. Who is in the party is not something
     // a stranger holding a link needs before deciding whether to follow it.
-    const party = record.partyHostUserId
-      ? await this.#partySize(record.partyHostUserId)
-      : null
+    const party = record.partyHostUserId ? await this.#partySize(record.partyHostUserId) : null
 
     return { inviter, party }
   }

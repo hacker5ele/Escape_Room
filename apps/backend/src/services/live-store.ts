@@ -126,6 +126,17 @@ export class LiveStore {
       .map((entry) => entry.userId)
   }
 
+  /**
+   * Do they have the game open?
+   *
+   * The same question the whole store answers, asked directly — so an
+   * invitation can be told in the app to somebody who is here and emailed to
+   * somebody who is not (ADR-0046).
+   */
+  isLive(userId: string, now: number = Date.now()): boolean {
+    return this.#fresh(userId, now) !== null
+  }
+
   /** Where somebody is standing, or null if they are not on the stage or not here. */
   standingOf(userId: string, now: number = Date.now()): Standing | null {
     return this.#fresh(userId, now)?.standing ?? null

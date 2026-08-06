@@ -19,11 +19,7 @@ export class ApiError extends Error {
   }
 
   static profileIncomplete(): ApiError {
-    return new ApiError(
-      409,
-      'PROFILE_INCOMPLETE',
-      'Choose a username before you start playing.',
-    )
+    return new ApiError(409, 'PROFILE_INCOMPLETE', 'Choose a username before you start playing.')
   }
 
   /**

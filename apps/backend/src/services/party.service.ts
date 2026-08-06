@@ -4,6 +4,7 @@ import type { GameRepository } from '../repositories/game.repository.js'
 import type { FriendService } from './friend.service.js'
 import type { ProfileService } from './profile.service.js'
 import type { NotificationService } from './notification.service.js'
+import type { InviteMailService } from '../mail/invite-mail.service.js'
 import { ApiError } from '../http/api-error.js'
 
 /**
@@ -27,6 +28,8 @@ export class PartyService {
     private readonly friends: FriendService,
     private readonly profiles: ProfileService,
     private readonly notifications?: NotificationService,
+    /** Absent means nobody is emailed — local development, and the test suite. */
+    private readonly invitations?: InviteMailService,
   ) {}
 
   /**
@@ -93,12 +96,40 @@ export class PartyService {
     }
 
     const me = await this.profiles.findByUserId(userId)
+    const name = me?.displayName || me?.username || 'A friend'
+
+    // Asked *before* the new notification is written, or it is the thing we
+    // just added and the answer is always yes.
+    const alreadyWaiting = await this.notifications?.hasUnreadFrom(
+      friendUserId,
+      'party_invite',
+      userId,
+    )
+
     await this.notifications?.notifyQuietly(
       friendUserId,
       'party_invite',
-      `${me?.displayName || me?.username || 'A friend'} invited you into their game.`,
+      `${name} invited you into their game.`,
       userId,
     )
+
+    // The bell is the whole of it for somebody who is here to see it. Email is
+    // for the person who is not, because otherwise the invitation sits unread
+    // until they happen to come back — which for somebody not playing today
+    // means never (ADR-0046).
+    if (!this.live.isLive(friendUserId) && !alreadyWaiting) {
+      await this.invitations?.emailQuietly({
+        inviterUserId: userId,
+        inviterName: name,
+        friendUserId,
+        // Off the heartbeat rather than out of storage: the character is not
+        // part of a public profile and never has been, and somebody inviting a
+        // friend is standing in the lobby as they do it — which is exactly when
+        // the stage knows what they look like. Null if they somehow are not,
+        // and the email simply has no picture in it.
+        character: this.live.standingOf(userId)?.character ?? null,
+      })
+    }
   }
 
   /**

@@ -30,7 +30,9 @@ const usernameOf = (user: string) => `handle_${user}`
 
 /** Leaves Alice and Bob mutual friends. */
 async function befriend(app: Server, a: string, b: string) {
-  await as(app, a).post('/api/friends/by-username').send({ username: usernameOf(b) })
+  await as(app, a)
+    .post('/api/friends/by-username')
+    .send({ username: usernameOf(b) })
   await as(app, b).post(`/api/friends/${a}/accept`)
 }
 
@@ -145,7 +147,9 @@ describe('who is allowed to read a conversation', () => {
     const app = buildApp()
     await signIn(app, ALICE, BOB)
     // Asked, not accepted. A request must not open a channel.
-    await as(app, ALICE).post('/api/friends/by-username').send({ username: usernameOf(BOB) })
+    await as(app, ALICE)
+      .post('/api/friends/by-username')
+      .send({ username: usernameOf(BOB) })
 
     expect((await send(app, ALICE, BOB, 'hi')).status).toBe(403)
     expect((await history(app, ALICE, BOB)).status).toBe(403)

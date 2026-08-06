@@ -64,9 +64,7 @@ describe('authentication', () => {
 
 describe('usernames', () => {
   it('refuses to start a game for an account with no username', async () => {
-    const response = await as(buildApp(), TEST_USER_WITHOUT_USERNAME)
-      .post('/api/sessions')
-      .send({})
+    const response = await as(buildApp(), TEST_USER_WITHOUT_USERNAME).post('/api/sessions').send({})
 
     // Enforced by the server, not the form — skipping the UI achieves nothing.
     expect(response.status).toBe(409)
@@ -118,9 +116,7 @@ describe('sessions', () => {
     const app = buildApp()
     const first = await startGame(app, ALICE)
 
-    await as(app, ALICE)
-      .post('/api/rooms/room-01/attempt')
-      .send({ answer: SOLUTIONS['room-01'] })
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
 
     const second = await startGame(app, ALICE)
     expect(second.id).toBe(first.id)
@@ -146,9 +142,7 @@ describe('sessions', () => {
   it('can be reset to replay from the first room', async () => {
     const app = buildApp()
     await startGame(app, ALICE)
-    await as(app, ALICE)
-      .post('/api/rooms/room-01/attempt')
-      .send({ answer: SOLUTIONS['room-01'] })
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
 
     expect((await as(app, ALICE).delete('/api/sessions/me')).status).toBe(204)
     expect((await as(app, ALICE).get('/api/sessions/me')).status).toBe(404)
@@ -303,8 +297,7 @@ describe('attempts', () => {
     const app = buildApp(2)
     await startGame(app, ALICE)
 
-    const attempt = () =>
-      as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: 1 })
+    const attempt = () => as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: 1 })
 
     expect((await attempt()).status).toBe(200)
     expect((await attempt()).status).toBe(200)
