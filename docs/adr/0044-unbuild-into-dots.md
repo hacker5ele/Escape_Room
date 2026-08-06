@@ -75,13 +75,70 @@ phone and barely anywhere on a desktop.
 together. Every other route is thrown from further out and lands with an overshoot. Two easings
 because they are two different sentences.
 
-### A piece in flight is flat paper, on purpose
+### The dots belong to the unbuild, and only to it
 
-A mask makes an element its own backdrop root, which leaves `.pane::before` with an empty backdrop
-and nothing to blur. Rather than let the glass fail halfway through the animation, it is put out
-deliberately: `--pane-blur: 0px; --pane-alpha: 1` for the duration. Those two tokens exist for
-exactly this kind of flattening, and the swap is invisible under motion that starts on the same
-frame.
+**A screen coming apart dissolves into dots. A screen arriving flies in and lands, fully inked.**
+
+Screening the arrival as well was symmetrical, obvious, and wrong to look at. **A 1px dot grid
+destroys type long before it stops filling a rectangle** — a panel keeps reading as a pale box while
+every word inside it has already gone. So each arriving panel appeared as a blank white rectangle
+that only afterwards filled in, twenty of them staggered across a second. Shortening the screened
+phase did not fix it, because the problem is not how long it lasts; it is that the arrival is
+screened at all.
+
+It is also not what was asked for. The request was that everything unbuilds itself, that only the
+dots are left, and that the next screen *flies in*. Only the first half of that is a dissolve.
+
+So an arriving piece has no mask on it, and its opacity is a **1ms switch rather than a fade** — it
+exists only so a piece is not sitting visible at its scattered start while it waits out its stagger.
+Two reasons it is not a real fade: "nothing fades in" is already a rule of this app's motion because
+a linear fade is the tell that reads as machine-made, and an element below `opacity: 1` is its own
+backdrop root, so a panel fading in is a panel with its glass switched off.
+
+The dissolve and the travel are two animations sharing no property — one owns `--dot-r` and
+`opacity`, the other `translate`, `rotate` and `scale`. Partly for independent timing, and partly
+because a keyframe in the middle applies the easing to *each* interval it creates: an overshoot
+written once would overshoot three times.
+
+### A piece in flight is the same panel, moved. Nothing recolours it.
+
+**Nothing in this transition touches `--pane-blur`, `--pane-alpha` or `--pane-ink`, and nothing puts
+an `overflow` on the container.** That is the rule, and it took three goes to arrive at it.
+
+An element with a transform on it is its own stacking context, which is exactly what ADR-0032 says
+never to give a `.pane` — `.pane::after` can no longer reach the page to overprint against. That is
+unavoidable while a thing is moving, and the mistake each time was trying to *compensate* for it:
+
+| attempt | what it did | what it looked like |
+| --- | --- | --- |
+| `--pane-alpha: 1` | opaque paper fill | a flat white box under the panel's own top-edge sheen |
+| `--pane-ink: 0` | tint removed rather than left to blend wrong | panels fly in a shade too pale |
+| `--pane-blur: 0` | matched the blur the mask had already killed | same, on the way out |
+| `overflow-x: clip` while animating | stopped a piece off-screen widening the document | **every** panel on the page flat for the length of the animation |
+
+The last one is the first rule at the top of `index.css` — *"never put `overflow: hidden` on an
+ancestor of `.pane`; the glass goes flat with no error anywhere"* — and "only while animating" is not
+a mitigation for it. Each of these was reasoned about as negligible and each was the reported
+complaint.
+
+The stacking context stays, then, and is simply held for as short a time as possible: each piece is
+cleared on its own `animationend` rather than on a timer that waits for the slowest. Instead of
+clipping, `inward()` mirrors any piece that would start off the right or the bottom of the page —
+coming from the left or the top costs nothing, because content outside those edges is not scrollable
+to. The distance is never shortened, only turned around.
+
+**Two tests read `index.css` and fail if any of those declarations reappears.** They also assert they
+found the block first: the version that imported the stylesheet with `?raw` got an empty string back
+— the Tailwind plugin claims every CSS import — and passed against a stylesheet containing precisely
+what it forbade.
+
+### Each piece is cleaned up when it lands, not when the last one does
+
+Same bug, second cause. On one shared timer the first panel kept its flattened look for the whole
+stagger — most of a second after it had visibly settled — and then popped. An `animationend`
+listener filtered to the travel animation corrects each piece on the frame it finishes, and there is
+nothing left to see. The timer stays as a floor sweep, because `animationend` never fires for an
+element that did not get to animate.
 
 ### Clipping, for about one second
 
