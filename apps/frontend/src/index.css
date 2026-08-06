@@ -631,7 +631,13 @@
      stone and old wood until Inaam's Figma has a real backdrop. Anything
      actually readable inside it — a clue panel, the answer field — stays
      ordinary Overprint paper (`.pane`, `.field`), the same way a lit page
-     would in a dark room, rather than inventing dark-mode versions of them. */
+     would in a dark room, rather than inventing dark-mode versions of them.
+
+     This room opts out of the shared walkable Stage — see `customScene` in
+     `registry.tsx` — and takes the whole viewport instead: no paper, no
+     halftone screen, nothing of the page showing anywhere around it. Leaving,
+     feedback and hints still work — `RoomView` floats them above this on
+     their own, since there is no page flow left for them to sit in. */
   .room1-scene {
     position: fixed;
     inset: 0;

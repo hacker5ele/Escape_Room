@@ -165,16 +165,19 @@ export function RoomView({
     }
   }
 
-  async function hint() {
-    if (busy) return
+  /** Returns the hint text so a custom-scene room can show it inline, not just RoomView's own list. */
+  async function hint(): Promise<string> {
     setBusy(true)
     try {
       const result = await takeHint(roomId, await authRef.current())
       play('pop')
       setHints((current) => [...current, result.hint])
       setRemaining(result.hintsRemaining)
+      return result.hint
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'No more hints.')
+      const message = error instanceof Error ? error.message : 'No more hints.'
+      setFeedback(message)
+      throw error
     } finally {
       setBusy(false)
     }
@@ -190,6 +193,35 @@ export function RoomView({
     walking: position.walking,
     emote,
     isMe: true,
+  }
+
+  // A custom-scene room takes the entire viewport, not just the column
+  // inside `<main>` below — see `.room1-scene`. RoomView still owns leaving
+  // and feedback here, the same as it does for every other room; they just
+  // float above the scene instead of sitting in the normal page flow,
+  // because there is no page flow left to sit in once the scene covers it.
+  // No hints panel — this room's own ten levels are the help.
+  if (state.kind === 'ready' && definition.customScene && !solved) {
+    return (
+      <>
+        {definition.render({ room: state.room, onAnswer: (value) => void answer(value), busy })}
+
+        <div className="fixed top-4 right-4 z-50">
+          <button type="button" onClick={onLeave} className="btn btn-ghost btn-sm">
+            Leave the room
+          </button>
+        </div>
+
+        {feedback && (
+          <p
+            role="alert"
+            className="pane fixed bottom-4 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 p-3 text-sm text-signal-600"
+          >
+            {feedback}
+          </p>
+        )}
+      </>
+    )
   }
 
   return (
@@ -228,23 +260,27 @@ export function RoomView({
         <>
           <p className="prose max-w-[62ch] text-sm text-stock-600">{state.room.intro}</p>
 
-          <Stage
-            scene={definition.scene}
-            actors={[me, ...actors.map(toActor)]}
-            onWalkTo={walkTo}
-            onWalkEnd={stopWalking}
-          >
-            {solved ? (
-              <div className="pane pointer-events-auto p-4 text-center">
-                <p className="font-display text-2xl font-bold text-solved-600">Solved</p>
-                <button type="button" onClick={onLeave} className="btn mt-3">
-                  Onward
-                </button>
-              </div>
-            ) : (
-              definition.render({ room: state.room, onAnswer: (value) => void answer(value), busy })
-            )}
-          </Stage>
+          {solved ? (
+            <div className="pane pointer-events-auto p-4 text-center">
+              <p className="font-display text-2xl font-bold text-solved-600">Solved</p>
+              <button type="button" onClick={onLeave} className="btn mt-3">
+                Onward
+              </button>
+            </div>
+          ) : (
+            <Stage
+              scene={definition.scene}
+              actors={[me, ...actors.map(toActor)]}
+              onWalkTo={walkTo}
+              onWalkEnd={stopWalking}
+            >
+              {definition.render({
+                room: state.room,
+                onAnswer: (value) => void answer(value),
+                busy,
+              })}
+            </Stage>
+          )}
 
           <EmoteBar onEmote={fire} />
 
@@ -259,7 +295,9 @@ export function RoomView({
               <h2 className="label">Hints</h2>
               <button
                 type="button"
-                onClick={() => void hint()}
+                onClick={() => {
+                  hint().catch(() => {})
+                }}
                 disabled={busy || remaining === 0}
                 className="btn btn-ghost btn-sm"
               >

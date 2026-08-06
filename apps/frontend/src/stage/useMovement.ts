@@ -37,6 +37,11 @@ const KEYS: Record<string, [number, number]> = {
   KeyD: [1, 0],
 }
 
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+}
+
 function clamp(x: number, y: number): { x: number; y: number } {
   return {
     x: Math.min(WALK_BOUNDS.maxX, Math.max(WALK_BOUNDS.minX, x)),
@@ -47,7 +52,7 @@ function clamp(x: number, y: number): { x: number; y: number } {
 export function useMovement(start: { x: number; y: number }, enabled = true) {
   const [position, setPosition] = useState<Position>({ ...start, facing: 1, walking: false })
   const current = useRef<Position>({ ...start, facing: 1, walking: false })
-  const held = useRef(new Set<string>());
+  const held = useRef(new Set<string>())
   /** Where a touch drag is pulling us, in stage units. Null when not dragging. */
   const target = useRef<{ x: number; y: number } | null>(null)
 
@@ -56,6 +61,10 @@ export function useMovement(start: { x: number; y: number }, enabled = true) {
 
     const down = (event: KeyboardEvent) => {
       if (!KEYS[event.code]) return
+      // Typing into an answer box is not steering — WASD spells words, and a
+      // room's own input sits right over this same window. Without this, "a"
+      // could never be typed anywhere on the page while a room was mounted.
+      if (isTypingTarget(event.target)) return
       // Otherwise the arrows scroll the page out from under the stage.
       event.preventDefault()
       held.current.add(event.code)

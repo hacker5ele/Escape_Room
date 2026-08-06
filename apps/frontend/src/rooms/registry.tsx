@@ -31,8 +31,16 @@ export interface RoomDefinition {
   title: string
   /** One line of atmosphere for the lobby tile. */
   tagline: string
-  /** Which scenery set the stage dresses itself with. */
+  /** Which scenery set the stage dresses itself with. Unused when `customScene` is set. */
   scene: 'vault' | 'lobby'
+  /**
+   * This room draws its own backdrop instead of standing on the shared
+   * walkable Stage — `render` gets the whole scene, not just the chrome on
+   * top of it. The trade is real: no co-op walking or emotes in this room.
+   * The Reading Hall is the one room that makes it, because its puzzle *is*
+   * a place to be scattered through — see the note on `RoomOne`.
+   */
+  customScene?: boolean
   render: (props: RoomProps) => React.ReactNode
 }
 
@@ -47,6 +55,7 @@ const DEFINITIONS: Record<RoomId, RoomDefinition> = {
     title: 'The Reading Hall',
     tagline: 'Ten marks, out of Rome, Greece, Egypt and Troy.',
     scene: 'vault',
+    customScene: true,
     render: (props) => <RoomOne {...props} />,
   },
   'room-02': {
