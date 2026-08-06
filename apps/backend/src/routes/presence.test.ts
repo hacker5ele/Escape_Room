@@ -61,6 +61,8 @@ async function beat(
       ready: false,
       emote: null,
       hidden: false,
+      acted: [],
+      holding: null,
       ...overrides,
     })
   expect(response.status).toBe(200)
@@ -330,7 +332,7 @@ describe('the party has a size limit', () => {
  */
 describe('the hall, from the heartbeat', () => {
   const WEST = { x: 200, y: 800 }
-  const EAST = { x: 1400, y: 800 }
+  const EAST = { x: 1330, y: 800 }
   const MIDDLE = { x: 800, y: 800 }
 
   async function partyInTheHall(app: Server) {
@@ -345,8 +347,8 @@ describe('the hall, from the heartbeat', () => {
     const app = buildApp()
     await partyInTheHall(app)
 
-    // Only the host touches a wheel — at the far west end of the room.
-    await beat(app, ALICE, WEST)
+    // Only the host takes hold of a wheel — at the far west end of the room.
+    await beat(app, ALICE, { ...WEST, holding: 'wheel-west' })
 
     // And the guest, standing in the middle and nowhere near it, sees it
     // turning. A hall of their own would still be rising, which is the whole
@@ -372,18 +374,29 @@ describe('the hall, from the heartbeat', () => {
 
     expect((await beat(app, ALICE, MIDDLE)).room?.trend).toBe('rising')
 
-    await beat(app, ALICE, WEST)
+    await beat(app, ALICE, { ...WEST, holding: 'wheel-west' })
     expect((await beat(app, BOB, MIDDLE)).room?.trend).toBe('holding')
 
-    await beat(app, BOB, EAST)
-    expect((await beat(app, ALICE, WEST)).room?.trend).toBe('falling')
+    await beat(app, BOB, { ...EAST, holding: 'wheel-east' })
+    expect((await beat(app, ALICE, { ...WEST, holding: 'wheel-west' })).room?.trend).toBe('falling')
   })
 
-  it('does not count somebody walking through a wheel', async () => {
+  /**
+   * The whole of what pressing E bought, at the far end of the chain: standing
+   * somewhere is no longer doing something. You have to take hold of it.
+   */
+  it('does not pump for somebody standing at a wheel without taking hold', async () => {
     const app = buildApp()
     await partyInTheHall(app)
 
-    const body = await beat(app, ALICE, { ...WEST, walking: true })
+    expect((await beat(app, ALICE, WEST)).room?.trend).toBe('rising')
+  })
+
+  it('refuses a wheel claimed from the other end of the hall', async () => {
+    const app = buildApp()
+    await partyInTheHall(app)
+
+    const body = await beat(app, ALICE, { ...MIDDLE, holding: 'wheel-west' })
     expect(body.room?.trend).toBe('rising')
   })
 

@@ -363,7 +363,24 @@ SCENERY = {
             "panel, NO backing rectangle."
         ),
     },
-    # Act IV.
+    # Act IV — the undertow gate. The winch is drawn at rest; the gate is drawn
+    # raised, and the room animates it down, so one piece covers both states.
+    "hall-gate": {
+        "height": 470,
+        "prompt": (
+            "A heavy iron portcullis grille of thick vertical bars with pointed feet and a "
+            "reinforced top rail, hanging raised. The grille alone as a cut-out shape: NO wall, "
+            "NO archway around it, NO square frame, NO background panel, NO backing rectangle."
+        ),
+    },
+    "hall-winch": {
+        "height": 300,
+        "prompt": (
+            "A wooden winch drum on an iron frame with a crank handle and a rope wound around it, "
+            "standing on the ground, seen from the front."
+        ),
+    },
+    # Act V.
     "hall-vault-door": {
         "height": 540,
         "prompt": (
