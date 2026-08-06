@@ -49,6 +49,10 @@ export class ApiError extends Error {
     return new ApiError(409, 'ROOM_ALREADY_SOLVED', 'You have already solved this room.')
   }
 
+  static roomNotReadyToComplete(): ApiError {
+    return new ApiError(409, 'ROOM_NOT_READY_TO_COMPLETE', 'This room is not ready to be marked complete yet.')
+  }
+
   static noHintsLeft(): ApiError {
     return new ApiError(409, 'NO_HINTS_LEFT', 'There are no more hints for this room.')
   }

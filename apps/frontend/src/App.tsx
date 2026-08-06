@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Navigate,
   Outlet,
@@ -10,9 +10,17 @@ import {
   useParams,
 } from 'react-router-dom'
 import { SignInButton, SignUpButton, UserButton } from '@clerk/react'
-import type { GameSession } from '@escape-room/shared'
+import type { GameSession, RoomPublicData } from '@escape-room/shared'
 import { isRoomId, isRoomUnlocked, ROOM_IDS } from '@escape-room/shared'
-import { ApiRequestError, startOrResumeGame } from './api/game'
+import {
+  ApiRequestError,
+  completeRoom,
+  fetchRoom,
+  requestHint,
+  resetRoom,
+  startOrResumeGame,
+  submitAttempt,
+} from './api/game'
 import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
 import { Avatar } from './social/Avatar'
@@ -28,6 +36,8 @@ import { isCharacter, type Character } from './character/parts'
 import { Tabs } from './ui/Tabs'
 import { LobbyView } from './lobby/LobbyView'
 import { RoomView } from './rooms/RoomView'
+import { ROOM_COMPONENTS } from './rooms/room-03-registry'
+import { previewRoomIdFromLocation, RoomPreview } from './rooms/preview'
 import { unlockAudio } from './audio/sfx'
 import { useLiveness } from './stage/useLiveness'
 import { preloadCharacter, preloadScene } from './stage/preload'
@@ -48,6 +58,14 @@ import { isInviteToken } from './routing'
  */
 export function App() {
   useLegacyHashRedirect()
+
+  // Dev-only shortcut: `?preview=room-03` renders that room directly, with
+  // mock data and no network calls, bypassing sign-in and the router
+  // entirely — see rooms/preview.tsx.
+  const previewRoomId = previewRoomIdFromLocation()
+  if (previewRoomId) {
+    return <RoomPreview roomId={previewRoomId} />
+  }
 
   return (
     <Routes>
@@ -537,6 +555,16 @@ function RoomRoute() {
   // A typo in the path is a typo, not a crash.
   if (!isRoomId(roomId)) return <Navigate to="/lobby" replace />
 
+  // room-03 owns its whole screen instead of playing through the shared
+  // Stage/RoomView shell every other room uses: it needs hints inline in
+  // its own dialogue, a hearts system, a room-scoped reset, and a
+  // `complete` step for stages with no server-checked answer (ADR-0066,
+  // ADR-0070) — none of which RoomView's contract (onAnswer/busy, an
+  // external hint list, an instant "Solved" swap) supports. See ADR-0065.
+  if (roomId === 'room-03') {
+    return <Room03Route game={game} onLeave={() => travel('/lobby')} onGameChange={setGame} />
+  }
+
   return (
     <RoomView
       roomId={roomId}
@@ -545,5 +573,154 @@ function RoomRoute() {
       onSolved={setGame}
       onLeave={() => travel('/lobby')}
     />
+  )
+}
+
+type RoomState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; room: RoomPublicData }
+  | { kind: 'error'; message: string }
+
+/**
+ * room-03, full-screen — the one room that opts out of the shared
+ * Stage/RoomView shell (see `RoomRoute` above and ADR-0065). Everything
+ * every *other* room gets from `RoomView` — entering, hints, submitting,
+ * leaving on solve — is reimplemented here against room-03's own richer
+ * `RoomProps` contract instead (onHint/onResetRoom/onCompleteRoom/
+ * onRoomFinished), since RoomView's simpler onAnswer/busy shape has no room
+ * for the Sphinx's hearts system, its own inline hints, or a completion
+ * step with no answer to check.
+ */
+function Room03Route({
+  game,
+  onLeave,
+  onGameChange,
+}: {
+  game: GameSession
+  onLeave: () => void
+  onGameChange: (game: GameSession) => void
+}) {
+  const { authHeaders } = useAppAuth()
+  const authRef = useRef(authHeaders)
+  authRef.current = authHeaders
+
+  const roomId = 'room-03' as const
+
+  // The room actually on screen can lag behind the server's own idea of
+  // "solved" on purpose: the server may already consider room-03 solved
+  // (its last attempt marked roomComplete, see ADR-0068) while the room's
+  // own component is still showing an on-screen finale (a congratulations
+  // scene, a walk through a door) that hasn't finished yet. `finished`
+  // becomes true only once the room itself calls `onRoomFinished` — see
+  // ADR-0069 — at which point this route hands back to the lobby exactly
+  // like RoomView's own "Onward" button does.
+  const [finished, setFinished] = useState(false)
+  const [state, setState] = useState<RoomState>({ kind: 'loading' })
+
+  useEffect(() => {
+    let cancelled = false
+    setState({ kind: 'loading' })
+
+    authRef
+      .current()
+      .then((headers) => fetchRoom(headers, roomId))
+      .then((room) => {
+        if (!cancelled) setState({ kind: 'ready', room })
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setState({
+            kind: 'error',
+            message: error instanceof Error ? error.message : 'Could not load this room.',
+          })
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (finished) onLeave()
+  }, [finished, onLeave])
+
+  if (state.kind === 'loading' || finished) {
+    return (
+      <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">
+        <p className="font-mono text-sm text-vault-300">Opening {roomId}…</p>
+      </section>
+    )
+  }
+
+  if (state.kind === 'error') {
+    return (
+      <section className="rounded-lg border border-alarm-800 bg-vault-900/60 p-6">
+        <p className="font-mono text-sm text-alarm-400">Could not load this room: {state.message}</p>
+      </section>
+    )
+  }
+
+  const RoomComponent = ROOM_COMPONENTS[roomId]
+  if (!RoomComponent) {
+    return (
+      <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">
+        <h2 className="font-mono text-sm text-vault-100">{state.room.title}</h2>
+        <p className="mt-2 text-sm text-vault-400">This room has no frontend yet.</p>
+      </section>
+    )
+  }
+
+  return (
+    <Suspense
+      fallback={
+        <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">
+          <p className="font-mono text-sm text-vault-300">Loading room…</p>
+        </section>
+      }
+    >
+      <RoomComponent
+        room={state.room}
+        onSubmit={async (answer) => {
+          const result = await submitAttempt(await authRef.current(), roomId, answer)
+          onGameChange(result.session)
+
+          // Deliberately does NOT set `finished` here, even if this attempt
+          // just solved the room server-side — see ADR-0069. The room being
+          // solved and the player being ready to leave it are different
+          // moments; only onRoomFinished (below) does that. `state.room`
+          // may now be stale (this room's own publicData() has moved on,
+          // e.g. to its next internal riddle) — re-fetch it so the room
+          // keeps showing real content instead of the pre-attempt
+          // snapshot, regardless of whether the room is now marked
+          // complete.
+          const refreshed = await fetchRoom(await authRef.current(), roomId)
+          setState({ kind: 'ready', room: refreshed })
+          return result
+        }}
+        onHint={async () => {
+          const hintResponse = await requestHint(await authRef.current(), roomId)
+          onGameChange({ ...game, hintsUsed: hintResponse.hintsUsed })
+          return hintResponse
+        }}
+        onResetRoom={async () => {
+          const result = await resetRoom(await authRef.current(), roomId)
+          onGameChange(result.session)
+          const refreshed = await fetchRoom(await authRef.current(), roomId)
+          setState({ kind: 'ready', room: refreshed })
+          return result
+        }}
+        onCompleteRoom={async () => {
+          const result = await completeRoom(await authRef.current(), roomId)
+          onGameChange(result.session)
+          return result
+        }}
+        onRoomFinished={() => {
+          // The room itself says its on-screen finale is done — now it's
+          // safe to leave, exactly like RoomView's own "Onward" button.
+          setFinished(true)
+        }}
+      />
+    </Suspense>
   )
 }
