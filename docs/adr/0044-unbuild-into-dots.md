@@ -100,21 +100,37 @@ The dissolve and the travel are two animations sharing no property — one owns 
 because a keyframe in the middle applies the easing to *each* interval it creates: an overshoot
 written once would overshoot three times.
 
-### A piece in flight loses its tint, but not its paper
+### A piece in flight is the same panel, moved. Nothing recolours it.
 
-**An element with a transform on it is its own stacking context, mask or no mask.** So for the length
-of the animation a `.pane` has the one thing ADR-0032 says never to give it: `.pane::after` can no
-longer reach the page to overprint against and blends against the panel instead. Unavoidable while a
-thing is moving, so `--pane-ink: 0` for the duration rather than left to blend wrong. Losing a 5%
-tint is very nearly nothing.
+**Nothing in this transition touches `--pane-blur`, `--pane-alpha` or `--pane-ink`, and nothing puts
+an `overflow` on the container.** That is the rule, and it took three goes to arrive at it.
 
-A *leaving* piece additionally drops its blur, because a mask makes the element its own backdrop root
-and `.pane::before` has nothing left to blur. There is no glass worth preserving on something that is
-turning into dots. An arriving piece has no mask, so it keeps it.
+An element with a transform on it is its own stacking context, which is exactly what ADR-0032 says
+never to give a `.pane` — `.pane::after` can no longer reach the page to overprint against. That is
+unavoidable while a thing is moving, and the mistake each time was trying to *compensate* for it:
 
-**`--pane-alpha` is deliberately not touched, and the first version of this rule got it wrong.**
-Forcing it to `1` made the paper fill opaque, and under the panel's own top-edge white sheen that is
-a flat white box.
+| attempt | what it did | what it looked like |
+| --- | --- | --- |
+| `--pane-alpha: 1` | opaque paper fill | a flat white box under the panel's own top-edge sheen |
+| `--pane-ink: 0` | tint removed rather than left to blend wrong | panels fly in a shade too pale |
+| `--pane-blur: 0` | matched the blur the mask had already killed | same, on the way out |
+| `overflow-x: clip` while animating | stopped a piece off-screen widening the document | **every** panel on the page flat for the length of the animation |
+
+The last one is the first rule at the top of `index.css` — *"never put `overflow: hidden` on an
+ancestor of `.pane`; the glass goes flat with no error anywhere"* — and "only while animating" is not
+a mitigation for it. Each of these was reasoned about as negligible and each was the reported
+complaint.
+
+The stacking context stays, then, and is simply held for as short a time as possible: each piece is
+cleared on its own `animationend` rather than on a timer that waits for the slowest. Instead of
+clipping, `inward()` mirrors any piece that would start off the right or the bottom of the page —
+coming from the left or the top costs nothing, because content outside those edges is not scrollable
+to. The distance is never shortened, only turned around.
+
+**Two tests read `index.css` and fail if any of those declarations reappears.** They also assert they
+found the block first: the version that imported the stylesheet with `?raw` got an empty string back
+— the Tailwind plugin claims every CSS import — and passed against a stylesheet containing precisely
+what it forbade.
 
 ### Each piece is cleaned up when it lands, not when the last one does
 
