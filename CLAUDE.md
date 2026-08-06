@@ -348,6 +348,8 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-06 | [0072](docs/adr/0072-room-04-tuned-for-fairness-and-demo-safety.md) | Room 4 tuned for fairness, checkpoint respawn, real interactive puzzles, and asset weight cut from about 106MB to 13MB | Proposed |
+| 2026-08-05 | [0071](docs/adr/0071-room-04-becomes-a-3d-chase-runner.md) | Room 4 becomes a 3D chase runner built on react three fiber, the only room using that stack | Proposed |
 | 2026-08-06 | [0049](docs/adr/0049-press-e-and-five-acts.md) | Walk up to a thing and press E; the sea slows to two and a half minutes; five acts and a full-screen vault | Accepted |
 | 2026-08-06 | [0048](docs/adr/0048-the-hall-floods.md) | Room 01 is a place you play by walking, it is filling up, and it changes shape when a friend is in it | Accepted |
 | 2026-08-05 | [0070](docs/adr/0070-olympus-carpet-race.md) | Olympus becomes a carpet-racing coin challenge, not a riddle sequence; new `POST /api/rooms/:roomId/complete` | Proposed |
