@@ -69,7 +69,6 @@ export interface RoomDefinition {
 
 import { HallWorldFor, RoomOne } from './room-01'
 import { RoomTwo } from './room-02'
-import { RoomThree } from './room-03'
 import { RoomFour } from './room-04'
 
 const DEFINITIONS: Record<RoomId, RoomDefinition> = {
@@ -88,12 +87,21 @@ const DEFINITIONS: Record<RoomId, RoomDefinition> = {
     scene: 'vault',
     render: (props) => <RoomTwo {...props} />,
   },
+  // room-03 ("The Sphinx's Reckoning") never renders through here — it opts
+  // out of the shared Stage/RoomView shell entirely and is rendered
+  // full-screen by App.tsx's `Room03Route` instead, since it needs a richer
+  // RoomProps contract (hints inline, hearts, reset, complete — see
+  // ADR-0065) than this registry's onAnswer/busy shape supports. This entry
+  // exists only so `Record<RoomId, RoomDefinition>` stays total and
+  // `roomDefinition('room-03')` has something to return if it is ever
+  // reached — App.tsx's `RoomRoute` intercepts room-03 before RoomView
+  // (which is what would otherwise call this) is ever asked to render it.
   'room-03': {
     id: 'room-03',
-    title: 'Room Three',
+    title: "The Sphinx's Reckoning",
     tagline: 'Deeper in.',
     scene: 'vault',
-    render: (props) => <RoomThree {...props} />,
+    render: () => null,
   },
   'room-04': {
     id: 'room-04',
