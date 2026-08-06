@@ -94,12 +94,39 @@ function reach(mode: Mode): number {
   return mode === 'fly' ? span * 0.3 + Math.random() * span * 0.2 : span * 0.06 + Math.random() * 60
 }
 
+/**
+ * Turns a piece around rather than letting it start off the right or the bottom
+ * of the page.
+ *
+ * A transformed element still contributes to scrollable overflow, so a piece
+ * waiting 400px to the right widens the document and flashes a scrollbar. The
+ * obvious answer is to clip the container — and it is the wrong one: an
+ * `overflow` other than `visible` anywhere above a `.pane` silently disables its
+ * `backdrop-filter`, which is the first rule in this project's stylesheet. Doing
+ * it "only during the animation" still means every panel on the page is flat for
+ * the length of the animation, which is exactly what it looks like.
+ *
+ * Coming from the left or the top costs nothing — content outside those edges is
+ * not scrollable to — so a piece with no room to its right simply arrives from
+ * the other side. The distance is never shortened, only mirrored.
+ */
+function inward(node: HTMLElement, dx: number, dy: number): [number, number] {
+  const box = node.getBoundingClientRect()
+  // A rotated rectangle is wider than its box; leave room for the corner.
+  const slack = box.width * 0.1 + 8
+  const right = document.documentElement.clientWidth - box.right - slack
+  const below = document.documentElement.clientHeight - box.bottom - slack
+
+  return [dx > right ? -dx : dx, dy > below ? -dy : dy]
+}
+
 function place(node: HTMLElement, mode: Mode, index: number, delayStep: number): void {
   const angle = Math.random() * Math.PI * 2
   const distance = reach(mode)
+  const [dx, dy] = inward(node, Math.cos(angle) * distance, Math.sin(angle) * distance)
 
-  node.style.setProperty('--fly-x', `${Math.round(Math.cos(angle) * distance)}px`)
-  node.style.setProperty('--fly-y', `${Math.round(Math.sin(angle) * distance)}px`)
+  node.style.setProperty('--fly-x', `${Math.round(dx)}px`)
+  node.style.setProperty('--fly-y', `${Math.round(dy)}px`)
   node.style.setProperty('--fly-spin', `${(Math.random() - 0.5) * (mode === 'fly' ? 26 : 8)}deg`)
   // Jittered, so the order is a drift down the page rather than a wave.
   node.style.setProperty('--fly-delay', `${Math.round(index * delayStep + Math.random() * 70)}ms`)
@@ -133,7 +160,6 @@ let mounted: HTMLElement | null = null
 export function unbuild(): void {
   if (!mounted || prefersReducedMotion()) return
 
-  mounted.classList.add('is-moving')
   pieces(mounted).forEach((node, index) => {
     // A short throw on the way out. The dissolve is the exit; the travel only
     // gives it a direction, and is not there to carry the piece off screen.
@@ -162,7 +188,6 @@ export function Assemble({ children }: { children: React.ReactNode }) {
     const mode: Mode = pathname === '/' ? 'gather' : 'fly'
     const moving = pieces(root)
 
-    root.classList.add('is-moving')
     root.dataset.assembleMode = mode
     moving.forEach((node, index) => {
       place(node, mode, index, STAGGER_MS)
@@ -173,12 +198,12 @@ export function Assemble({ children }: { children: React.ReactNode }) {
      * Each piece is cleaned up the moment *it* lands, not when the last one
      * does.
      *
-     * A piece in flight has a transform, so it is its own stacking context and
-     * its `.pane` layers cannot blend against the page (see `index.css`). On
-     * one shared timer the first panel therefore kept its flattened look for
-     * the entire stagger — most of a second after it had visibly settled —
-     * and then popped. Per-piece, the correction happens on the frame the
-     * animation ends and there is nothing to see.
+     * A piece in flight carries a transform, which is a stacking context, which
+     * is the one thing a `.pane` is not supposed to have. Nothing compensates
+     * for that — every attempt to compensate is what made panels fly in pale —
+     * so the answer is to hold it for as short a time as possible. On one shared
+     * timer the first panel kept a transform for the entire stagger, most of a
+     * second after it had visibly settled.
      *
      * Clearing also matters for what comes after: a leftover transform fights
      * whatever animates the element next, and the character rig is
@@ -192,12 +217,9 @@ export function Assemble({ children }: { children: React.ReactNode }) {
     root.addEventListener('animationend', onEnd)
 
     // `animationend` does not fire for an element that never got to animate —
-    // a display change, a piece removed mid-flight. This is the floor sweep,
-    // and it owns `is-moving`, which cannot be lifted per piece: it is what
-    // stops a piece flying in from off a narrow screen widening the document.
+    // a display change, a piece removed mid-flight. This is the floor sweep.
     const settled = window.setTimeout(
       () => {
-        root.classList.remove('is-moving')
         delete root.dataset.assembleMode
         for (const node of moving) clear(node)
       },
@@ -207,7 +229,6 @@ export function Assemble({ children }: { children: React.ReactNode }) {
     return () => {
       root.removeEventListener('animationend', onEnd)
       window.clearTimeout(settled)
-      root.classList.remove('is-moving')
       for (const node of moving) clear(node)
     }
   }, [pathname])

@@ -1279,35 +1279,24 @@
 }
 
 @layer components {
-  /* Clipped only while something is in flight. A piece thrown in from off the
-     right of a 375px phone would otherwise widen the document and flash a
-     horizontal scrollbar — and `overflow-x: hidden` on `html` is the one thing
-     ADR-0032 forbids outright, because it silently kills `backdrop-filter` on
-     every pane in the app.
+  /* A piece in flight is the same panel, moved. Nothing here.
+     ---------------------------------------------------------------------
+     There is deliberately no shared rule for `.piece-arriving` — no
+     `will-change`, no `backface-visibility`, and above all nothing that touches
+     `--pane-blur`, `--pane-alpha` or `--pane-ink`. An arriving panel must be
+     pixel-identical to a settled one apart from its position, and every version
+     of this that reached for one of those tokens produced the same complaint:
+     the panel flies in pale and then corrects itself on landing.
 
-     One axis, and `clip` rather than `hidden`. `clip` is the only value that
-     lets the other axis stay `visible`, so the vertical overflow a panel needs
-     is untouched and the clipping machinery a `.pane` is sensitive to is kept
-     to the minimum that actually solves the problem. */
-  .assemble.is-moving {
-    overflow-x: clip;
-  }
-
-  .piece-leaving,
-  .piece-arriving {
-    /* An element with a transform on it is its own stacking context, which is
-       the one thing the design system says never to give a `.pane`:
-       `.pane::after` can no longer reach the page to overprint against and
-       would blend against the panel instead. Unavoidable while a thing is
-       moving, so the tint is switched off rather than left to blend wrong.
-
-       `--pane-alpha` is emphatically NOT touched. Forcing it to 1 was the first
-       version of this rule and it was badly wrong — an opaque paper fill under
-       the panel's own top-edge sheen is a flat white box. */
-    --pane-ink: 0;
-    will-change: transform;
-    backface-visibility: hidden;
-  }
+     There is also no `overflow` on `.assemble`, in either axis, at any point.
+     Clipping the container is the obvious way to stop a piece that starts off
+     the right of the screen widening the document — and it is the one thing the
+     top of this file forbids outright, because `overflow` other than `visible`
+     above a `.pane` silently kills its `backdrop-filter`. "Only while
+     animating" is not a mitigation: it means every panel on the page is flat
+     for the length of the animation, which is precisely what that looks like.
+     `inward()` in `Assemble.tsx` mirrors those pieces instead, so nothing ever
+     needs clipping away. */
 
   /* The dots belong to the unbuild, and only to it.
      ---------------------------------------------------------------------
@@ -1341,11 +1330,11 @@
     -webkit-mask-size: 6px 6px;
     -webkit-mask-repeat: repeat;
 
-    /* A mask makes this element its own backdrop root, so `.pane::before` has
-       an empty backdrop and nothing to blur. Off for the 340ms the panel is
-       coming apart anyway — there is no glass to preserve on something that is
-       turning into dots. */
-    --pane-blur: 0px;
+    /* No pane token is touched here either. A mask does make the element its own
+       backdrop root, so `.pane::before` has nothing left to blur — but that
+       happens on its own, and forcing `--pane-blur: 0` to "match" it can only
+       ever lighten a panel that is already dissolving. Nothing in this
+       transition is allowed to change how a panel is coloured. */
     will-change: transform, opacity, --dot-r;
   }
 

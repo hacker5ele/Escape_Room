@@ -1,9 +1,28 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { useState } from 'react'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Assemble, pieces, unbuild } from './Assemble'
+
+/**
+ * The design system, as text.
+ *
+ * Off disk rather than imported. `../index.css?raw` looks like the obvious way
+ * and silently returns an **empty string** — the Tailwind plugin claims every
+ * CSS import — which made the two assertions below pass against a stylesheet
+ * that had exactly what they forbid in it. A guard that cannot fail is worse
+ * than no guard, so this one proves it found the file first.
+ *
+ * Two candidates because `process.cwd()` is the workspace under `npm test` and
+ * the repository root under `vitest --root`.
+ */
+function designSystem(): string {
+  const path = ['src/index.css', 'apps/frontend/src/index.css'].find(existsSync)
+  expect(path, 'could not find index.css to check it').toBeDefined()
+  return readFileSync(path as string, 'utf8')
+}
 
 /** Detached on purpose: `pieces()` reads a tree, and a stray one in the
  *  document would show up in every later `screen` query. */
@@ -19,6 +38,40 @@ function animationEnd(animationName: string): Event {
   Object.defineProperty(event, 'animationName', { value: animationName })
   return event
 }
+
+describe('a piece in flight is the same panel, moved', () => {
+  // Read rather than rendered: jsdom applies no CSS, so the only way to hold
+  // this rule is to assert on the stylesheet itself. Comments are stripped
+  // first — index.css explains at length why these declarations are absent, and
+  // the explanation must not read as the thing it is warning about.
+  const css = designSystem()
+  const start = css.indexOf('@property --dot-r')
+  const transition = css.slice(start).replace(/\/\*[\s\S]*?\*\//g, '')
+
+  it('is looking at the block it thinks it is', () => {
+    expect(start).toBeGreaterThan(0)
+    expect(transition).toContain('.piece-arriving')
+    expect(transition).toContain('.piece-leaving')
+  })
+
+  it('changes no pane token', () => {
+    // Three separate attempts to "compensate" for the stacking context a
+    // transform creates — `--pane-alpha: 1`, then `--pane-ink: 0`, then
+    // `--pane-blur: 0` — each produced the same report: panels fly in pale and
+    // correct themselves on landing. A panel is coloured by exactly one set of
+    // rules, and moving it is not one of them.
+    expect(transition).not.toMatch(/--pane-(blur|alpha|ink)\s*:/)
+  })
+
+  it('never clips the container, in either axis', () => {
+    // `overflow` other than `visible` above a `.pane` silently disables its
+    // `backdrop-filter` — the first rule at the top of index.css. Doing it
+    // "only while animating" is not a mitigation: it flattens every panel on
+    // the page for the length of the animation. `inward()` keeps pieces on
+    // screen instead, so there is nothing to clip.
+    expect(transition).not.toMatch(/\boverflow(-[xy])?\s*:/)
+  })
+})
 
 describe('choosing what moves', () => {
   it('takes the outermost panel of a nest, not both', () => {
