@@ -1578,6 +1578,17 @@
   /* The JS refuses to mark anything in the first place, so these classes never
      appear. Belt and braces for a preference changed mid-flight. */
   .piece-leaving,
+  /* Waiting for its own pictures.
+     ---------------------------------------------------------------------
+     Invisible rather than early. A piece whose artwork is still downloading
+     would otherwise animate as an empty box and have the picture appear
+     afterwards with no animation at all — which is the one thing the whole
+     transition exists to avoid. Held here until it has something to show, then
+     released into the same arrival everything else got (ADR-0047). */
+  .assemble .piece-held {
+    opacity: 0;
+  }
+
   .piece-arriving {
     animation: none !important;
     mask-image: none !important;

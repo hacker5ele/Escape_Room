@@ -30,6 +30,7 @@ import { LobbyView } from './lobby/LobbyView'
 import { RoomView } from './rooms/RoomView'
 import { unlockAudio } from './audio/sfx'
 import { useLiveness } from './stage/useLiveness'
+import { preloadCharacter, preloadScene } from './stage/preload'
 import { Assemble, LEAVE_TOTAL_MS, unbuild } from './fx/Assemble'
 import { isInviteToken } from './routing'
 
@@ -404,7 +405,22 @@ function GameLayout() {
  * arranged around it, which is why it is `/` and opens by default.
  */
 function RoomsRoute() {
-  const { game, travel } = useGame()
+  const { game, travel, character } = useGame()
+
+  // The lobby's scenery, fetched while somebody is still reading this page.
+  // Start is the button on this tab, so this is the last screen before the
+  // stage — and a room cannot fly in if its furniture has not arrived
+  // (ADR-0047).
+  useEffect(() => {
+    void preloadScene('lobby')
+  }, [])
+
+  // And the four parts you are wearing. Yours is the one character certain to
+  // be standing on that stage, and the picker probably cached it already — but
+  // not for somebody who signed up on another device and came back.
+  useEffect(() => {
+    if (character) void preloadCharacter(character)
+  }, [character])
 
   return (
     <section className="pane p-5">

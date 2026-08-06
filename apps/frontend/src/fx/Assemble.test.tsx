@@ -255,7 +255,10 @@ describe('arriving', () => {
     render(<Screen />)
     const panel = screen.getByTestId('panel')
 
-    act(() => void vi.advanceTimersByTime(2000))
+    // Past the floor sweep, which now allows for a piece that spent the whole
+    // hold waiting for its artwork. In a browser `animationend` gets there
+    // first; jsdom runs no animations, so this is the timer's path.
+    act(() => void vi.advanceTimersByTime(5000))
 
     // Left in place, a transform on a panel fights whatever animates it next —
     // the character rig is transform-driven end to end.
@@ -327,5 +330,89 @@ describe('leaving', () => {
     // Called from `travel()`, which a route can reach before or after the
     // container exists. Throwing here would break navigation itself.
     expect(() => unbuild()).not.toThrow()
+  })
+})
+
+describe('a piece with pictures in it', () => {
+  beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }))
+  afterEach(() => vi.useRealTimers())
+
+  /** jsdom loads nothing, so `complete` is false until a load is dispatched. */
+  function Scene({ loaded }: { loaded: boolean }) {
+    return (
+      <MemoryRouter>
+        <Assemble>
+          <div data-piece data-testid="stage">
+            <img data-testid="prop" src={loaded ? '' : '/scenery/lobby-sofa.webp'} alt="" />
+          </div>
+        </Assemble>
+      </MemoryRouter>
+    )
+  }
+
+  it('waits, rather than animating an empty box', () => {
+    // The bug: the wave played whether or not the artwork had arrived, so on a
+    // cold cache the scenery animated as nothing and the furniture appeared
+    // afterwards with no animation at all.
+    render(<Scene loaded={false} />)
+    const stage = screen.getByTestId('stage')
+
+    expect(stage).toHaveClass('piece-held')
+    expect(stage).not.toHaveClass('piece-arriving')
+  })
+
+  it('flies in the moment its picture arrives', async () => {
+    render(<Scene loaded={false} />)
+    const stage = screen.getByTestId('stage')
+
+    await act(async () => {
+      screen.getByTestId('prop').dispatchEvent(new Event('load'))
+    })
+
+    expect(stage).not.toHaveClass('piece-held')
+    expect(stage).toHaveClass('piece-arriving')
+  })
+
+  it('does not make a latecomer wait out the stagger as well', async () => {
+    // It has already waited longer than the whole wave; its place in the queue
+    // stopped meaning anything.
+    render(<Scene loaded={false} />)
+    const stage = screen.getByTestId('stage')
+
+    await act(async () => {
+      screen.getByTestId('prop').dispatchEvent(new Event('load'))
+    })
+
+    expect(stage.style.getPropertyValue('--fly-delay')).toBe('0ms')
+  })
+
+  it('gives up on a picture that never arrives', async () => {
+    // An image that 404s never fires `load`, and a piece held for ever is a
+    // hole in the page.
+    render(<Scene loaded={false} />)
+    const stage = screen.getByTestId('stage')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+
+    expect(stage).not.toHaveClass('piece-held')
+  })
+
+  it('counts a broken picture as arrived rather than waiting for it', async () => {
+    render(<Scene loaded={false} />)
+    const stage = screen.getByTestId('stage')
+
+    await act(async () => {
+      screen.getByTestId('prop').dispatchEvent(new Event('error'))
+    })
+
+    expect(stage).not.toHaveClass('piece-held')
+    expect(stage).toHaveClass('piece-arriving')
+  })
+
+  it('does not hold a piece whose pictures are already there', () => {
+    render(<Scene loaded={true} />)
+    expect(screen.getByTestId('stage')).toHaveClass('piece-arriving')
   })
 })

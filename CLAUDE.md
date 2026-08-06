@@ -346,6 +346,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-06 | [0047](docs/adr/0047-art-arrives-before-the-animation.md) | Fetch a screen's art before it arrives; hold any piece that still has none | Accepted |
 | 2026-08-06 | [0046](docs/adr/0046-email-an-absent-friend.md) | Invite a friend who is not on the app and they get an email, with your character in it | Accepted |
 | 2026-08-06 | [0045](docs/adr/0045-membership-is-liveness.md) | Being in a game is a claim you keep alive; close the tab and you leave both | Accepted |
 | 2026-08-05 | [0044](docs/adr/0044-unbuild-into-dots.md) | Screens unbuild into their own halftone dots and rebuild out of them | Accepted |
@@ -548,6 +549,16 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
     beats from *every* screen, not just the stage — you can be in a friend's game while reading the
     leaderboard. Walking out of the lobby takes your character off the stage at once and leaves you
     in the party, which is the one departure that is a real click rather than a guess.
+  - **A piece does not fly in until it has something to fly in with**
+    ([ADR-0047](docs/adr/0047-art-arrives-before-the-animation.md)). A scene is about a megabyte of
+    scenery and nothing used to fetch it until the stage painted, so on a cold cache the wave
+    animated **empty boxes** and the furniture popped in afterwards. Now the Rooms tab pulls down the
+    lobby (Start is the button on it), the lobby pulls down whichever room is selected, and your own
+    character comes with it — `decode()`, not just `load`, because otherwise the hitch just moves to
+    the frame that draws it. One promise per URL, so flicking along the room row costs one download
+    each. And any piece whose art still has not arrived is **held invisible** rather than animated
+    empty, released the moment it can be drawn, with a 2.5s ceiling because an image that 404s never
+    fires `load`.
   - **Screens unbuild themselves into dots** ([ADR-0044](docs/adr/0044-unbuild-into-dots.md)). The
     whole app is printed as a halftone, so a panel leaving does not slide or fade: an animated dot
     mask at the page's own 6px pitch takes its ink away until only its dots are left, those fade into
