@@ -10,7 +10,7 @@ import type { RoomId } from '@escape-room/shared'
  * When you change a puzzle, change this too, or the test suite will tell you.
  */
 export const SOLUTIONS: Record<RoomId, unknown> = {
-  'room-01': '7931473781',
+  'room-01': '620539',
   'room-02': 'ESCAPE ROOM',
   'room-03': 21,
   'room-04': 108,

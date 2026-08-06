@@ -626,115 +626,657 @@
     line-height: 1.62;
   }
 
-  /* Room 1 — the Reading Hall, a dark scene built from the stock ramp's own
-     dark end rather than a second palette: stock-950/900 standing in for
-     stone and old wood until Inaam's Figma has a real backdrop. Anything
-     actually readable inside it — a clue panel, the answer field — stays
-     ordinary Overprint paper (`.pane`, `.field`), the same way a lit page
-     would in a dark room, rather than inventing dark-mode versions of them.
+  /* ---- Room 1: the Reading Hall, below the harbour ------------------------
 
-     This room opts out of the shared walkable Stage — see `customScene` in
-     `registry.tsx` — and takes the whole viewport instead: no paper, no
-     halftone screen, nothing of the page showing anywhere around it. Leaving,
-     feedback and hints still work — `RoomView` floats them above this on
-     their own, since there is no page flow left for them to sit in. */
-  .room1-scene {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    overflow-y: auto;
-    /* A shaft of light through the collapsed roof (the narrow cone), the
-       shelving on either side falling into shadow (the wide low-opacity
-       wash at the edges), and a floor that darkens as it recedes. */
-    background:
-      radial-gradient(18% 60% at 50% -4%, rgb(232 69 46 / 0.16) 0%, rgb(232 69 46 / 0) 78%),
-      radial-gradient(60% 45% at 50% 0%, rgb(24 22 15 / 0) 0%, rgb(14 13 8 / 0.55) 85%),
-      linear-gradient(
-        180deg,
-        rgb(14 13 8 / 0) 55%,
-        rgb(14 13 8 / 0.7) 92%,
-        rgb(14 13 8 / 0.92) 100%
-      ),
-      var(--color-stock-950);
-    color: var(--color-stock-200);
-  }
+     The print pipeline already stops the *artwork* looking generated: every
+     piece is posterised to four inks and screened with a halftone, so eighty
+     separately generated images stop looking separately generated. What it
+     cannot do is make a screen look like a comic, because a comic is not a
+     rendering style — it is a set of layout conventions. That half is here.
 
-  /* The floor: faint flagstone joints, denser toward the bottom edge so it
-     reads as receding rather than tiled flat. */
-  .room1-scene::after {
-    content: '';
+     Three of them do most of the work, and none can be generated:
+
+     - **Misregistration.** Every piece of display type in this room is set
+       twice, the cyan plate a couple of pixels off the red. Real four-colour
+       printing does not line up perfectly and an image model has no reason to
+       reproduce that; it is the single most convincing tell in the room and it
+       costs one pseudo-element.
+     - **Nothing is level.** Panels sit at a fraction of a degree. Generated
+       output is suspiciously square.
+     - **A coarser screen for the water**, 10px against the page's 6px, so the
+       sea reads as a separate printing pass rather than a coloured rectangle.
+
+     No fades and no blurs anywhere — those are project rules already
+     (ADR-0037, ADR-0044), and they are also exactly what would undo the above. */
+
+  /* The chrome layer. `pointer-events` stays off so the stage underneath can
+     still be dragged to walk — only the vault panel takes the pointer back. */
+  .hall-chrome {
     position: absolute;
-    inset: auto 0 0 0;
-    height: 26vh;
-    min-height: 170px;
-    background-image:
-      repeating-linear-gradient(
-        100deg,
-        rgb(230 224 208 / 0.05) 0px,
-        rgb(230 224 208 / 0.05) 1px,
-        transparent 1px,
-        transparent 74px
-      ),
-      repeating-linear-gradient(
-        80deg,
-        rgb(230 224 208 / 0.04) 0px,
-        rgb(230 224 208 / 0.04) 1px,
-        transparent 1px,
-        transparent 96px
-      );
-    -webkit-mask-image: linear-gradient(180deg, transparent, black 55%);
-    mask-image: linear-gradient(180deg, transparent, black 55%);
+    inset: 0;
     pointer-events: none;
   }
 
-  .room1-hotspot {
-    position: relative;
+  /* ---- the sea ---------------------------------------------------------- */
+
+  /* Drawn over everybody, because a player is *in* the water rather than behind
+     it. Positioned by `top` in stage units, which is `floodLine(depth)` — the
+     same function that decides whose chin is under, so the drawing and the rule
+     cannot disagree. */
+  .hall-water {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -240px;
+    pointer-events: none;
+  }
+
+  /* The crest sits *above* the surface, so it cannot be clipped by the water —
+     doing that hid it completely. It gets its own window, exactly one stage
+     wide and as tall as the strip, which contains the scroll horizontally
+     without cutting anything off the top.
+
+     Safe to clip here in a way it is not higher up: `overflow` on any ancestor
+     of a `.pane` kills its `backdrop-filter`, which is why `.stage-frame` is
+     explicitly not clipped. Nothing inside the stage is a pane — this room's
+     panels are comic boxes, not glass. */
+  .hall-water-crest-window {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 118px;
+    overflow: hidden;
+  }
+
+  .hall-water-body {
+    position: absolute;
+    inset: 0;
+    /* Deliberately not opaque: the shelving and the fallen column stay legible
+       as silhouettes under the surface, which is what makes it read as depth
+       instead of as a blue rectangle laid over the bottom of the picture. */
+    background-color: rgb(11 127 191 / 0.72);
+    /* The coarse plate. 10px against the page's 6px. */
+    background-image: radial-gradient(rgb(6 75 112 / 0.55) 1.7px, transparent 1.8px);
+    background-size: 10px 10px;
+  }
+
+  /* Four copies — A, mirrored, A, mirrored — scrolled by half their width, so
+     the frame it snaps back to is the same drawing it started on. Two copies
+     would tile but not loop: the join would jump every cycle. */
+  /* The crest is a `wide` piece, so the catalogue's `height` was only ever a
+     hint — `process_all.py` scales those to the stage *width*, and the drawing
+     came back 1600×600. Rendered at its own height it stood taller than the
+     lamps and hid the entire act behind a wave.
+
+     So the strip is a fixed 150 units and the art is *cropped* into it rather
+     than squashed: the box is exactly one stage wide, so `cover` scales
+     nothing horizontally and simply takes a band out of the middle, which is
+     the band with the crests in it. */
+  .hall-water-crest {
+    position: absolute;
+    left: 0;
+    top: 0;
+    /* The drawing is 1600×606: transparent at the top, curling crests through
+       the middle, flat sea below. Only the crests are wanted — taking the
+       drawing's solid half as well put a 330-unit wall of wave across the room
+       and buried the act behind it. A shallow band of curl sitting on the
+       body's own colour is what a comic actually draws. */
+    height: 118px;
+    width: 400%;
+    display: flex;
+    animation: hall-drift 11s linear infinite;
+  }
+
+  .hall-water-crest img {
+    width: 25%;
+    height: 100%;
+    display: block;
+    max-width: none;
+    /* Box and drawing are both one stage wide, so `cover` scales nothing
+       sideways and simply takes the top 330 rows. */
+    object-fit: cover;
+    object-position: 50% 24%;
+  }
+
+  .hall-water-crest img[data-mirrored] {
+    scale: -1 1;
+  }
+
+  @keyframes hall-drift {
+    to {
+      translate: -50% 0;
+    }
+  }
+
+  /* The channel the hall opens down the middle when there are two of you.
+     Not a wall — you wade across it in a stride. What it takes is whatever you
+     are carrying. */
+  .hall-channel {
+    position: absolute;
+    background: rgb(6 75 112 / 0.5);
+    border-left: 4px solid var(--color-stock-900);
+    border-right: 4px solid var(--color-stock-900);
+  }
+
+  /* ---- stations --------------------------------------------------------- */
+
+  /* Placed by the feet, like every prop and every player on the stage, so the
+     three sort against each other correctly. */
+  .hall-spot {
+    position: absolute;
+  }
+
+  .hall-spot img {
+    position: absolute;
+    left: 0;
+    top: 0;
+    /* A station is a *point* — a zero-size div at the spot's coordinates, with
+       its artwork hung off it by negative margins. Tailwind's preflight sets
+       `img { max-width: 100% }`, and 100% of a zero-width parent is zero, so
+       every lamp and wheel in the room rendered at full height and no width at
+       all. The scenery props escape this only because their parent is the whole
+       1600-unit stage. */
+    max-width: none;
+  }
+
+  /* The room answering the character. The ring appears when you are near enough
+     to work this thing — it is the only instruction the room ever gives about
+     how to play it, and it is why nothing in here needs a button. */
+  .hall-ring {
+    position: absolute;
+    left: 0;
+    top: 0;
+    translate: -50% -50%;
+    border: 4px dashed rgb(232 69 46 / 0);
+    border-radius: 50%;
+    transition: border-color 0.12s steps(2);
+  }
+
+  .hall-spot[data-near] .hall-ring {
+    border-color: rgb(232 69 46 / 0.85);
+    animation: hall-spin 3.4s linear infinite;
+  }
+
+  /* The hall is asking for this one specifically — a named lamp, the next
+     pedestal in the row. Drawn even when you are nowhere near it, because half
+     the point is that your partner can see which one you need. */
+  .hall-spot[data-wanted] .hall-ring {
+    border-style: solid;
+    border-color: rgb(11 127 191 / 0.9);
+  }
+
+  .hall-spot[data-idle] {
+    opacity: 0.45;
+  }
+
+  @keyframes hall-spin {
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  .hall-wheel[data-running] {
+    animation: hall-turn 1.1s linear infinite;
+    transform-origin: 50% 82%;
+  }
+
+  @keyframes hall-turn {
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  /* Steps, not a smooth pulse: a lamp in a comic flickers between two drawn
+     states, it does not cross-fade. */
+  .hall-lamp[data-lit] {
+    animation: hall-flicker 0.34s steps(2, end) infinite;
+  }
+
+  @keyframes hall-flicker {
+    50% {
+      translate: 0 -3px;
+    }
+  }
+
+  .hall-carried img {
+    animation: hall-heft 0.7s ease-in-out infinite;
+  }
+
+  @keyframes hall-heft {
+    50% {
+      translate: 0 -7px;
+    }
+  }
+
+  .hall-sign {
+    translate: 0 -300px;
+  }
+
+  .hall-keypad[data-drowned] {
+    filter: saturate(0.4);
+  }
+
+  /* ---- the players, in the water ---------------------------------------- */
+
+  /* Both of these key off the actor's own height, so somebody at the front of
+     the stage goes under a little later than somebody at the back — which is
+     what makes the depth of the room read as depth of water. */
+  /* Cream, not cyan, and that is not a taste decision. The water draws over
+     everybody at `z-index: 5000`, and an actor sits in its own stacking context
+     because the stage positions it with a transform — so a ripple can never be
+     lifted above the surface it is supposed to be on. Drawn in paper it reads
+     straight through 72% cyan; drawn in cyan it was invisible. */
+  .stage-actor[data-wet]::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -10px;
+    width: 150px;
+    height: 34px;
+    translate: -50% 0;
+    border: 5px solid var(--color-stock-50);
+    border-radius: 50%;
+    animation: hall-ripple 1.5s ease-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes hall-ripple {
+    from {
+      scale: 0.5;
+      opacity: 1;
+    }
+    to {
+      scale: 1.35;
+      opacity: 0;
+    }
+  }
+
+  .stage-actor[data-afloat] .character {
+    animation: hall-bob 2.3s ease-in-out infinite;
+  }
+
+  @keyframes hall-bob {
+    50% {
+      translate: 0 -14px;
+      rotate: -2.5deg;
+    }
+  }
+
+  /* ---- the caption box --------------------------------------------------- */
+
+  /* Where a comic puts its narration: top left, square corners, a heavy key
+     line and a hard offset shadow. Deliberately not a `.pane` — the glass
+     panels are the app's voice and this is the hall's. */
+  .hall-caption {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    max-width: min(34ch, calc(100% - 1.5rem));
+    padding: 0.55rem 0.7rem;
+    border: 3px solid var(--color-stock-900);
+    background: var(--color-stock-50);
+    box-shadow: var(--shadow-print);
+    rotate: -0.4deg;
+  }
+
+  .hall-caption-line {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 700;
+    line-height: 1.45;
+    letter-spacing: 0.04em;
+    color: var(--color-stock-900);
+  }
+
+  .hall-caption-urgent {
+    margin-top: 0.3rem;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--color-signal-600);
+    animation: hall-blink 0.7s steps(2, end) infinite;
+  }
+
+  @keyframes hall-blink {
+    50% {
+      opacity: 0.25;
+    }
+  }
+
+  /* ---- the gauge and the figures ----------------------------------------- */
+
+  .hall-readouts {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    padding: 1rem;
-    border: 1px solid rgb(246 242 230 / 0.16);
-    background: rgb(24 22 15 / 0.55);
-    color: var(--color-stock-200);
-    text-align: left;
-    cursor: pointer;
-    transition:
-      border-color 0.16s ease,
-      background-color 0.16s ease;
+    gap: 0.5rem;
+    align-items: flex-end;
   }
 
-  .room1-hotspot:hover,
-  .room1-hotspot:focus-visible {
-    border-color: var(--color-signal-500);
-    background: rgb(24 22 15 / 0.8);
+  .hall-gauge,
+  .hall-fragments {
+    padding: 0.45rem 0.55rem;
+    border: 3px solid var(--color-stock-900);
+    background: var(--color-stock-50);
+    box-shadow: var(--shadow-print-sm);
+    rotate: 0.5deg;
   }
 
-  /* A stage not reached yet — the veil inside does the visual telling; this
-     just stops it pretending to be clickable. */
-  .room1-hotspot:disabled {
-    cursor: not-allowed;
+  .hall-gauge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
   }
 
-  .room1-hotspot:disabled:hover {
-    border-color: rgb(246 242 230 / 0.16);
-    background: rgb(24 22 15 / 0.55);
+  .hall-gauge-label {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--color-stock-600);
   }
 
-  .room1-hotspot[data-visited='true'] {
-    border-color: rgb(11 127 191 / 0.6);
+  .hall-gauge-tube {
+    position: relative;
+    width: 1.35rem;
+    height: 7rem;
+    border: 2px solid var(--color-stock-900);
+    background: var(--color-stock-100);
   }
 
-  .room1-hotspot[data-visited='true']::after {
-    content: 'read';
+  /* Grows from the bottom, and does not ease: the water is where it is, and a
+     transition would draw it somewhere it is not. */
+  .hall-gauge-fill {
     position: absolute;
-    top: 0.6rem;
-    right: 0.7rem;
-    font-size: 0.6rem;
-    font-weight: 500;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--color-solved-300);
+    inset: auto 0 0 0;
+    background-color: var(--color-solved-500);
+    background-image: radial-gradient(rgb(6 75 112 / 0.6) 1.4px, transparent 1.5px);
+    background-size: 6px 6px;
   }
+
+  /* The line the hall drowns you at. */
+  .hall-gauge-danger {
+    position: absolute;
+    left: -3px;
+    right: -3px;
+    top: 12%;
+    border-top: 3px solid var(--color-signal-500);
+  }
+
+  .hall-gauge-trend {
+    font-family: var(--font-mono);
+    font-size: 0.5rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--color-stock-700);
+  }
+
+  .hall-gauge[data-trend='rising'] .hall-gauge-trend {
+    color: var(--color-signal-600);
+  }
+
+  .hall-gauge[data-trend='falling'] .hall-gauge-trend {
+    color: var(--color-solved-600);
+  }
+
+  .hall-figures {
+    display: flex;
+    gap: 0.2rem;
+    margin-top: 0.25rem;
+  }
+
+  .hall-figure {
+    padding: 0.1rem 0.25rem;
+    border: 2px solid var(--color-stock-300);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-stock-400);
+  }
+
+  .hall-figure[data-known] {
+    border-color: var(--color-stock-900);
+    background: var(--color-signal-500);
+    color: var(--color-stock-50);
+  }
+
+  /* ---- the vault -------------------------------------------------------- */
+
+  .hall-vault {
+    position: absolute;
+    left: 50%;
+    bottom: 0.75rem;
+    translate: -50% 0;
+    width: min(28rem, calc(100% - 1.5rem));
+    padding: 0.6rem 0.7rem;
+    border: 3px solid var(--color-stock-900);
+    background: var(--color-stock-50);
+    box-shadow: var(--shadow-print);
+    rotate: -0.3deg;
+  }
+
+  .hall-vault-row {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.3rem;
+  }
+
+  .hall-code {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    letter-spacing: 0.34em;
+    text-align: center;
+  }
+
+  .hall-vault-note {
+    margin-top: 0.35rem;
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    line-height: 1.4;
+    color: var(--color-stock-600);
+  }
+
+  /* ---- lettered sound effects -------------------------------------------- */
+
+  .hall-bangs {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* Set in the app's own display face rather than drawn, for two reasons: an
+     image model spells a made-up word like SPLOOSH correctly about as often as
+     not, and drawn type cannot misregister. */
+  .hall-bang {
+    position: absolute;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(1.5rem, 5.5vw, 3.2rem);
+    letter-spacing: -0.02em;
+    color: var(--color-signal-500);
+    -webkit-text-stroke: 4px var(--color-stock-900);
+    paint-order: stroke fill;
+    white-space: nowrap;
+    animation: hall-bang 900ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  }
+
+  /* The cyan plate, a hair off register. Painted first, so the red sits on top
+     exactly as it would coming off the second pass of a press. No blend mode:
+     `multiply` cannot lighten and is the trap this project has already been
+     caught by once. */
+  .hall-bang::before {
+    content: attr(data-text);
+    position: absolute;
+    left: 0;
+    top: 0;
+    translate: 4px -3px;
+    color: var(--color-solved-500);
+    -webkit-text-stroke: 4px var(--color-solved-500);
+    paint-order: stroke fill;
+  }
+
+  @keyframes hall-bang {
+    0% {
+      scale: 0.3;
+      opacity: 0;
+    }
+    35% {
+      scale: 1.12;
+      opacity: 1;
+    }
+    70% {
+      scale: 1;
+      opacity: 1;
+    }
+    100% {
+      scale: 1.04;
+      opacity: 0;
+    }
+  }
+
+  /* ---- drowning ---------------------------------------------------------- */
+
+  /* The last thing anybody sees. Full bleed, because the sea has stopped being
+     scenery at this point. */
+  .hall-drowned {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background-color: rgb(11 127 191 / 0.94);
+    background-image: radial-gradient(rgb(6 75 112 / 0.7) 2.4px, transparent 2.5px);
+    background-size: 14px 14px;
+    animation: hall-swallow 420ms cubic-bezier(0.5, 0, 0.75, 0) both;
+  }
+
+  .hall-drowned p {
+    font-family: var(--font-display);
+    font-size: clamp(3rem, 16vw, 8rem);
+    font-weight: 800;
+    color: var(--color-stock-50);
+    -webkit-text-stroke: 6px var(--color-stock-900);
+    paint-order: stroke fill;
+    rotate: -3deg;
+  }
+
+  .hall-drowned span {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-align: center;
+    color: var(--color-stock-50);
+  }
+
+  @keyframes hall-swallow {
+    from {
+      clip-path: inset(100% 0 0 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+
+  /* At 320px the readouts would take a third of the picture, so the gauge lies
+     down and the figures sit beside it. Rule 8: usable, not merely unbroken. */
+  /* On a phone the stage is 320×180, and a HUD designed to sit in the corners of
+     a 1600×900 picture simply does not fit in it — the caption, the gauge and
+     the code panel landed on top of one another with the caption cut off
+     mid-word. Anchoring the caption to the *bottom* did not help either: five
+     and a half rem from the bottom of a 180px stage is the top of it.
+
+     So on a narrow screen the readout stops being a gauge and becomes a chip.
+     The tube is the first thing to go — it is the most expensive 7rem in the
+     room and it says exactly what the word beside it says. */
+  @media (width < 30rem) {
+    .hall-readouts {
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 0.3rem;
+      top: 0.4rem;
+      right: 0.4rem;
+    }
+
+    .hall-gauge-tube {
+      display: none;
+    }
+
+    .hall-gauge,
+    .hall-fragments {
+      padding: 0.3rem 0.35rem;
+      rotate: 0deg;
+    }
+
+    .hall-gauge-label {
+      font-size: 0.45rem;
+      letter-spacing: 0.1em;
+    }
+
+    .hall-figure {
+      font-size: 0.6rem;
+      padding: 0.05rem 0.15rem;
+    }
+
+    /* Beside the chips rather than under them, and clamped: three lines of a
+       narration box is plenty, and an un-clamped one grows over the room. */
+    .hall-caption {
+      top: 0.4rem;
+      left: 0.4rem;
+      max-width: 52%;
+      padding: 0.3rem 0.4rem;
+      rotate: 0deg;
+      box-shadow: var(--shadow-print-sm);
+    }
+
+    .hall-caption-line,
+    .hall-caption-urgent {
+      font-size: 0.5rem;
+      line-height: 1.35;
+      /* Monospaced caps in a 160px box: one long word is wider than the line,
+         and without this it is clipped mid-word rather than wrapped. */
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      overflow: hidden;
+    }
+
+    .hall-vault {
+      bottom: 0.4rem;
+      padding: 0.4rem 0.45rem;
+    }
+
+    .hall-code {
+      font-size: 0.85rem;
+      letter-spacing: 0.2em;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hall-water-crest,
+    .hall-wheel[data-running],
+    .hall-lamp[data-lit],
+    .hall-carried img,
+    .hall-spot[data-near] .hall-ring,
+    .stage-actor[data-wet]::after,
+    .stage-actor[data-afloat] .character,
+    .hall-caption-urgent {
+      animation: none;
+    }
+  }
+
 }
 
 /* --------------------------------------------------------------------------

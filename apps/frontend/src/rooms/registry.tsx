@@ -1,5 +1,7 @@
-import type { RoomId, RoomPublicData } from '@escape-room/shared'
+import type { LiveRoom, RoomId, RoomPublicData } from '@escape-room/shared'
 import { ROOM_IDS } from '@escape-room/shared'
+import type { SceneName } from '../stage/scenes'
+import type { Actor } from '../stage/Stage'
 
 /**
  * The frontend half of the room plugin registry (ADR-0007).
@@ -17,12 +19,23 @@ import { ROOM_IDS } from '@escape-room/shared'
  */
 
 export interface RoomProps {
-  /** What the server sent. Never contains the answer — see ADR-0006. */
+  /** What the server sent on entering. Never contains the answer — see ADR-0006. */
   room: RoomPublicData
   /** Hand an answer to the server. Feedback and the solved state are handled above. */
   onAnswer: (answer: unknown) => void
   /** True while an attempt is in flight; disable inputs on it. */
   busy: boolean
+  /**
+   * The room's own state, arriving on the heartbeat twice a second.
+   *
+   * **Null for every room that is a question and a box**, which is most of
+   * them. A room only has one of these if the server is running a clock for it
+   * (ADR-0048), and what is inside `detail` is that room's own business —
+   * narrow it in the room, not here.
+   */
+  live: LiveRoom | null
+  /** Everybody standing in the room, you included, already interpolated. */
+  actors: Actor[]
 }
 
 export interface RoomDefinition {
@@ -32,7 +45,7 @@ export interface RoomDefinition {
   /** One line of atmosphere for the lobby tile. */
   tagline: string
   /** Which scenery set the stage dresses itself with. Unused when `customScene` is set. */
-  scene: 'vault' | 'lobby'
+  scene: SceneName
   /**
    * This room draws its own backdrop instead of standing on the shared
    * walkable Stage — `render` gets the whole scene, not just the chrome on
@@ -41,10 +54,20 @@ export interface RoomDefinition {
    * a place to be scattered through — see the note on `RoomOne`.
    */
   customScene?: boolean
+  /**
+   * Drawn **inside** the stage's coordinate space and depth-sorted with the
+   * players, so a room can put things in the world you walk behind rather than
+   * only panels that float over it.
+   *
+   * Optional, and most rooms will never want it: a room whose furniture stands
+   * still should put it in `scenes.ts` instead, where it costs no rendering at
+   * all. This is for the ones whose furniture changes while you watch.
+   */
+  renderWorld?: (props: RoomProps) => React.ReactNode
   render: (props: RoomProps) => React.ReactNode
 }
 
-import { RoomOne } from './room-01'
+import { HallWorldFor, RoomOne } from './room-01'
 import { RoomTwo } from './room-02'
 import { RoomThree } from './room-03'
 import { RoomFour } from './room-04'
@@ -53,9 +76,9 @@ const DEFINITIONS: Record<RoomId, RoomDefinition> = {
   'room-01': {
     id: 'room-01',
     title: 'The Reading Hall',
-    tagline: 'Ten marks, out of Rome, Greece, Egypt and Troy.',
-    scene: 'vault',
-    customScene: true,
+    tagline: 'Below the harbour, and the harbour has found it.',
+    scene: 'hall',
+    renderWorld: (props) => <HallWorldFor {...props} />,
     render: (props) => <RoomOne {...props} />,
   },
   'room-02': {

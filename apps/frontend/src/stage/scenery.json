@@ -128,6 +128,126 @@
       "w": 140,
       "h": 330
     },
+    "hall-wall": {
+      "w": 1600,
+      "h": 1388
+    },
+    "hall-floor": {
+      "w": 1600,
+      "h": 1293
+    },
+    "hall-water-crest": {
+      "w": 1600,
+      "h": 606
+    },
+    "hall-column": {
+      "w": 185,
+      "h": 460
+    },
+    "hall-column-fallen": {
+      "w": 249,
+      "h": 140
+    },
+    "hall-statue": {
+      "w": 277,
+      "h": 470
+    },
+    "hall-shelf-a": {
+      "w": 314,
+      "h": 490
+    },
+    "hall-shelf-b": {
+      "w": 293,
+      "h": 330
+    },
+    "hall-scroll-pile": {
+      "w": 205,
+      "h": 150
+    },
+    "hall-brazier": {
+      "w": 294,
+      "h": 310
+    },
+    "hall-lamp-out": {
+      "w": 234,
+      "h": 380
+    },
+    "hall-lamp-lit": {
+      "w": 207,
+      "h": 380
+    },
+    "hall-pedestal": {
+      "w": 172,
+      "h": 180
+    },
+    "hall-tablet-a": {
+      "w": 108,
+      "h": 120
+    },
+    "hall-tablet-b": {
+      "w": 128,
+      "h": 120
+    },
+    "hall-tablet-c": {
+      "w": 104,
+      "h": 120
+    },
+    "hall-tablet-d": {
+      "w": 92,
+      "h": 120
+    },
+    "hall-tablet-e": {
+      "w": 105,
+      "h": 120
+    },
+    "hall-wheel-west": {
+      "w": 209,
+      "h": 370
+    },
+    "hall-wheel-east": {
+      "w": 251,
+      "h": 370
+    },
+    "hall-gearbox": {
+      "w": 149,
+      "h": 230
+    },
+    "hall-sign-turn-a": {
+      "w": 148,
+      "h": 150
+    },
+    "hall-sign-turn-b": {
+      "w": 155,
+      "h": 150
+    },
+    "hall-vault-door": {
+      "w": 340,
+      "h": 540
+    },
+    "hall-keypad": {
+      "w": 126,
+      "h": 210
+    },
+    "hall-tally": {
+      "w": 119,
+      "h": 140
+    },
+    "hall-tidestaff": {
+      "w": 97,
+      "h": 540
+    },
+    "hall-grate": {
+      "w": 147,
+      "h": 100
+    },
+    "hall-amphora": {
+      "w": 146,
+      "h": 200
+    },
+    "hall-bench": {
+      "w": 443,
+      "h": 160
+    },
     "splat-a": {
       "w": 296,
       "h": 300

@@ -8,6 +8,7 @@ import {
 import type { RoomService } from '../services/room.service.js'
 import type { Actor, GameService } from '../services/game.service.js'
 import type { ProfileService } from '../services/profile.service.js'
+import type { HallService } from '../services/hall.service.js'
 import type { Authenticator } from '../http/authenticator.js'
 import { requirePlayer } from '../http/require-auth.js'
 import { readRoomId } from '../http/request.js'
@@ -19,6 +20,17 @@ export function createRoomRoutes(
   authenticator: Authenticator,
   attemptRateLimiter: RequestHandler,
   profiles?: ProfileService,
+  /**
+   * Only for the rooms that have a clock in them, and only to be told a code
+   * was wrong.
+   *
+   * The alternative was letting `check()` reach the water, and a room's
+   * `check()` is the one function in the codebase that must stay pure — it is
+   * the only place an answer is known (ADR-0006), it is called by tests with a
+   * bare session, and giving it a side effect on shared state is how it would
+   * stop being testable.
+   */
+  halls?: HallService,
 ): Router {
   const router = Router()
 
@@ -79,6 +91,13 @@ export function createRoomRoutes(
       parsed.data.answer,
       await actorFor(userId, game),
     )
+
+    // A wrong code at the vault door and the sea takes a step. It is what makes
+    // ten thousand combinations unguessable in a room you can drown in — the
+    // rate limiter bounds how fast you may guess, and this bounds how many
+    // guesses you survive.
+    if (!body.correct) halls?.penalise(userId, roomId)
+
     res.json(body)
   })
 
