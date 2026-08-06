@@ -107,9 +107,20 @@ describe('activity log', () => {
     const app = buildApp()
     await start(app)
 
-    for (const roomId of ['room-01', 'room-02', 'room-03', 'room-04'] as const) {
+    for (const roomId of ['room-01', 'room-02'] as const) {
       await as(app).post(`/api/rooms/${roomId}/attempt`).send({ answer: SOLUTIONS[roomId] })
     }
+
+    // room-03's five riddles are real progress but no longer finish the
+    // room by themselves (ADR-0025) — only POST .../complete (ADR-0027)
+    // actually marks it solved, once Atlantis and the Olympus carpet race
+    // (both client-side) are cleared too.
+    for (const answer of ['A', 'C', 'D', 'D', 'B']) {
+      await as(app).post('/api/rooms/room-03/attempt').send({ answer })
+    }
+    await as(app).post('/api/rooms/room-03/complete').send({})
+
+    await as(app).post('/api/rooms/room-04/attempt').send({ answer: SOLUTIONS['room-04'] })
 
     const log = await events(app)
     const completed = log.filter((event) => event.type === 'game_completed')

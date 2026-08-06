@@ -1,10 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
-import type { GameSession } from '@escape-room/shared'
-import { ROOM_IDS } from '@escape-room/shared'
-import { ApiRequestError, startOrResumeGame } from './api/game'
+import type { GameSession, RoomPublicData } from '@escape-room/shared'
+import { currentRoomId, ROOM_IDS } from '@escape-room/shared'
+import {
+  ApiRequestError,
+  completeRoom,
+  fetchRoom,
+  requestHint,
+  resetRoom,
+  startOrResumeGame,
+  submitAttempt,
+} from './api/game'
 import { ProfileForm } from './account/ProfileForm'
 import { ActivityLog } from './account/ActivityLog'
+import { ROOM_COMPONENTS } from './rooms/registry'
+import { previewRoomIdFromLocation, RoomPreview } from './rooms/preview'
 
 /**
  * The scaffold page, behind a sign-in gate.
@@ -18,6 +28,11 @@ import { ActivityLog } from './account/ActivityLog'
  * code goes.
  */
 export function App() {
+  const previewRoomId = previewRoomIdFromLocation()
+  if (previewRoomId) {
+    return <RoomPreview roomId={previewRoomId} />
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-10 px-6 py-16">
       <header className="space-y-3">
@@ -159,7 +174,162 @@ function GamePanel() {
         </p>
       </section>
 
+      {state.kind === 'ready' && <CurrentRoom game={state.game} onGameChange={(game) => setState({ kind: 'ready', game })} />}
+
       {state.kind === 'ready' && <ActivityLog events={state.game.events} />}
     </>
+  )
+}
+
+type RoomState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; room: RoomPublicData }
+  | { kind: 'error'; message: string }
+
+/**
+ * Resolves which room the player is currently in from their own progress —
+ * the same rule the server enforces — fetches its data, and renders the
+ * matching component from the registry. Rooms without a component yet show
+ * a placeholder instead of crashing the app.
+ */
+function CurrentRoom({
+  game,
+  onGameChange,
+}: {
+  game: GameSession
+  onGameChange: (game: GameSession) => void
+}) {
+  const { getToken } = useAuth()
+  const getTokenRef = useRef(getToken)
+  getTokenRef.current = getToken
+
+  const serverRoomId = currentRoomId(game)
+
+  // The room actually on screen can lag behind `serverRoomId` on purpose:
+  // the server may already consider the current room solved (its last
+  // attempt marked roomComplete, see ADR-0025) while the room's own
+  // component is still showing an on-screen finale (a congratulations
+  // scene, a walk through a door) that hasn't finished yet. Advancing here
+  // is `displayedRoomId` catching up to `serverRoomId`, gated on the room
+  // component itself calling `onRoomFinished` — see ADR-0026. Most rooms
+  // will call it immediately after their one correct answer, which makes
+  // them advance exactly as before; only a room with its own finale
+  // sequence needs to hold onto the door for a while first.
+  const [displayedRoomId, setDisplayedRoomId] = useState(serverRoomId)
+  const [state, setState] = useState<RoomState>({ kind: 'loading' })
+
+  useEffect(() => {
+    if (!displayedRoomId) return
+    let cancelled = false
+    setState({ kind: 'loading' })
+
+    getTokenRef
+      .current()
+      .then((token) => fetchRoom(token, displayedRoomId))
+      .then((room) => {
+        if (!cancelled) setState({ kind: 'ready', room })
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setState({
+            kind: 'error',
+            message: error instanceof Error ? error.message : 'Could not load this room.',
+          })
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [displayedRoomId])
+
+  const roomId = displayedRoomId
+
+  if (!roomId) {
+    return (
+      <section className="rounded-lg border border-solved-800 bg-vault-900/60 p-6">
+        <h2 className="font-mono text-sm text-solved-400">Every room is solved.</h2>
+      </section>
+    )
+  }
+
+  if (state.kind === 'loading') {
+    return (
+      <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">
+        <p className="font-mono text-sm text-vault-300">Opening {roomId}…</p>
+      </section>
+    )
+  }
+
+  if (state.kind === 'error') {
+    return (
+      <section className="rounded-lg border border-alarm-800 bg-vault-900/60 p-6">
+        <p className="font-mono text-sm text-alarm-400">Could not load this room: {state.message}</p>
+      </section>
+    )
+  }
+
+  const RoomComponent = ROOM_COMPONENTS[roomId]
+  if (!RoomComponent) {
+    return (
+      <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">
+        <h2 className="font-mono text-sm text-vault-100">{state.room.title}</h2>
+        <p className="mt-2 text-sm text-vault-400">This room has no frontend yet.</p>
+      </section>
+    )
+  }
+
+  return (
+    <Suspense
+      fallback={
+        <section className="rounded-lg border border-vault-800 bg-vault-900/60 p-6">
+          <p className="font-mono text-sm text-vault-300">Loading room…</p>
+        </section>
+      }
+    >
+      <RoomComponent
+        room={state.room}
+        onSubmit={async (answer) => {
+          const result = await submitAttempt(await getTokenRef.current(), roomId, answer)
+          onGameChange(result.session)
+
+          // Deliberately does NOT advance `displayedRoomId` here, even if
+          // this attempt just solved the room server-side — see
+          // ADR-0026. The room being solved and the player being ready to
+          // leave it are different moments; only onRoomFinished (below)
+          // moves the displayed room forward. `state.room` may now be
+          // stale (this room's own publicData() has moved on, e.g. to its
+          // next internal riddle) — re-fetch it so the room keeps showing
+          // real content instead of the pre-attempt snapshot, regardless of
+          // whether the room is now marked complete.
+          const refreshed = await fetchRoom(await getTokenRef.current(), roomId)
+          setState({ kind: 'ready', room: refreshed })
+          return result
+        }}
+        onHint={async () => {
+          const hintResponse = await requestHint(await getTokenRef.current(), roomId)
+          onGameChange({ ...game, hintsUsed: hintResponse.hintsUsed })
+          return hintResponse
+        }}
+        onResetRoom={async () => {
+          const result = await resetRoom(await getTokenRef.current(), roomId)
+          onGameChange(result.session)
+          const refreshed = await fetchRoom(await getTokenRef.current(), roomId)
+          setState({ kind: 'ready', room: refreshed })
+          return result
+        }}
+        onCompleteRoom={async () => {
+          const result = await completeRoom(await getTokenRef.current(), roomId)
+          onGameChange(result.session)
+          return result
+        }}
+        onRoomFinished={() => {
+          // The room itself says its on-screen finale is done — now it's
+          // safe to catch `displayedRoomId` up to whatever the server
+          // already thinks is current.
+          setDisplayedRoomId(currentRoomId(game))
+        }}
+      />
+    </Suspense>
   )
 }

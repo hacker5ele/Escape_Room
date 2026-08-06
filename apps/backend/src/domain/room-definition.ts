@@ -4,6 +4,20 @@ export interface AttemptOutcome {
   correct: boolean
   /** Optional nudge shown to the player. Never reveal the answer here. */
   feedback?: string
+  /**
+   * Whether this correct answer finishes the ROOM, not just this attempt.
+   *
+   * Defaults to `correct` when omitted — true for every single-stage room
+   * (rooms 1, 2, 4: one correct answer IS the room finished). A multi-stage
+   * room whose later stages are still server-checked answers must set this
+   * explicitly to `false` on every correct answer except its true final
+   * one, or GameService.applyAttempt marks the whole room — and therefore
+   * every room after it — unlocked after the very first riddle. See
+   * ADR-0025. Room 3's later stages (Atlantis, the Olympus carpet race) are
+   * entirely client-side and never reach `check()` at all — see
+   * `canComplete` below and ADR-0027.
+   */
+  roomComplete?: boolean
 }
 
 /**
@@ -40,4 +54,14 @@ export interface RoomDefinition {
    * and narrow it yourself.
    */
   check(answer: unknown, session: GameSession): AttemptOutcome
+
+  /**
+   * Whether `POST /api/rooms/:roomId/complete` (ADR-0027) is allowed to
+   * mark this room solved right now, given everything server-checked about
+   * it is already done. Rooms with no client-only tail stage after their
+   * last `check()` never need this — it defaults to `false` when omitted,
+   * since only a room that actually has such a stage should ever expose a
+   * way to finish outside of `check()` at all.
+   */
+  canComplete?(session: GameSession): boolean
 }

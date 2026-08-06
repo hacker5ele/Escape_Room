@@ -187,6 +187,8 @@ in `Authorization: Bearer …`.
 | `GET` | `/api/rooms/:roomId` | — | `{ room }` or `403` if locked |
 | `POST` | `/api/rooms/:roomId/attempt` | `{ answer }` | `{ correct, session, feedback? }` |
 | `POST` | `/api/rooms/:roomId/hint` | — | `{ hint, hintsUsed }` |
+| `POST` | `/api/rooms/:roomId/reset` | — | `{ session }` — wipes only this room's progress ([ADR-0023](docs/adr/0023-room-03-hearts-system.md)) |
+| `POST` | `/api/rooms/:roomId/complete` | — | `{ session }` — marks the room solved with no answer, if `canComplete()` allows it ([ADR-0027](docs/adr/0027-olympus-carpet-race.md)) |
 
 **There is no session id anywhere.** A player has exactly one game and the server finds it from the
 verified token, so nothing identifying a game travels on the wire to be forged
@@ -284,6 +286,12 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-05 | [0027](docs/adr/0027-olympus-carpet-race.md) | Olympus becomes a carpet-racing coin challenge, not a riddle sequence; new `POST /api/rooms/:roomId/complete` | Proposed |
+| 2026-08-05 | [0026](docs/adr/0026-room-owns-its-own-finale.md) | A room decides when it's done showing its own finale, via a new `onRoomFinished` callback | Proposed |
+| 2026-08-05 | [0025](docs/adr/0025-room-completion-vs-attempt-correctness.md) | A correct attempt and a finished room are different things — fixes players being bounced out of room-03 mid-run | Proposed |
+| 2026-08-05 | [0024](docs/adr/0024-olympus-second-act.md) | A third beat after Atlantis: Mount Olympus, a second server-checked riddle act | Proposed, superseded by 0027 |
+| 2026-08-05 | [0023](docs/adr/0023-room-03-hearts-system.md) | A shared 3-hearts system across the Sphinx and Atlantis, plus a room-scoped reset endpoint | Proposed |
+| 2026-08-04 | [0022](docs/adr/0022-room-03-sphinx-riddles.md) | Room 3 is a five-riddle sequence staged from the event log; frontend gets its room shell | Proposed |
 | 2026-08-03 | [0021](docs/adr/0021-unique-usernames.md) | Every player has a unique username, enforced by Clerk | Accepted |
 | 2026-08-03 | [0020](docs/adr/0020-activity-log.md) | Record an activity log against each account | Accepted |
 | 2026-08-03 | [0019](docs/adr/0019-games-belong-to-accounts.md) | A game belongs to an account; the session header goes away | Accepted |

@@ -78,10 +78,36 @@ function profileIncompleteResponse() {
   )
 }
 
+function roomResponse() {
+  return new Response(
+    JSON.stringify({
+      room: {
+        id: 'room-02',
+        order: 2,
+        title: 'The Archive',
+        intro: 'Shelves of paper.',
+        prompt: 'Decode the card.',
+        data: {},
+        hintsAvailable: 3,
+      },
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  )
+}
+
+/** Routes a stubbed `fetch` by URL, the way the real API distinguishes endpoints. */
+function routedFetch(): typeof fetch {
+  return vi.fn().mockImplementation((input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/rooms/')) return Promise.resolve(roomResponse())
+    return Promise.resolve(gameResponse())
+  }) as unknown as typeof fetch
+}
+
 beforeEach(() => {
   // A fresh Response per call — a consumed body throws rather than quietly
   // returning the wrong thing.
-  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(gameResponse())))
+  vi.stubGlobal('fetch', routedFetch())
 })
 
 afterEach(() => {
@@ -173,12 +199,18 @@ describe('App', () => {
       clerkFirstName = null
       clerkLastName = null
       // The server decides this, not the browser — the UI reacts to the 409.
+      let firstCall = true
       vi.stubGlobal(
         'fetch',
-        vi
-          .fn()
-          .mockImplementationOnce(() => Promise.resolve(profileIncompleteResponse()))
-          .mockImplementation(() => Promise.resolve(gameResponse())),
+        vi.fn().mockImplementation((input: RequestInfo | URL) => {
+          if (firstCall) {
+            firstCall = false
+            return Promise.resolve(profileIncompleteResponse())
+          }
+          const url = String(input)
+          if (url.includes('/rooms/')) return Promise.resolve(roomResponse())
+          return Promise.resolve(gameResponse())
+        }),
       )
     })
 

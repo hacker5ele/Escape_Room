@@ -53,14 +53,33 @@ export class RoomService {
     const outcome = getRoom(roomId).check(answer, session)
 
     // Every attempt is logged, right or wrong — the wrong ones are what show
-    // where players get stuck.
-    const updatedSession = await this.games.applyAttempt(session, roomId, answer, outcome.correct)
+    // where players get stuck. `roomComplete` (defaulting to `correct`) is
+    // what actually unlocks the next room — see ADR-0025: a multi-stage room
+    // like room-03 has many correct answers before its true final one.
+    const roomComplete = outcome.roomComplete ?? outcome.correct
+    const updatedSession = await this.games.applyAttempt(session, roomId, answer, outcome.correct, roomComplete)
 
     return {
       correct: outcome.correct,
       feedback: outcome.feedback,
       session: updatedSession,
     }
+  }
+
+  /**
+   * Marks a room solved with no answer involved — for a room whose final
+   * stage(s) are entirely client-side (ADR-0027). Refuses unless the room's
+   * own `canComplete()` agrees the server-checked part is actually done;
+   * defaults to always refusing for rooms that don't define it, since only
+   * a room with such a stage should ever be finishable this way.
+   */
+  async complete(session: GameSession, roomId: RoomId): Promise<GameSession> {
+    if (!isRoomUnlocked(session, roomId)) throw ApiError.roomLocked()
+
+    const room = getRoom(roomId)
+    if (!room.canComplete?.(session)) throw ApiError.roomNotReadyToComplete()
+
+    return this.games.completeRoom(session, roomId)
   }
 
   /**

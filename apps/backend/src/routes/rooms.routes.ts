@@ -2,6 +2,8 @@ import { Router, type RequestHandler } from 'express'
 import {
   attemptRequestSchema,
   type AttemptResponse,
+  type RoomCompleteResponse,
+  type RoomResetResponse,
   type RoomResponse,
   type RoomsResponse,
 } from '@escape-room/shared'
@@ -65,6 +67,26 @@ export function createRoomRoutes(
     const roomId = readRoomId(req)
     const game = await requireGame(req, authenticator, games)
     res.json(await rooms.hint(game, roomId))
+  })
+
+  // POST /api/rooms/:roomId/reset — wipes this room's progress only, leaving
+  // the rest of the game untouched. See ADR-0023: used by room-03's Atlantis
+  // quest, which has no other way to tell the server its own run failed.
+  router.post('/:roomId/reset', async (req, res) => {
+    const roomId = readRoomId(req)
+    const game = await requireGame(req, authenticator, games)
+    const body: RoomResetResponse = { session: await games.resetRoom(game, roomId) }
+    res.json(body)
+  })
+
+  // POST /api/rooms/:roomId/complete — marks a room solved with no answer
+  // involved, for a room whose final stage(s) are entirely client-side. See
+  // ADR-0027: used once room-03's Olympus carpet race is won.
+  router.post('/:roomId/complete', async (req, res) => {
+    const roomId = readRoomId(req)
+    const game = await requireGame(req, authenticator, games)
+    const body: RoomCompleteResponse = { session: await rooms.complete(game, roomId) }
+    res.json(body)
   })
 
   return router
