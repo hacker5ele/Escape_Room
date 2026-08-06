@@ -56,6 +56,17 @@ export function useMovement(start: { x: number; y: number }, enabled = true) {
 
     const down = (event: KeyboardEvent) => {
       if (!KEYS[event.code]) return
+      // Typing an answer is not a walk command — WASD has to reach the input
+      // that is focused, or "a" can never be typed into a puzzle answer.
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target.isContentEditable)
+      ) {
+        return
+      }
       // Otherwise the arrows scroll the page out from under the stage.
       event.preventDefault()
       held.current.add(event.code)

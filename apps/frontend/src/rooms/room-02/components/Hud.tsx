@@ -15,6 +15,7 @@ export function Hud({
   muted,
   onToggleMute,
   onRestart,
+  onLeave,
 }: {
   locationTitle: string
   objective: string
@@ -25,6 +26,7 @@ export function Hud({
   muted: boolean
   onToggleMute: () => void
   onRestart: () => void
+  onLeave: () => void
 }) {
   return (
     <header className="hud">
@@ -64,6 +66,9 @@ export function Hud({
         </button>
         <button type="button" className="icon-btn" title="Restart" onClick={onRestart}>
           RESTART
+        </button>
+        <button type="button" className="icon-btn" title="Leave the room" onClick={onLeave}>
+          LEAVE
         </button>
       </div>
     </header>

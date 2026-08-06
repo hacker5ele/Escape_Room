@@ -90,6 +90,9 @@ function PreviewRoom({ roomId }: { roomId: RoomId }) {
           hintsUsed: 0,
           hintsRemaining: 0,
         })}
+        onLeave={() => {
+          window.location.href = '/'
+        }}
       />
     </Suspense>
   )

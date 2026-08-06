@@ -53,7 +53,7 @@ function getObjective(state: RoomState): string {
   return 'Reach the emergency exit.'
 }
 
-export function Room02({ onSubmit }: RoomProps) {
+export function Room02({ onSubmit, onLeave }: RoomProps) {
   const [state, dispatch] = useReducer(roomReducer, undefined, createInitialState)
   const [screen, setScreen] = useState<Screen>('title')
   const [muted, setMuted] = useState(false)
@@ -549,6 +549,7 @@ export function Room02({ onSubmit }: RoomProps) {
             muted={muted}
             onToggleMute={toggleMute}
             onRestart={handleRestart}
+            onLeave={onLeave}
           />
           <Scene location={LOCATIONS[state.currentLocation]} onHotspotClick={handleHotspotClick} />
           <InventoryBar inventory={state.inventory} />
@@ -640,7 +641,7 @@ export function Room02({ onSubmit }: RoomProps) {
         title={endingVariant === 'death' ? 'CONTAINMENT FAILURE' : 'MISSION COMPLETE'}
         subtitle={endingVariant === 'death' ? STORY.deathSubtitle : STORY.endingSubtitle}
         flavor={endingVariant === 'death' ? STORY.deathFlavor : STORY.endingFlavor}
-        onPlayAgain={handleRestart}
+        onContinue={onLeave}
       />
 
       <Toast message={toastMessage} toastKey={toastKey} />

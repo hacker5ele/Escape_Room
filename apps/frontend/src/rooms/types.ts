@@ -9,4 +9,5 @@ export interface RoomProps {
   room: RoomPublicData
   onSubmit: (answer: unknown) => Promise<AttemptResponse>
   onHint: () => Promise<HintResponse>
+  onLeave: () => void
 }

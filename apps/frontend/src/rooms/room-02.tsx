@@ -10,12 +10,13 @@ import { Room02 } from './room-02/Room02'
  * only this adapter is new. It does not use hints, so `onHint` is a stub
  * that is never actually called.
  */
-export function RoomTwo({ room, onAnswer }: CustomSceneProps) {
+export function RoomTwo({ room, onAnswer, onLeave }: CustomSceneProps) {
   return (
     <Room02
       room={room}
       onSubmit={onAnswer}
       onHint={async (): Promise<HintResponse> => ({ hint: '', hintsUsed: 0, hintsRemaining: 0 })}
+      onLeave={onLeave}
     />
   )
 }

@@ -23,6 +23,10 @@ export interface RoomProps {
   onAnswer: (answer: unknown) => void
   /** True while an attempt is in flight; disable inputs on it. */
   busy: boolean
+  /** Leave the room. Most rooms never call this — RoomView already draws its
+   *  own "Leave the room" chrome — but a `customScene` room draws its own, so
+   *  it needs the callback itself. */
+  onLeave: () => void
 }
 
 /**

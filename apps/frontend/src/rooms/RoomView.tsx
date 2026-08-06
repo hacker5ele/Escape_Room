@@ -204,10 +204,11 @@ export function RoomView({
 
   // A custom-scene room takes the entire viewport, not just the column
   // inside `<main>` below — it draws its own backdrop instead of standing on
-  // the shared Stage. RoomView still owns leaving and feedback here, the
-  // same as it does for every other room; they just float above the scene
-  // instead of sitting in the normal page flow, because there is no page
-  // flow left to sit in once the scene covers it.
+  // the shared Stage. RoomView still owns leaving here, but does not draw
+  // any chrome for it: a custom scene has its own HUD, own corners, own
+  // idea of where a "leave" control belongs, and a floating button placed
+  // by RoomView has already collided with room-02's own mute/restart once.
+  // `onLeave` is handed to the room instead, in `RoomProps`.
   //
   // `ownsEnding` keeps rendering the room even after `solved` — the room
   // shows its own ending instead of RoomView's generic "Solved" pane, so it
@@ -227,13 +228,8 @@ export function RoomView({
             return result
           },
           busy,
+          onLeave,
         })}
-
-        <div data-piece="no" className="fixed top-4 right-4 z-50">
-          <button type="button" onClick={onLeave} className="btn btn-ghost btn-sm">
-            Leave the room
-          </button>
-        </div>
 
         {!definition.ownsEnding && feedback && (
           <p
@@ -297,7 +293,12 @@ export function RoomView({
                 </button>
               </div>
             ) : (
-              definition.render({ room: state.room, onAnswer: (value) => void answer(value), busy })
+              definition.render({
+                room: state.room,
+                onAnswer: (value) => void answer(value),
+                busy,
+                onLeave,
+              })
             )}
           </Stage>
 
