@@ -1279,24 +1279,52 @@
 }
 
 @layer components {
-  /* A piece in flight is the same panel, moved. Nothing here.
+  /* A moving panel hides its own fill, because a resting one already does.
      ---------------------------------------------------------------------
-     There is deliberately no shared rule for `.piece-arriving` — no
-     `will-change`, no `backface-visibility`, and above all nothing that touches
-     `--pane-blur`, `--pane-alpha` or `--pane-ink`. An arriving panel must be
-     pixel-identical to a settled one apart from its position, and every version
-     of this that reached for one of those tokens produced the same complaint:
-     the panel flies in pale and then corrects itself on landing.
+     This is the fix for "the panels fly in white", and it is not a tweak — it
+     corrects a wrong assumption about what a `.pane` looks like.
 
-     There is also no `overflow` on `.assemble`, in either axis, at any point.
-     Clipping the container is the obvious way to stop a piece that starts off
-     the right of the screen widening the document — and it is the one thing the
-     top of this file forbids outright, because `overflow` other than `visible`
-     above a `.pane` silently kills its `backdrop-filter`. "Only while
-     animating" is not a mitigation: it means every panel on the page is flat
-     for the length of the animation, which is precisely what that looks like.
-     `inward()` in `Assemble.tsx` mirrors those pieces instead, so nothing ever
-     needs clipping away. */
+     **`.pane::before` and `::after` are invisible.** Not subtle, not partly:
+     they never reach the screen. They sit at `z-index: -1` and `.pane` is not a
+     stacking context, so they paint in the *root* stacking context's negative
+     layer — which comes **before** `body`, an in-flow block whose background is
+     opaque. The page is drawn straight over the top of them.
+
+     Painting a pane's fill bright red proves it: the panel looks completely
+     ordinary. Give that same panel any transform at all and it turns scarlet,
+     because the transform makes `.pane` a stacking context and the fill is
+     trapped inside it, where it finally paints on top.
+
+     Measured, a pane's interior at rest is the bare page to within a rounding
+     error — same colour, same halftone contrast. Under a transform it becomes a
+     flat, bluer block with no page texture in it at all. That is the white.
+
+     So the fill is taken away for exactly as long as a piece is moving, which
+     leaves the panel showing the page through it — which is what it does when
+     it is standing still. The two states then match to about one part in 200.
+
+     This makes the animation correct. It does **not** make the design system
+     correct: the glass, the sheen and the overprint tint have never once been
+     seen in this app, and whether to fix that is a decision about how every
+     screen looks, not about a transition. Flagged, not quietly changed. */
+  .piece-arriving.pane::before,
+  .piece-arriving.pane::after,
+  .piece-arriving .pane::before,
+  .piece-arriving .pane::after,
+  .piece-leaving.pane::before,
+  .piece-leaving.pane::after,
+  .piece-leaving .pane::before,
+  .piece-leaving .pane::after {
+    display: none;
+  }
+
+  /* Beyond that, nothing. No `--pane-*` token is touched — three separate
+     attempts to compensate for the stacking context by nudging alpha, ink or
+     blur all failed, because none of them was the mechanism. And no `overflow`
+     goes on `.assemble` in either axis: clipping above a `.pane` is what the top
+     of this file forbids, and "only while animating" flattens every panel on the
+     page for the length of the animation. `inward()` in `Assemble.tsx` turns
+     stray pieces around instead, so there is nothing to clip. */
 
   /* The dots belong to the unbuild, and only to it.
      ---------------------------------------------------------------------

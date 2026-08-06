@@ -54,6 +54,34 @@ describe('a piece in flight is the same panel, moved', () => {
     expect(transition).toContain('.piece-leaving')
   })
 
+  it("takes away a moving panel's fill, which is what makes it match", () => {
+    // `.pane::before` and `::after` sit at `z-index: -1` under an element that
+    // is not a stacking context, so they paint before `body` — whose opaque
+    // background covers them. They have never been seen in this app. Any
+    // transform makes `.pane` a stacking context, traps them, and they finally
+    // appear: measured in Chrome, a pane's interior goes from being the bare
+    // page (texture 29.1) to a flat, bluer block (texture 3.3). That is the
+    // white background, and taking the fill away for the length of the move
+    // brings it back to within one part in 200 of the resting panel.
+    const rule = transition.match(/([^{}]+)\{\s*display:\s*none;?\s*\}/)
+    expect(rule, 'no rule hides the fill of a moving panel').not.toBeNull()
+
+    for (const selector of [
+      '.piece-arriving.pane::before',
+      '.piece-arriving.pane::after',
+      '.piece-arriving .pane::before',
+      '.piece-arriving .pane::after',
+      '.piece-leaving.pane::before',
+      '.piece-leaving.pane::after',
+      // Descendants matter too: a room's `.pane` sits inside the stage, and the
+      // stage is one piece.
+      '.piece-leaving .pane::before',
+      '.piece-leaving .pane::after',
+    ]) {
+      expect(rule?.[1]).toContain(selector)
+    }
+  })
+
   it('changes no pane token', () => {
     // Three separate attempts to "compensate" for the stacking context a
     // transform creates — `--pane-alpha: 1`, then `--pane-ink: 0`, then
