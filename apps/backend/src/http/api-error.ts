@@ -19,11 +19,7 @@ export class ApiError extends Error {
   }
 
   static profileIncomplete(): ApiError {
-    return new ApiError(
-      409,
-      'PROFILE_INCOMPLETE',
-      'Choose a username before you start playing.',
-    )
+    return new ApiError(409, 'PROFILE_INCOMPLETE', 'Choose a username before you start playing.')
   }
 
   /**
@@ -51,6 +47,10 @@ export class ApiError extends Error {
 
   static roomAlreadySolved(): ApiError {
     return new ApiError(409, 'ROOM_ALREADY_SOLVED', 'You have already solved this room.')
+  }
+
+  static roomNotReadyToComplete(): ApiError {
+    return new ApiError(409, 'ROOM_NOT_READY_TO_COMPLETE', 'This room is not ready to be marked complete yet.')
   }
 
   static noHintsLeft(): ApiError {

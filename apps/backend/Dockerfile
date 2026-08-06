@@ -43,6 +43,13 @@ RUN npm ci --omit=dev --workspace @escape-room/backend --include-workspace-root 
 COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 
+# The character parts and the starburst, as PNG. The API draws a picture of
+# whoever sent an invitation into the email it sends (ADR-0046), and there is no
+# canvas on a server — so the art has to be in the image with it. About 450 KB,
+# written by `scripts/characters/process_all.py` alongside the web assets, so
+# the two cannot drift.
+COPY --from=build /app/apps/backend/assets ./apps/backend/assets
+
 # Never run as root.
 USER node
 

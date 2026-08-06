@@ -29,11 +29,6 @@ import {
   type NotificationRepository,
 } from './repositories/notification.repository.js'
 import {
-  DynamoPartyRepository,
-  InMemoryPartyRepository,
-  type PartyRepository,
-} from './repositories/party.repository.js'
-import {
   DynamoMessageRepository,
   InMemoryMessageRepository,
   type MessageRepository,
@@ -42,6 +37,10 @@ import { GameService } from './services/game.service.js'
 import { ChatService } from './services/chat.service.js'
 import { LeaderboardService } from './services/leaderboard.service.js'
 import { PartyService } from './services/party.service.js'
+import { LiveStore } from './services/live-store.js'
+import { InviteMailService } from './mail/invite-mail.service.js'
+import { NoMailer, SesMailer, type Mailer } from './mail/mail.service.js'
+import { NoDirectory, createClerkDirectory, type Directory } from './http/directory.js'
 import { NotificationService } from './services/notification.service.js'
 import { FriendService } from './services/friend.service.js'
 import { InviteService } from './services/invite.service.js'
@@ -59,6 +58,7 @@ import { createLeaderboardRoutes } from './routes/leaderboard.routes.js'
 import { createPartyRoutes } from './routes/party.routes.js'
 import { createPresenceRoutes } from './routes/presence.routes.js'
 import { PresenceService } from './services/presence.service.js'
+import { HallService } from './services/hall.service.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
 import {
   createAttemptRateLimiter,
@@ -76,7 +76,12 @@ export interface AppOptions {
   inviteRepository?: InviteRepository
   notificationRepository?: NotificationRepository
   messageRepository?: MessageRepository
-  partyRepository?: PartyRepository
+  /** Injected by tests that need to age it; a fresh one otherwise. */
+  liveStore?: LiveStore
+  /** Injected by tests to assert what would have been sent. Absent means nothing is. */
+  mailer?: Mailer
+  /** Injected by tests. Absent means nobody has a reachable address. */
+  directory?: Directory
   /** Injected by tests so the suite needs no Clerk key and makes no network calls. */
   authenticator?: Authenticator
   /** Attempts per IP per minute. Tests lower it to assert the limiter fires. */
@@ -150,29 +155,57 @@ export function createApp(options: AppOptions = {}): Express {
       ? new DynamoMessageRepository(config.messagesTableName, config.awsRegion)
       : new InMemoryMessageRepository())
 
-  const partyRepository =
-    options.partyRepository ??
-    (config.partyTableName
-      ? new DynamoPartyRepository(config.partyTableName, config.awsRegion)
-      : new InMemoryPartyRepository())
+  // The whole of the lobby and co-op, in one map that empties itself. Being in
+  // somebody's party is a claim you keep alive by beating rather than a row
+  // anybody has to remember to delete, so closing a tab leaves the game the
+  // same way it leaves the lobby — by going quiet (ADR-0045).
+  const live = options.liveStore ?? new LiveStore()
 
-  const gameService = new GameService(repository, partyRepository)
+  const gameService = new GameService(repository, live)
   const profileService = new ProfileService(profileRepository)
   const notificationService = new NotificationService(notificationRepository, profileService)
   const friendService = new FriendService(friendshipRepository, profileService, notificationService)
   const leaderboardService = new LeaderboardService(repository, friendService, profileService)
-  const partyService = new PartyService(
-    partyRepository,
+  // Email is off unless it is configured, which is what local development, the
+  // test suite and `docker compose up` all run with. There is no key to forget:
+  // SES is reached with the instance role (ADR-0046).
+  const mailer =
+    options.mailer ??
+    (config.mailFrom ? new SesMailer(config.mailFrom, config.awsRegion) : new NoMailer())
+  const directory =
+    options.directory ?? (config.authMode === 'clerk' ? createClerkDirectory() : new NoDirectory())
+
+  // `inviteService` is referenced here and constructed below — the closure is
+  // only *called* when somebody sends an invitation, long after both exist.
+  // That is what unties the knot: the invite service needs the party service to
+  // describe a party, and the party service needs this to send an email.
+  const invitations: InviteMailService | undefined =
+    config.mailFrom || options.mailer
+      ? new InviteMailService(
+          (userId) => inviteService.create(userId, { forParty: true }),
+          directory,
+          mailer,
+          config.publicOrigin,
+        )
+      : undefined
+
+  const partyService: PartyService = new PartyService(
+    live,
     repository,
     friendService,
     profileService,
     notificationService,
+    invitations,
   )
 
-  // In memory, deliberately: a position is meaningless a second later and a
-  // lobby does not outlive the process. Sound only because App Runner is pinned
-  // to one instance — see ADR-0038.
-  const presenceService = new PresenceService(partyService, profileService)
+  // Reads the same map as the party service rather than asking it, which is
+  // what makes "I left the lobby" and "I left the game" one expiry instead of
+  // two things that can disagree.
+  // The flooded halls, keyed by host like the phases beside them. Ticked from
+  // the heartbeat rather than from a timer, so a hall nobody is standing in is
+  // not rising (ADR-0048).
+  const hallService = new HallService(live)
+  const presenceService = new PresenceService(live, profileService, hallService)
   const chatService = new ChatService(
     messageRepository,
     friendService,
@@ -181,7 +214,11 @@ export function createApp(options: AppOptions = {}): Express {
   )
   // The party is passed so a link minted from the lobby can describe it — and
   // is constructed above, so the order here matters.
-  const inviteService = new InviteService(inviteRepository, profileService, partyService)
+  const inviteService: InviteService = new InviteService(
+    inviteRepository,
+    profileService,
+    partyService,
+  )
   const roomService = new RoomService(gameService)
 
   const app = express()
@@ -235,15 +272,13 @@ export function createApp(options: AppOptions = {}): Express {
     ),
   )
 
-  app.use(
-    '/api/party',
-    createPartyRoutes(partyService, authenticator, socialWriteLimiter),
-  )
+  app.use('/api/party', createPartyRoutes(partyService, authenticator, socialWriteLimiter))
 
   app.use(
     '/api/stage',
     createPresenceRoutes(
       presenceService,
+      live,
       partyService,
       gameService,
       authenticator,
@@ -272,14 +307,21 @@ export function createApp(options: AppOptions = {}): Express {
       authenticator,
       // Sending is capped tighter than reading: a burst of messages is the one
       // social action that costs somebody else attention.
-      createRateLimiter({ limit: 60, authenticator, message: 'You are sending messages too quickly.' }),
+      createRateLimiter({
+        limit: 60,
+        authenticator,
+        message: 'You are sending messages too quickly.',
+      }),
       // An open conversation polls faster than the bell does, so its read
       // budget has to be larger than the shared write budget.
       createRateLimiter({ limit: 300, authenticator, message: 'Polling too fast. Slow down.' }),
     ),
   )
 
-  app.use('/api/friends', createFriendRoutes(friendService, profileService, authenticator, socialWriteLimiter))
+  app.use(
+    '/api/friends',
+    createFriendRoutes(friendService, profileService, authenticator, socialWriteLimiter),
+  )
   app.use(
     '/api/invites',
     createInviteRoutes(
@@ -304,6 +346,7 @@ export function createApp(options: AppOptions = {}): Express {
       authenticator,
       createAttemptRateLimiter(options.attemptRateLimit ?? config.attemptRateLimit, authenticator),
       profileService,
+      hallService,
     ),
   )
 

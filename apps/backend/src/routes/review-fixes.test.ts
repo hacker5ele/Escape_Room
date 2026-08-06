@@ -16,7 +16,9 @@ const ALICE = 'user_alice'
 const BOB = 'user_bob'
 const CAROL = 'user_carol'
 
-function buildApp(options: { attemptRateLimit?: number; gameRepository?: InMemoryGameRepository } = {}) {
+function buildApp(
+  options: { attemptRateLimit?: number; gameRepository?: InMemoryGameRepository } = {},
+) {
   const gameRepository = options.gameRepository ?? new InMemoryGameRepository()
   const app = createApp({
     authenticator: createTestAuthenticator(),
@@ -41,7 +43,9 @@ async function signIn(app: Server, ...users: string[]) {
 const usernameOf = (user: string) => `handle_${user}`
 
 async function befriend(app: Server, a: string, b: string) {
-  await as(app, a).post('/api/friends/by-username').send({ username: usernameOf(b) })
+  await as(app, a)
+    .post('/api/friends/by-username')
+    .send({ username: usernameOf(b) })
   await as(app, b).post(`/api/friends/${a}/accept`)
 }
 

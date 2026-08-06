@@ -67,6 +67,29 @@ export const hintResponseSchema = z.object({
 })
 export type HintResponse = z.infer<typeof hintResponseSchema>
 
+// --- POST /api/rooms/:roomId/reset -----------------------------------------
+
+/**
+ * Wipes one room's progress only — see ADR-0066. Same shape as
+ * `sessionResponseSchema`; kept as its own named export so a room-scoped
+ * reset reads as its own endpoint at the call site, not a reuse of the
+ * session response by coincidence.
+ */
+export const roomResetResponseSchema = sessionResponseSchema
+export type RoomResetResponse = SessionResponse
+
+// --- POST /api/rooms/:roomId/complete --------------------------------------
+
+/**
+ * Marks a room solved with no attempt/answer involved — for a room whose
+ * final stage(s) are entirely client-side, so there is no server-checked
+ * answer left for `roomComplete` (see ADR-0068) to hang off of. See
+ * ADR-0070. Same shape as `sessionResponseSchema`, for the same reason
+ * `roomResetResponseSchema` is.
+ */
+export const roomCompleteResponseSchema = sessionResponseSchema
+export type RoomCompleteResponse = SessionResponse
+
 // --- Errors ---------------------------------------------------------------
 
 export const API_ERROR_CODES = [
@@ -94,6 +117,8 @@ export const API_ERROR_CODES = [
   'ROOM_NOT_FOUND',
   'ROOM_LOCKED',
   'ROOM_ALREADY_SOLVED',
+  /** POST /api/rooms/:roomId/complete called before the room's canComplete() allows it. See ADR-0070. */
+  'ROOM_NOT_READY_TO_COMPLETE',
   'NO_HINTS_LEFT',
   'RATE_LIMITED',
   'INTERNAL_ERROR',

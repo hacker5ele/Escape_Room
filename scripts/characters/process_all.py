@@ -6,6 +6,16 @@ Print every generated part, then write the manifest the app reads.
 Reads   scripts/characters/raw/{slot}/{id}.png
 Writes  apps/frontend/public/characters/{slot}/{id}.webp   (+ .thumb.webp)
         apps/frontend/src/character/manifest.json
+        apps/backend/assets/characters/{slot}/{id}.png     (+ manifest.json)
+
+The API gets its own copy, as PNG, because it draws characters too now — an
+invitation email carries a picture of whoever sent it (ADR-0046) and there is no
+canvas on a server. PNG rather than WebP because the decoder on that side is
+pure JavaScript and reads one format; the extra weight buys a container that
+needs no native image library.
+
+Both copies are written by this one run from the same measurements, so they
+cannot drift the way two hand-maintained manifests would.
 
 The manifest is generated rather than hand-written because the numbers in it —
 each part's size and where it hangs from — are measurements of the finished
@@ -28,6 +38,7 @@ from parts import SLOTS, part_id  # noqa: E402
 
 RAW = pathlib.Path("scripts/characters/raw")
 PUBLIC = pathlib.Path("apps/frontend/public/characters")
+API = pathlib.Path("apps/backend/assets/characters")
 MANIFEST = pathlib.Path("apps/frontend/src/character/manifest.json")
 
 FRAME = (520, 690)
@@ -59,6 +70,7 @@ def main() -> int:
 
     for slot in SLOTS:
         (PUBLIC / slot).mkdir(parents=True, exist_ok=True)
+        (API / slot).mkdir(parents=True, exist_ok=True)
         entries = []
 
         for index in range(len(SLOTS[slot][1])):
@@ -70,6 +82,7 @@ def main() -> int:
 
             printed, pivot = P.process(str(source), slot)
             printed.save(PUBLIC / slot / f"{name}.webp", "WEBP", quality=92, method=6)
+            printed.save(API / slot / f"{name}.png", "PNG", optimize=True)
 
             thumbnail = printed.copy()
             thumbnail.thumbnail(
@@ -89,11 +102,14 @@ def main() -> int:
 
     MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     MANIFEST.write_text(json.dumps(manifest, indent=2) + "\n")
+    (API / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
     counts = {slot: len(entries) for slot, entries in manifest["slots"].items()}
     print(f"\nmanifest: {counts}")
     total = sum(f.stat().st_size for f in PUBLIC.rglob("*.webp"))
     print(f"assets:   {total / 1024:.0f} KB across {len(list(PUBLIC.rglob('*.webp')))} files")
+    api_total = sum(f.stat().st_size for f in API.rglob("*.png"))
+    print(f"api:      {api_total / 1024:.0f} KB across {len(list(API.rglob('*.png')))} files")
 
     if missing:
         print(f"\nMISSING {len(missing)}: {', '.join(missing)}")

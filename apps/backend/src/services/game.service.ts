@@ -8,7 +8,7 @@ import {
   type RoomId,
 } from '@escape-room/shared'
 import { GameConflictError, type GameRepository } from '../repositories/game.repository.js'
-import type { PartyRepository } from '../repositories/party.repository.js'
+import type { LiveStore } from './live-store.js'
 import type { PlayerProfile } from '../http/authenticator.js'
 import { ApiError } from '../http/api-error.js'
 
@@ -31,7 +31,7 @@ export class GameService {
   constructor(
     private readonly repository: GameRepository,
     /** Absent means solo play only — every player is their own host. */
-    private readonly party?: PartyRepository,
+    private readonly party?: LiveStore,
   ) {}
 
   /**
@@ -42,8 +42,7 @@ export class GameService {
    * gets the party's, without knowing a party exists. See ADR-0028.
    */
   async hostFor(userId: string): Promise<string> {
-    const membership = await this.party?.find(userId)
-    return membership?.hostUserId ?? userId
+    return this.party?.hostOf(userId) ?? userId
   }
 
   /**
@@ -62,7 +61,7 @@ export class GameService {
       // The host left or reset since we joined. Falling back to our own game is
       // better than reporting an error nobody can act on — but it has to be
       // the game we already had, not a new one written over the top of it.
-      await this.party?.remove(userId)
+      this.party?.release(userId)
 
       const own = await this.repository.findByUserId(userId)
       if (own) return own
@@ -106,8 +105,24 @@ export class GameService {
    * they cannot delete the progress of everybody else playing with them.
    */
   async reset(userId: string): Promise<void> {
-    await this.party?.remove(userId)
+    this.party?.release(userId)
     await this.repository.deleteByUserId(userId)
+  }
+
+  /**
+   * Wipes one room's progress only — its events and its `solvedRooms` entry
+   * — leaving the rest of the game untouched. See ADR-0066: this exists so a
+   * client-only sub-mechanic (room-03's Atlantis quest) can trigger a true
+   * "start this room over" without the server having any other way to learn
+   * that happened.
+   */
+  async resetRoom(game: GameSession, roomId: RoomId): Promise<GameSession> {
+    const updated: GameSession = {
+      ...game,
+      solvedRooms: game.solvedRooms.filter((id) => id !== roomId),
+      events: game.events.filter((event) => event.roomId !== roomId),
+    }
+    return this.repository.save(updated)
   }
 
   /**
@@ -116,11 +131,7 @@ export class GameService {
    * Only the first — this runs on a read path, and logging every refresh would
    * both spam the history and turn a GET into a write.
    */
-  async recordRoomEntered(
-    game: GameSession,
-    roomId: RoomId,
-    actor?: Actor,
-  ): Promise<GameSession> {
+  async recordRoomEntered(game: GameSession, roomId: RoomId, actor?: Actor): Promise<GameSession> {
     const alreadySeen = game.events.some(
       (event) => event.type === 'room_entered' && event.roomId === roomId,
     )
@@ -134,7 +145,16 @@ export class GameService {
   }
 
   /**
-   * Logs an answer and, when it is right, marks the room solved — in one save.
+   * Logs an answer and, when the ROOM is actually finished, marks it solved
+   * — in one save.
+   *
+   * `correct` and `roomComplete` are deliberately separate (ADR-0068):
+   * `correct` is whether this one attempt was right (always logged, right
+   * or wrong — the wrong ones are what show where players get stuck).
+   * `roomComplete` is whether the whole room is now done. For a one-shot
+   * room they're the same value; a multi-stage room like room-03 has many
+   * correct answers before the one that actually finishes it, and
+   * `roomComplete` is `false` for all the others.
    *
    * Combined deliberately: writing the event and the progress separately would
    * mean two round trips per attempt and a window where the log and the
@@ -145,6 +165,7 @@ export class GameService {
     roomId: RoomId,
     answer: unknown,
     correct: boolean,
+    roomComplete: boolean,
     actor?: Actor,
   ): Promise<GameSession> {
     // Re-applied against whatever the game looks like at write time, so a
@@ -162,7 +183,7 @@ export class GameService {
         ...by(actor),
       })
 
-      if (correct && !updated.solvedRooms.includes(roomId)) {
+      if (roomComplete && !updated.solvedRooms.includes(roomId)) {
         updated = { ...updated, solvedRooms: [...updated.solvedRooms, roomId] }
         updated = append(updated, { at, type: 'room_solved', roomId, ...by(actor) })
 
@@ -176,14 +197,48 @@ export class GameService {
     })
   }
 
+  /**
+   * Marks a room solved directly, with no attempt/answer involved — for a
+   * room whose later stages are entirely client-side (ADR-0070: room-03's
+   * Atlantis quest and Olympus carpet race), so there is no further
+   * server-checked answer left to hang `roomComplete` off of. The room
+   * itself decides when this is allowed to succeed — see
+   * `RoomDefinition.canComplete` — so calling this early (e.g. before the
+   * Sphinx's five riddles are actually done) does nothing.
+   */
+  async completeRoom(game: GameSession, roomId: RoomId, actor?: Actor): Promise<GameSession> {
+    if (game.solvedRooms.includes(roomId)) return game
+
+    return this.#mutate(game, (current) => {
+      if (current.solvedRooms.includes(roomId)) return null
+
+      const at = now()
+      let updated: GameSession = {
+        ...current,
+        solvedRooms: [...current.solvedRooms, roomId],
+      }
+      updated = append(updated, { at, type: 'room_solved', roomId, ...by(actor) })
+
+      if (isGameComplete(updated) && updated.finishedAt === null) {
+        updated = { ...updated, finishedAt: at }
+        updated = append(updated, { at, type: 'game_completed' })
+      }
+
+      return updated
+    })
+  }
+
   async recordHintUsed(game: GameSession, roomId: RoomId, actor?: Actor): Promise<GameSession> {
     return this.#mutate(game, (current) =>
-      append({ ...current, hintsUsed: current.hintsUsed + 1 }, {
-        at: now(),
-        type: 'hint_taken',
-        roomId,
-        ...by(actor),
-      }),
+      append(
+        { ...current, hintsUsed: current.hintsUsed + 1 },
+        {
+          at: now(),
+          type: 'hint_taken',
+          roomId,
+          ...by(actor),
+        },
+      ),
     )
   }
 
@@ -266,7 +321,7 @@ function describeAnswer(answer: unknown): string {
       ? answer
       : typeof answer === 'number' || typeof answer === 'boolean'
         ? String(answer)
-        : JSON.stringify(answer) ?? String(answer)
+        : (JSON.stringify(answer) ?? String(answer))
 
   return text.slice(0, MAX_LOGGED_ANSWER_LENGTH)
 }

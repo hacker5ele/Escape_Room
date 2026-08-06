@@ -193,6 +193,221 @@ SCENERY = {
         "height": 330,
         "prompt": "A tall metal locker with a louvred door, a handle and a small ventilation grille.",
     },
+    # ---- room 01: the Reading Hall, sinking into the harbour -----------------
+    #
+    # Alexandria drawn by a 1950s advertising illustrator, which is the whole
+    # fusion: ancient objects, modern brush. The shared STYLE block does that
+    # work, so nothing below repeats it.
+    #
+    # There is no sound-effect lettering here on purpose. A comic's SPLOOSH is
+    # set in the app's own display face with the plates offset, because an image
+    # model misspells words often enough that one bad "SPLOOOSH" would cost more
+    # than the whole run — and drawn type cannot misregister, which is the tell
+    # that sells the print.
+    "hall-wall": {
+        "height": 620,
+        "wide": True,
+        "prompt": (
+            "A flat section of ancient Egyptian-Greek library wall, seen straight on. Big stone "
+            "blocks, a row of empty arched scroll niches, a painted band of simple key-pattern "
+            "ornament along the top. Just the wall surface, edge to edge, nothing standing in "
+            "front of it."
+        ),
+    },
+    "hall-floor": {
+        "height": 340,
+        "wide": True,
+        "prompt": (
+            "A flat section of worn stone flagstone floor seen from a low angle, receding "
+            "slightly, with a shallow drainage channel running across it. Just the floor "
+            "surface, edge to edge, nothing on it."
+        ),
+    },
+    # The one piece of water worth generating: a hand-drawn crest that tiles
+    # sideways and scrolls. Everything below the crest is flat ink and a coarse
+    # dot screen in CSS, because a comic draws water with a line, not a texture.
+    "hall-water-crest": {
+        "height": 70,
+        "wide": True,
+        "prompt": (
+            "A long horizontal strip of stylised comic water surface seen edge-on: a wavy "
+            "rippling waterline with small curling crests and a few flat spray flecks above it. "
+            "The waterline runs the full width, left edge to right edge, and the strip is empty "
+            "above and below it."
+        ),
+    },
+    "hall-column": {
+        "height": 460,
+        "prompt": (
+            "A tall ancient stone column with a fluted shaft and a simple carved capital, "
+            "cracked near the top, standing upright."
+        ),
+    },
+    "hall-column-fallen": {
+        "height": 140,
+        "prompt": "A toppled ancient stone column lying on its side, broken into two drum sections.",
+    },
+    "hall-statue": {
+        "height": 470,
+        "prompt": (
+            "A weathered ancient stone statue of a seated lion on a square plinth, worn smooth, "
+            "seen from the front. An animal carving, not a person."
+        ),
+    },
+    "hall-shelf-a": {
+        "height": 490,
+        "prompt": (
+            "A tall stone library shelving bay with rows of square pigeonhole niches, papyrus "
+            "scrolls stacked in some of the holes and others empty."
+        ),
+    },
+    "hall-shelf-b": {
+        "height": 330,
+        "prompt": (
+            "A lower stone library shelving bay, leaning slightly, with square niches and a few "
+            "rolled papyrus scrolls spilling out of it."
+        ),
+    },
+    "hall-scroll-pile": {
+        "height": 150,
+        "prompt": "A heap of rolled papyrus scrolls piled loosely on the ground, some tied with cord.",
+    },
+    "hall-brazier": {
+        "height": 310,
+        "prompt": "An ancient bronze brazier bowl on three tapered legs, cold and empty, no flame.",
+    },
+    # Act I. Two states of the same object, generated separately rather than
+    # recoloured, so the lit one can have a real drawn flame.
+    "hall-lamp-out": {
+        "height": 380,
+        "prompt": (
+            "A tall ancient bronze oil lamp on a slender three-legged stand, the shallow lamp "
+            "dish empty and unlit. No flame, no glow."
+        ),
+    },
+    "hall-lamp-lit": {
+        "height": 380,
+        "prompt": (
+            "A tall ancient bronze oil lamp on a slender three-legged stand, burning with a "
+            "single bold flat flame shape rising from the dish. Flat solid flame, NO glow, "
+            "NO halo, NO light rays."
+        ),
+    },
+    # Act II.
+    "hall-pedestal": {
+        "height": 180,
+        "prompt": (
+            "A low square ancient stone pedestal with a rectangular slot cut into its flat top, "
+            "empty, seen from the front."
+        ),
+    },
+    "hall-tablet-a": {
+        "height": 120,
+        "prompt": "A small rectangular clay tablet with a carved sun disc symbol on its face, chipped corners.",
+    },
+    "hall-tablet-b": {
+        "height": 120,
+        "prompt": "A small rectangular clay tablet with a carved wave symbol on its face, chipped corners.",
+    },
+    "hall-tablet-c": {
+        "height": 120,
+        "prompt": "A small rectangular clay tablet with a carved eye symbol on its face, chipped corners.",
+    },
+    "hall-tablet-d": {
+        "height": 120,
+        "prompt": "A small rectangular clay tablet with a carved reed leaf symbol on its face, chipped corners.",
+    },
+    "hall-tablet-e": {
+        "height": 120,
+        "prompt": "A small rectangular clay tablet with a carved star symbol on its face, chipped corners.",
+    },
+    # Act III. Two distinct wheels rather than one mirrored, because the pair is
+    # meant to read as two different machines at two different ends.
+    "hall-wheel-west": {
+        "height": 370,
+        "prompt": (
+            "A large iron sluice valve wheel with eight spokes, mounted upright on a heavy "
+            "bolted floor stand with a threaded spindle. Seen straight on."
+        ),
+    },
+    "hall-wheel-east": {
+        "height": 370,
+        "prompt": (
+            "A large iron sluice valve wheel with six spokes and a knurled rim, mounted upright "
+            "on a squat bolted floor pillar. Seen straight on."
+        ),
+    },
+    "hall-gearbox": {
+        "height": 230,
+        "prompt": (
+            "An ancient bronze gear mechanism housing with two meshed toothed gearwheels showing "
+            "through a cut-away front plate, mounted on a wall bracket."
+        ),
+    },
+    # Nothing in the catalogue may be mirrored in code, so the two turn
+    # directions are two separate drawings. A flipped arrow is a wrong
+    # instruction, which is the same class of mistake as a flipped hand gesture.
+    "hall-sign-turn-a": {
+        "height": 150,
+        "prompt": (
+            "A square stone plaque carved with a bold circular arrow curving clockwise. The "
+            "plaque alone as a cut-out shape: NO wall, NO square frame around it, NO background "
+            "panel, NO backing rectangle."
+        ),
+    },
+    "hall-sign-turn-b": {
+        "height": 150,
+        "prompt": (
+            "A square stone plaque carved with a bold circular arrow curving anticlockwise. The "
+            "plaque alone as a cut-out shape: NO wall, NO square frame around it, NO background "
+            "panel, NO backing rectangle."
+        ),
+    },
+    # Act IV.
+    "hall-vault-door": {
+        "height": 540,
+        "prompt": (
+            "A tall arched bronze double door with heavy studs, ring handles and a carved lintel, "
+            "closed, seen straight on. The door alone as a cut-out shape: NO wall around it, "
+            "NO square frame, NO background panel, NO backing rectangle."
+        ),
+    },
+    "hall-keypad": {
+        "height": 210,
+        "prompt": (
+            "A bronze combination dial plate on a short stone post: a round face with ten "
+            "notched positions around its rim and a stubby pointer. No writing, no numbers."
+        ),
+    },
+    "hall-tally": {
+        "height": 140,
+        "prompt": (
+            "A carved stone tally stone with a row of five deep vertical scratch marks cut into "
+            "it. The stone alone as a cut-out shape: NO wall, NO frame, NO backing rectangle."
+        ),
+    },
+    "hall-tidestaff": {
+        "height": 540,
+        "prompt": (
+            "A tall narrow wooden depth-measuring staff, a plain vertical plank with regular "
+            "horizontal graduation marks notched along it from bottom to top. No writing."
+        ),
+    },
+    "hall-grate": {
+        "height": 100,
+        "prompt": (
+            "A square iron floor drain grate with a lattice of thick bars, seen from a low angle "
+            "lying flat on the ground."
+        ),
+    },
+    "hall-amphora": {
+        "height": 200,
+        "prompt": "A large ancient clay amphora jar with two handles and a narrow neck, standing upright.",
+    },
+    "hall-bench": {
+        "height": 160,
+        "prompt": "A long low stone bench with solid slab legs, seen from the front.",
+    },
     # ---- decoration used by the effects --------------------------------------
     "splat-a": {
         "height": 300,

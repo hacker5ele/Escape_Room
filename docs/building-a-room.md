@@ -131,9 +131,30 @@ export function RoomTwo({ room, onAnswer, busy }: RoomProps) {
 }
 ```
 
-**You get three props and nothing else.** `room` is what the server sent, `onAnswer` hands a value
+**Three props are all most rooms need.** `room` is what the server sent, `onAnswer` hands a value
 back, `busy` is true while an attempt is in flight — disable your inputs on it or a double-click
 sends two attempts.
+
+Two more arrive for the rooms that want them, and you can ignore both:
+
+- **`actors`** — everybody standing in the room, you included, already interpolated.
+- **`live`** — the room's own state, arriving on the heartbeat twice a second, and **`null` for every
+  room that is a question and a box.** A room only gets one if the server is running a clock for it.
+  That is how room 01 works: see [ADR-0048](adr/0048-the-hall-floods.md), and note that what is
+  inside `live.detail` is each room's own business — narrow it in your room, the way you already
+  narrow `room.data`.
+
+There is also an optional **`renderWorld`** beside `render` in the registry. `render` returns chrome,
+which floats over the stage in screen pixels; `renderWorld` returns things drawn **inside** the
+stage's own 1600×900 space and depth-sorted with the players, so you can put objects in the room that
+somebody walks behind. Most rooms should not need it — furniture that stands still belongs in
+`scenes.ts`, where it costs no rendering at all. It is for furniture that changes while you watch.
+
+One trap if you do build a station players walk up to: a zero-size positioning `<div>` with its
+artwork hung off it by negative margins will render that artwork **at zero width**, because
+Tailwind's preflight sets `img { max-width: 100% }` and 100% of nothing is nothing. Set
+`max-width: none` on the image. The scenery props escape this only because their parent is the whole
+stage.
 
 **You do not build**: entering the room, the locked-door message, your room's `intro` line, the
 answer feedback, the hint button, the emote bar, the solved celebration, the way out, the stage
@@ -153,7 +174,7 @@ Then name the door in `registry.tsx`:
 ```
 
 `title` and `tagline` are what the lobby's room picker shows. `scene` chooses the scenery the stage
-dresses itself with — `'vault'` or `'lobby'` today, and section 4 is how you add another.
+dresses itself with — `'lobby'`, `'vault'` or `'hall'` today, and section 4 is how you add another.
 
 ## 3. Making it look like the rest of the app
 

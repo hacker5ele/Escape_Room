@@ -55,9 +55,7 @@ describe('local development authentication', () => {
     const app = localApp()
     const first = await as(app, 'ada').post('/api/sessions').send({})
 
-    await as(app, 'ada')
-      .post('/api/rooms/room-01/attempt')
-      .send({ answer: SOLUTIONS['room-01'] })
+    await as(app, 'ada').post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
 
     const second = await as(app, 'ada').post('/api/sessions').send({})
     expect(second.body.session.id).toBe(first.body.session.id)

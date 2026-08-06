@@ -97,7 +97,42 @@ const VAULT: Scene = {
   ],
 }
 
-export const SCENES = { lobby: LOBBY, vault: VAULT } as const
+/**
+ * Room 01: the Reading Hall, below the harbour and filling up.
+ *
+ * Only the furniture is here. Everything the hall actually *does* — the lamps,
+ * the wheels, the pedestals, the tablets, the water — is drawn by the room
+ * itself, because all of it changes twice a second and a scene is a list of
+ * things that stand still (ADR-0048).
+ *
+ * So the floor is left unusually bare. Five lamps, five pedestals, five tablets
+ * and two wheels are already standing on it, and a scene prop in the same place
+ * is a prop somebody cannot see past while they work.
+ */
+const HALL: Scene = {
+  wall: 'hall-wall',
+  floor: 'hall-floor',
+  props: [
+    // On the wall, above everything, so the floor stays walkable.
+    { piece: 'hall-tally', x: 800, y: 300 },
+    { piece: 'hall-vault-door', x: 800, y: 585 },
+    { piece: 'hall-gearbox', x: 1465, y: 545 },
+    { piece: 'hall-tidestaff', x: 95, y: 655 },
+    // The far edges, framing the room without standing in it.
+    { piece: 'hall-column', x: 40, y: 715 },
+    { piece: 'hall-shelf-a', x: 175, y: 690 },
+    { piece: 'hall-shelf-b', x: 1335, y: 700 },
+    { piece: 'hall-statue', x: 1540, y: 770 },
+    { piece: 'hall-amphora', x: 105, y: 878 },
+    { piece: 'hall-scroll-pile', x: 1450, y: 852 },
+    { piece: 'hall-column-fallen', x: 1560, y: 880 },
+    { piece: 'hall-brazier', x: 40, y: 862 },
+    // Lies flat at the front — this is where the sea is getting in.
+    { piece: 'hall-grate', x: 800, y: 898, depth: 640 },
+  ],
+}
+
+export const SCENES = { lobby: LOBBY, vault: VAULT, hall: HALL } as const
 export type SceneName = keyof typeof SCENES
 
 const PIECES = manifest.pieces as Record<string, { w: number; h: number }>
@@ -109,6 +144,26 @@ export function pieceSize(piece: string): { w: number; h: number } | null {
 
 export function pieceUrl(piece: string): string {
   return `/scenery/${piece}.webp`
+}
+
+/** Dry, and over the head of even the player standing furthest back. */
+const FLOOD_DRY = 905
+const FLOOD_DROWNED = 300
+
+/**
+ * Where the water surface sits, for a room that has one.
+ *
+ * `depth` runs 0 to 100 on the wire and means nothing in particular until it is
+ * put on the stage, which is here — stage geometry belongs with the rest of the
+ * stage geometry. The water and the actors standing in it both read this, so
+ * "your chin is under" and "the surface is drawn there" cannot disagree.
+ *
+ * The bottom of the range is just off the front of the floor rather than at it,
+ * so a nearly-dry hall still shows a shallow film rather than nothing at all.
+ */
+export function floodLine(depth: number): number {
+  const t = Math.min(1, Math.max(0, depth / 100))
+  return FLOOD_DRY - t * (FLOOD_DRY - FLOOD_DROWNED)
 }
 
 /**

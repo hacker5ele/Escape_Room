@@ -1,7 +1,13 @@
 import { Router, type RequestHandler } from 'express'
 import type { HeartbeatResponse } from '@escape-room/shared'
-import { heartbeatRequestSchema, isRoomId, partyPhaseSchema } from '@escape-room/shared'
+import {
+  aliveRequestSchema,
+  heartbeatRequestSchema,
+  isRoomId,
+  partyPhaseSchema,
+} from '@escape-room/shared'
 import type { PresenceService } from '../services/presence.service.js'
+import type { LiveStore } from '../services/live-store.js'
 import type { PartyService } from '../services/party.service.js'
 import type { GameService } from '../services/game.service.js'
 import type { Authenticator } from '../http/authenticator.js'
@@ -21,6 +27,7 @@ import { ApiError } from '../http/api-error.js'
  */
 export function createPresenceRoutes(
   presence: PresenceService,
+  live: LiveStore,
   party: PartyService,
   games: GameService,
   authenticator: Authenticator,
@@ -77,10 +84,41 @@ export function createPresenceRoutes(
     res.status(204).end()
   })
 
-  // DELETE /api/stage — I have left; forget where I was standing.
+  /**
+   * POST /api/stage/alive — I still have the game open.
+   *
+   * The same beat as a heartbeat with the position left off, sent every five
+   * seconds from every screen rather than only from the stage. You can be in a
+   * friend's game while reading the leaderboard, and a claim nobody is renewing
+   * is a claim that has ended (ADR-0045) — so without this, tabbing to another
+   * page would quietly drop you out of their game.
+   *
+   * Answers `204`. Where the party is travels on the heartbeat, and somebody
+   * who is not on the stage is not following it anywhere.
+   */
+  router.post('/alive', rateLimiter, async (req, res) => {
+    const userId = await requireUserId(req, authenticator)
+
+    const parsed = aliveRequestSchema.safeParse(req.body)
+    if (!parsed.success) {
+      throw ApiError.validation('That is not a valid beat.')
+    }
+
+    live.alive(userId, parsed.data.hidden)
+    res.status(204).end()
+  })
+
+  /**
+   * DELETE /api/stage — take me off the stage.
+   *
+   * Your character leaves the room; your claim on the party does not. Walking
+   * out of the lobby to look at the leaderboard is the one departure that is a
+   * real click rather than a guess about an unloading page, so it is the one
+   * that happens at once rather than on a timeout.
+   */
   router.delete('/', rateLimiter, async (req, res) => {
     const userId = await requireUserId(req, authenticator)
-    presence.forget(userId)
+    presence.leaveStage(userId)
     res.status(204).end()
   })
 

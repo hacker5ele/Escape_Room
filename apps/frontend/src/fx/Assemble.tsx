@@ -150,8 +150,54 @@ function place(node: HTMLElement, mode: Mode, index: number, delayStep: number):
   node.style.setProperty('--fly-delay', `${Math.round(index * delayStep + Math.random() * 70)}ms`)
 }
 
+/**
+ * How long a piece may wait for its own pictures before arriving without them.
+ *
+ * There has to be a ceiling: an image that 404s never fires `load`, and a piece
+ * held for ever is a hole in the page. Long enough to cover a slow connection,
+ * short enough that a broken asset is a missing picture rather than a missing
+ * panel.
+ */
+const HOLD_LIMIT_MS = 2_500
+
+/** Every picture a piece is waiting on — itself included, if it is one. */
+function artOf(node: HTMLElement): HTMLImageElement[] {
+  const own = node instanceof HTMLImageElement ? [node] : []
+  return [...own, ...node.querySelectorAll('img')]
+}
+
+/**
+ * Resolves once a piece has something to show, or once it has waited too long.
+ *
+ * This is the whole point. The wave used to start whether or not the artwork
+ * had arrived, so on a cold cache the scenery animated as empty boxes and the
+ * furniture appeared afterwards, one file at a time, with no animation at all —
+ * a picture cannot fly in before it exists.
+ */
+function whenReady(node: HTMLElement): Promise<void> {
+  const waiting = artOf(node).filter((image) => !image.complete)
+  if (waiting.length === 0) return Promise.resolve()
+
+  return new Promise<void>((resolve) => {
+    let left = waiting.length
+    const done = () => {
+      left -= 1
+      if (left <= 0) resolve()
+    }
+
+    for (const image of waiting) {
+      // `error` counts as done: a picture that will not load is one the piece
+      // is never going to get, and holding for it helps nobody.
+      image.addEventListener('load', done, { once: true })
+      image.addEventListener('error', done, { once: true })
+    }
+
+    window.setTimeout(resolve, HOLD_LIMIT_MS)
+  })
+}
+
 function clear(node: HTMLElement): void {
-  node.classList.remove('piece-arriving', 'piece-leaving')
+  node.classList.remove('piece-arriving', 'piece-leaving', 'piece-held')
   for (const name of ['--fly-x', '--fly-y', '--fly-spin', '--fly-delay']) {
     node.style.removeProperty(name)
   }
@@ -213,11 +259,29 @@ export function Assemble({ children }: { children: React.ReactNode }) {
     const moving = pieces(root)
 
     const step = stagger(moving.length, WAVE_MS, STAGGER_MS)
+    let abandoned = false
 
     root.dataset.assembleMode = mode
     moving.forEach((node, index) => {
       place(node, mode, index, step)
-      node.classList.add('piece-arriving')
+
+      // A piece with all its pictures joins the wave where it belongs. One that
+      // is still downloading is held invisible and arrives the moment it can —
+      // late, but flying, rather than on time and empty.
+      if (artOf(node).every((image) => image.complete)) {
+        node.classList.add('piece-arriving')
+        return
+      }
+
+      node.classList.add('piece-held')
+      void whenReady(node).then(() => {
+        if (abandoned) return
+        // No stagger for a latecomer: it has already waited longer than the
+        // whole wave, and its place in the queue stopped meaning anything.
+        node.style.setProperty('--fly-delay', '0ms')
+        node.classList.remove('piece-held')
+        node.classList.add('piece-arriving')
+      })
     })
 
     /**
@@ -249,10 +313,14 @@ export function Assemble({ children }: { children: React.ReactNode }) {
         delete root.dataset.assembleMode
         for (const node of moving) clear(node)
       },
-      ARRIVE_MS + (moving.length - 1) * step + 140,
+      // Long enough for a piece that spent the whole hold waiting for its
+      // artwork. The per-piece `animationend` above is what normally ends this;
+      // the timer is only a floor.
+      ARRIVE_MS + (moving.length - 1) * step + HOLD_LIMIT_MS + 140,
     )
 
     return () => {
+      abandoned = true
       root.removeEventListener('animationend', onEnd)
       window.clearTimeout(settled)
       for (const node of moving) clear(node)

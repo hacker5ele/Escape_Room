@@ -40,11 +40,7 @@ export interface NotificationRepository {
    * DynamoDB rejects it as a key value, and the in-memory implementation below
    * refuses it too so that the two behave alike where it matters.
    */
-  listSince(
-    userId: string,
-    afterSk: string | null,
-    limit: number,
-  ): Promise<NotificationRecord[]>
+  listSince(userId: string, afterSk: string | null, limit: number): Promise<NotificationRecord[]>
   countUnread(userId: string): Promise<number>
   /**
    * Is there already an unread one of this kind from this person?
@@ -129,8 +125,7 @@ export class DynamoNotificationRepository implements NotificationRepository {
     const result = await this.#client.send(
       new QueryCommand({
         TableName: this.#tableName,
-        KeyConditionExpression:
-          afterSk === null ? 'userId = :u' : 'userId = :u AND sk > :after',
+        KeyConditionExpression: afterSk === null ? 'userId = :u' : 'userId = :u AND sk > :after',
         ExpressionAttributeValues:
           afterSk === null ? { ':u': userId } : { ':u': userId, ':after': afterSk },
         Limit: limit,
@@ -177,35 +172,35 @@ export class DynamoNotificationRepository implements NotificationRepository {
     let startKey: Record<string, unknown> | undefined
 
     do {
-    const result = await this.#client.send(
-      new QueryCommand({
-        TableName: this.#tableName,
-        KeyConditionExpression: 'userId = :u',
-        FilterExpression:
-          '(attribute_not_exists(readAt) OR readAt = :null) AND #type = :type AND actorUserId = :actor',
-        ExpressionAttributeNames: { '#type': 'type' },
-        ExpressionAttributeValues: {
-          ':u': userId,
-          ':null': null,
-          ':type': type,
-          ':actor': actorUserId,
-        },
-        // No `Limit` here, deliberately. DynamoDB applies Limit *before* the
-        // filter, so `Limit: 1` reads a single item — the oldest in the
-        // partition — filters it away and reports nothing unread. The bell then
-        // rings on every single message, which is the exact behaviour this
-        // method exists to prevent, and it looks like it is working because a
-        // notification does appear.
-        ProjectionExpression: 'id',
-        ExclusiveStartKey: startKey,
-      }),
-    )
+      const result = await this.#client.send(
+        new QueryCommand({
+          TableName: this.#tableName,
+          KeyConditionExpression: 'userId = :u',
+          FilterExpression:
+            '(attribute_not_exists(readAt) OR readAt = :null) AND #type = :type AND actorUserId = :actor',
+          ExpressionAttributeNames: { '#type': 'type' },
+          ExpressionAttributeValues: {
+            ':u': userId,
+            ':null': null,
+            ':type': type,
+            ':actor': actorUserId,
+          },
+          // No `Limit` here, deliberately. DynamoDB applies Limit *before* the
+          // filter, so `Limit: 1` reads a single item — the oldest in the
+          // partition — filters it away and reports nothing unread. The bell then
+          // rings on every single message, which is the exact behaviour this
+          // method exists to prevent, and it looks like it is working because a
+          // notification does appear.
+          ProjectionExpression: 'id',
+          ExclusiveStartKey: startKey,
+        }),
+      )
 
-    if ((result.Items?.length ?? 0) > 0) return true
-    startKey = result.LastEvaluatedKey
-  } while (startKey)
+      if ((result.Items?.length ?? 0) > 0) return true
+      startKey = result.LastEvaluatedKey
+    } while (startKey)
 
-  return false
+    return false
   }
 
   async markAllRead(userId: string, at: string): Promise<void> {
