@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { CharacterFigure } from './CharacterFigure'
 import {
   SLOTS,
   SLOT_LABELS,
+  findPart,
   type Character,
   type Slot,
   partUrl,
@@ -41,8 +43,15 @@ export function CharacterPicker({
   /** Whether confirming will overwrite a picture the player already had. */
   replacesExistingPhoto?: boolean
 }) {
-  const [character, setCharacter] = useState<Character>(() => initial ?? randomCharacter())
-  const [slot, setSlot] = useState<Slot>('head')
+  // The outfit lives in the URL, so reloading mid-choice keeps it — and so a
+  // link to a particular character shows that character (ADR-0040).
+  const [params, setParams] = useSearchParams()
+
+  const [character, setCharacter] = useState<Character>(() => fromParams(params, initial))
+  const [slot, setSlot] = useState<Slot>(() => {
+    const wanted = params.get('slot')
+    return SLOTS.includes(wanted as Slot) ? (wanted as Slot) : 'head'
+  })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const gridRef = useRef<HTMLDivElement | null>(null)
@@ -53,6 +62,27 @@ export function CharacterPicker({
   useEffect(() => {
     void preloadParts()
   }, [])
+
+  /**
+   * Mirror the choice into the URL, debounced.
+   *
+   * `replace`, never `push`: browsing twenty heads must not put twenty entries
+   * in the back stack for somebody to press through.
+   *
+   * Debounced because Safari throttles history writes — roughly a hundred calls
+   * in thirty seconds — and throws `SecurityError` past that. Clicking quickly
+   * along a row of parts would reach it, and losing the URL is a poor trade for
+   * updating it on every frame of a click.
+   */
+  const write = useRef(setParams)
+  write.current = setParams
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      write.current({ ...character, slot }, { replace: true })
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [character, slot])
 
   const options = partsIn(slot)
   const index = options.findIndex((part) => part.id === character[slot])
@@ -218,4 +248,23 @@ export function CharacterPicker({
       </div>
     </section>
   )
+}
+
+/**
+ * The outfit the URL is asking for.
+ *
+ * Each part is checked against the catalogue rather than trusted: these are
+ * query parameters, so they can say anything, and an id from a catalogue that
+ * has since changed should quietly become a random one rather than render a
+ * broken image. `initial` is what to fall back to before random — which is how
+ * reopening the picker starts from who you already are.
+ */
+function fromParams(params: URLSearchParams, initial?: Character): Character {
+  const random = randomCharacter()
+  const pick = (slot: Slot): string => {
+    const wanted = params.get(slot)
+    if (wanted && findPart(slot, wanted)) return wanted
+    return initial?.[slot] ?? random[slot]
+  }
+  return { head: pick('head'), body: pick('body'), arm: pick('arm'), leg: pick('leg') }
 }

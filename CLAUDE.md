@@ -126,6 +126,7 @@ Escape_Room/
 ├── CLAUDE.md                   ← you are here
 ├── docs/
 │   ├── adr/                    ← Architecture Decision Records (approval required)
+│   ├── building-a-room.md      ← how to build a room, end to end — start here
 │   └── api-contract.md         ← the HTTP contract, in prose
 ├── packages/
 │   └── shared/                 ← @escape-room/shared — types, schemas, unlock rule
@@ -219,7 +220,7 @@ The social layer, added by ADRs 0023–0029:
 | `DELETE` | `/api/friends/:userId` | — | reject and unfriend are one operation |
 | `POST` | `/api/friends/:userId/block` · `/unblock` | — | the updated lists |
 | `GET` | `/api/invites/:token` | — | `{ inviter }` — **open, no account needed** |
-| `POST` | `/api/invites` | — | `{ invite }` — mints a link |
+| `POST` | `/api/invites` | `{ forParty? }` | `{ invite }` — mints a link; `forParty` also joins the party |
 | `GET` | `/api/invites` | — | `{ invites }` — your own, to share or revoke |
 | `DELETE` | `/api/invites/:token` | — | `204` — revoke |
 | `POST` | `/api/invites/:token/accept` | — | friends immediately; the link was the consent |
@@ -343,7 +344,13 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
-| 2026-08-05 | [0038](docs/adr/0038-presence-and-the-iris-wipe.md) | Presence in memory, polled and interpolated; the transition is an iris wipe | Accepted |
+| 2026-08-05 | [0044](docs/adr/0044-unbuild-into-dots.md) | Screens unbuild into their own halftone dots and rebuild out of them | Accepted |
+| 2026-08-05 | [0043](docs/adr/0043-hints-are-per-room.md) | Hints are counted per room, derived from the activity log | Accepted |
+| 2026-08-05 | [0042](docs/adr/0042-party-invites.md) | Invite a friend into your game, or a link that befriends and joins in one step | Accepted |
+| 2026-08-05 | [0041](docs/adr/0041-stable-callbacks-in-effects.md) | An effect may not depend on a callback prop — wrap it in `useEvent()` | Accepted |
+| 2026-08-05 | [0040](docs/adr/0040-path-routing.md) | Real paths, no hash; reload recovers the room, the tab and the outfit | Accepted |
+| 2026-08-05 | [0039](docs/adr/0039-empty-key-cursor.md) | Null is the empty cursor; in-memory stand-ins must be as strict as DynamoDB | Accepted |
+| 2026-08-05 | [0038](docs/adr/0038-presence-and-the-iris-wipe.md) | Presence in memory, polled and interpolated; the transition is an iris wipe — *the transition half is superseded by [0044](docs/adr/0044-unbuild-into-dots.md)* | Accepted |
 | 2026-08-05 | [0037](docs/adr/0037-lobby-stage-and-rooms.md) | Start → lobby → room; one walkable stage, generated scenery, synthesised sound | Accepted |
 | 2026-08-05 | [0036](docs/adr/0036-global-board-is-a-top-ten.md) | The global board is a top ten plus your own row; games read in one batch | Accepted |
 | 2026-08-05 | [0035](docs/adr/0035-responsive.md) | Everything responsive from 320px up; never `overflow-x: hidden` on the root | Accepted |
@@ -387,9 +394,17 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
 ### Where the code stands
 
 - **`packages/shared`** — complete. The contract, the room ids, and `isRoomUnlocked()`.
+- **Hints are per room** ([ADR-0043](docs/adr/0043-hints-are-per-room.md)) — a room's hints are
+  indexed by hints taken *in that room*, counted from the activity log, which has recorded
+  `hint_taken` with a `roomId` since ADR-0020. `session.hintsUsed` stays a whole-game total because
+  that is what the leaderboard ranks on. `hintsAvailable` on the wire means *how many you can still
+  take here*, not how many the room has.
 - **`apps/backend`** — complete for the scaffold. All seven endpoints, the 403 room gate, four
   **placeholder** puzzles, rate limiting, and 54 tests. The placeholder puzzles exist to prove the
   architecture and to serve as templates; the room sub-teams replace them.
+  **[`docs/building-a-room.md`](docs/building-a-room.md) is the guide** — the two files and two
+  registry lines a room actually is, the rules the test suite already enforces for you, how to
+  generate scenery with the image model, and why the result does not look AI-generated.
 - **`apps/frontend`** — a sign-in gate and one page behind it. It proves the whole chain works: Clerk
   issues a token, the browser sends it, the API verifies it and finds that account's game. The rooms
   themselves are the team's work.
@@ -413,18 +428,35 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   limb mirrored, so **no part may have a handedness** (a V sign becomes a rude gesture reversed), and
   the head hangs from `chin` rather than `neck` so it overlaps the torso instead of resting on it.
   "Change character" in the game header reopens the picker.
-- **The signed-in page is tabbed** — Rooms · Friends · Leaderboard · Activity, via `src/ui/Tabs.tsx`.
-  Only the open tab is mounted, because friends and chat poll on a timer. The selection lives in the
-  URL hash, so `/#friends` is linkable and a reload keeps its place. A room's own UI belongs inside
-  the Rooms tab.
+- **Every screen is a real path** ([ADR-0040](docs/adr/0040-path-routing.md)) — `/`, `/friends`,
+  `/leaderboard`, `/activity`, `/character`, `/lobby`, `/room/:roomId`, `/invite/:token`. **No hash
+  anywhere.** Reloading returns you to where you were, and the character picker keeps the outfit in
+  the query string (`?head=…&body=…`), validated against the catalogue rather than trusted.
+  - The gates are one layout route, `RequiresGame` — loading, signed out, no profile, no character.
+    Everything below can assume a signed-in player with a game.
+  - **The host's location is the party's location; a guest follows it.** That is what makes the back
+    button out of a room work instead of the server pulling you straight back in.
+  - `isInviteToken()` in `src/routing.ts` still guards the invite path: the router hands over whatever
+    was in the segment and it goes into a request URL.
+  - No infrastructure was needed — CloudFront, nginx and Vite already rewrote unknown paths to
+    `index.html`, and the smoke test now checks seven routes rather than one.
 - **Accounts** — players register with Clerk before they can reach anything. Progress and an activity
   log live in DynamoDB, keyed on the Clerk user id, so a game survives logout and deploys.
+- **Invites** ([ADR-0042](docs/adr/0042-party-invites.md)) — from the lobby, the host can invite a
+  friend (they get a notification with a **Join their game** button) or mint a **party link**.
+  Following a party link makes you friends *and* puts you in the game in one step. The join is
+  best-effort and the friendship is not: if the party filled up or the host left, the friendship
+  still stands and you land in your own lobby. The preview says how many are in the party, never who.
 - **Friends** — add somebody by username, or send a revocable invite link that shows who is inviting
   before the recipient has an account. Accept, reject, unfriend and block all work
   ([ADR-0024](docs/adr/0024-friend-graph-and-invite-links.md)). Following a link makes the two of you
   friends straight away — the link was the consent
   ([ADR-0029](docs/adr/0029-rate-limits-per-account-and-invite-acceptance.md)).
-- **Notifications** — a bell with an unread badge, fed by a single polled `/api/sync`. App Runner
+- **Notifications** — a bell with an unread badge, fed by a single polled `/api/sync`. The cursor is
+  `null` for "from the beginning", **never an empty string** — DynamoDB rejects an empty string as a
+  key value, so `sk > ''` is a 500 rather than an unbounded query. The in-memory repositories now
+  refuse it too: a stand-in that is *more permissive* than the real database does not simulate it, it
+  hides it, and that is how this shipped ([ADR-0039](docs/adr/0039-empty-key-cursor.md)). App Runner
   supports neither WebSockets nor long-lived streams, so polling is the only option; it stops
   entirely while the tab is hidden ([ADR-0025](docs/adr/0025-notifications-by-polling.md)). Chat and
   co-op will add fields to the same response rather than endpoints of their own.
@@ -452,6 +484,15 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   drops you into the room. **Room 01 is deliberately empty and walkable**; rooms 02–04 are stubs
   wired to the real `attempt` and `hint` endpoints — a sub-team writes the puzzle in
   `rooms/room-0N.tsx` and touches nothing else (ADR-0007).
+  - **Depth is `z-index`, never DOM order.** Sorting the stage's children by
+    position made React reorder keyed nodes as people walked, and **moving a DOM node restarts its
+    CSS animations** — the drop-in replayed dozens of times a minute. A test pins the DOM order as
+    stable.
+  - **An effect may not depend on a callback prop** — wrap it in `useEvent()` first
+    ([ADR-0041](docs/adr/0041-stable-callbacks-in-effects.md)). An inline `onDone={() => …}` is a new
+    function every render, so the effect is rebuilt every render: the countdown never counted and the
+    iris wipe played six times. `react-hooks/exhaustive-deps` does **not** catch this — it checks
+    that deps are complete, not that they are stable.
   - **The stage** (`src/stage/`) is one component used by the lobby *and* every room. It is a fixed
     1600×900 space scaled once; everything is placed **by its feet** and sorted by `y`, which is what
     lets you walk behind the sofa. Flat things (a rug) need a `depth` override or they draw over
@@ -471,9 +512,13 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
     the Terraform is load-bearing now: raise it and friends will vanish for each other, because two
     instances would each hold half the room. A deploy clears every lobby and drops nobody from their
     party. The party is capped at **four**.
-  - **The transition is an iris wipe** — the circle that closes on the end of every 1950s cartoon,
-    with an overshoot, an inked rim and a wobble, because a perfect circle is what gives a machine
-    away.
+  - **Screens unbuild themselves into dots** ([ADR-0044](docs/adr/0044-unbuild-into-dots.md)). The
+    whole app is printed as a halftone, so a panel leaving does not slide or fade: an animated dot
+    mask at the page's own 6px pitch takes its ink away until only its dots are left, those fade into
+    the ground, and the next screen's pieces fly in from their own directions and land. Panels and
+    the controls a player aims at — **not** list rows. `/` gathers, everywhere else is thrown. Opt a
+    block in with `data-piece`, out with `data-piece="no"`. This replaced an iris wipe, which was
+    period-correct and generic to every cartoon ever made.
 - **Infrastructure** — Docker, compose, CI, CODEOWNERS and the PR template are in place.
 
 ### Open questions

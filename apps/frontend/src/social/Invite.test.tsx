@@ -2,28 +2,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { LocalAuthProvider } from '../auth/LocalAuthProvider'
 import { InvitePage } from './InvitePage'
-import { inviteTokenFromPath } from '../routing'
+import { isInviteToken } from '../routing'
 
-describe('reading the token out of the URL', () => {
-  it('matches an invite path', () => {
-    expect(inviteTokenFromPath('/invite/abc123')).toBe('abc123')
-    expect(inviteTokenFromPath('/invite/abc123/')).toBe('abc123')
-  })
-
+describe('the token the router hands over', () => {
   it('accepts the base64url alphabet the tokens actually use', () => {
-    expect(inviteTokenFromPath('/invite/aB-_9xYz')).toBe('aB-_9xYz')
+    expect(isInviteToken('abc123')).toBe(true)
+    expect(isInviteToken('aB-_9xYz')).toBe(true)
   })
 
-  it('ignores anything that is not an invite link', () => {
-    for (const path of ['/', '/invite', '/invite/', '/rooms/1', '/invite/a/b']) {
-      expect(inviteTokenFromPath(path), path).toBeNull()
+  it('rejects anything that is not one', () => {
+    for (const value of [undefined, '', 'a'.repeat(129)]) {
+      expect(isInviteToken(value), String(value)).toBe(false)
     }
   })
 
-  it('rejects a token with characters a real one cannot contain', () => {
-    // Keeps a path segment from smuggling anything into the request URL.
-    expect(inviteTokenFromPath('/invite/../../etc')).toBeNull()
-    expect(inviteTokenFromPath('/invite/<script>')).toBeNull()
+  it('rejects characters a real token cannot contain', () => {
+    // The token goes straight into a request URL, and the router will hand over
+    // whatever was in the segment — including percent-encoded traversal, which
+    // survives the browser's own normalisation.
+    for (const value of ['../../etc', '<script>', 'a/b', '%2e%2e%2f', 'a b']) {
+      expect(isInviteToken(value), value).toBe(false)
+    }
   })
 })
 
@@ -55,7 +54,7 @@ afterEach(() => {
 
 describe('the invite landing page', () => {
   it('shows who is inviting you before asking you to sign in', async () => {
-    const fetchSpy = mockFetch(() => json({ inviter: INVITER }))
+    const fetchSpy = mockFetch(() => json({ inviter: INVITER, party: null }))
 
     render(
       <LocalAuthProvider>
@@ -74,7 +73,7 @@ describe('the invite landing page', () => {
   })
 
   it('offers a way to sign in rather than an accept button when signed out', async () => {
-    mockFetch(() => json({ inviter: INVITER }))
+    mockFetch(() => json({ inviter: INVITER, party: null }))
 
     render(
       <LocalAuthProvider>
@@ -107,7 +106,7 @@ describe('the invite landing page', () => {
 
   it('does not render the inviter name as markup', async () => {
     mockFetch(() =>
-      json({ inviter: { ...INVITER, displayName: '<img src=x onerror=alert(1)>' } }),
+      json({ inviter: { ...INVITER, displayName: '<img src=x onerror=alert(1)>' }, party: null }),
     )
 
     const { container } = render(

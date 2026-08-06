@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { CharacterFigure } from './CharacterFigure'
 import { CharacterPicker } from './CharacterPicker'
 import { RIG, SLOTS, isCharacter, partsIn, randomCharacter, type Slot } from './parts'
@@ -101,13 +102,20 @@ describe('the figure', () => {
 describe('choosing a character', () => {
   const noop = () => Promise.resolve()
 
+  /**
+   * The picker keeps the outfit in the query string, so it needs a router.
+   * `initialEntries` is also how a URL-restored outfit is tested.
+   */
+  const inRouter = (ui: React.ReactNode, url = '/character') =>
+    render(<MemoryRouter initialEntries={[url]}>{ui}</MemoryRouter>)
+
   it('shows twenty options for the open slot', async () => {
-    render(<CharacterPicker onConfirm={noop} />)
+    inRouter(<CharacterPicker onConfirm={noop} />)
     expect(screen.getAllByRole('radio')).toHaveLength(20)
   })
 
   it('switches catalogue when you switch slot', async () => {
-    render(<CharacterPicker onConfirm={noop} />)
+    inRouter(<CharacterPicker onConfirm={noop} />)
     expect(screen.getByRole('tab', { name: 'Head' })).toHaveAttribute('aria-selected', 'true')
 
     await userEvent.click(screen.getByRole('tab', { name: 'Legs' }))
@@ -117,7 +125,7 @@ describe('choosing a character', () => {
   })
 
   it('cycles the open slot with the arrow keys', async () => {
-    render(<CharacterPicker onConfirm={noop} />)
+    inRouter(<CharacterPicker onConfirm={noop} />)
     const before = screen.getAllByRole('radio').findIndex((r) => r.getAttribute('aria-checked') === 'true')
 
     screen.getByRole('radiogroup').focus()
@@ -128,7 +136,7 @@ describe('choosing a character', () => {
   })
 
   it('wraps round rather than stopping at the end', async () => {
-    render(<CharacterPicker onConfirm={noop} />)
+    inRouter(<CharacterPicker onConfirm={noop} />)
     const group = screen.getByRole('radiogroup')
     group.focus()
 
@@ -142,7 +150,7 @@ describe('choosing a character', () => {
 
   it('hands back a complete character when you confirm', async () => {
     const onConfirm = vi.fn().mockResolvedValue(undefined)
-    render(<CharacterPicker onConfirm={onConfirm} />)
+    inRouter(<CharacterPicker onConfirm={onConfirm} />)
 
     await userEvent.click(screen.getByRole('button', { name: /this is me/i }))
 
@@ -152,7 +160,7 @@ describe('choosing a character', () => {
 
   it('opens on who you already are when reopened to edit', () => {
     const mine = randomCharacter()
-    render(<CharacterPicker onConfirm={noop} initial={mine} onCancel={() => undefined} />)
+    inRouter(<CharacterPicker onConfirm={noop} initial={mine} onCancel={() => undefined} />)
 
     expect(screen.getByRole('heading', { name: /change your character/i })).toBeInTheDocument()
 
@@ -165,23 +173,23 @@ describe('choosing a character', () => {
 
   it('offers a way out only when there is something to go back to', async () => {
     const onCancel = vi.fn()
-    const { rerender } = render(<CharacterPicker onConfirm={noop} />)
     // At sign-up there is no game behind the picker, so cancelling would leave
     // the player nowhere.
+    const { unmount } = inRouter(<CharacterPicker onConfirm={noop} />)
     expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
+    unmount()
 
-    rerender(
-      <CharacterPicker onConfirm={noop} initial={randomCharacter()} onCancel={onCancel} />,
-    )
+    inRouter(<CharacterPicker onConfirm={noop} initial={randomCharacter()} onCancel={onCancel} />)
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
   it('warns before it overwrites a picture you already had', () => {
-    const { rerender } = render(<CharacterPicker onConfirm={noop} />)
+    const { unmount } = inRouter(<CharacterPicker onConfirm={noop} />)
     expect(screen.queryByText(/replaces your current profile picture/i)).not.toBeInTheDocument()
+    unmount()
 
-    rerender(<CharacterPicker onConfirm={noop} replacesExistingPhoto />)
+    inRouter(<CharacterPicker onConfirm={noop} replacesExistingPhoto />)
     expect(screen.getByText(/replaces your current profile picture/i)).toBeInTheDocument()
   })
 })

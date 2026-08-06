@@ -1,5 +1,6 @@
 import { Router, type RequestHandler } from 'express'
 import { z } from 'zod'
+import { createInviteRequestSchema } from '@escape-room/shared'
 import type {
   FriendListResponse,
   Invite,
@@ -11,6 +12,7 @@ import type { InviteService } from '../services/invite.service.js'
 import type { ProfileService } from '../services/profile.service.js'
 import type { Authenticator } from '../http/authenticator.js'
 import { requireUserId } from '../http/require-auth.js'
+import type { PartyService } from '../services/party.service.js'
 import { ApiError } from '../http/api-error.js'
 
 const byUsernameSchema = z.object({ username: z.string().trim().min(1).max(64) })
@@ -99,6 +101,8 @@ export function createInviteRoutes(
   authenticator: Authenticator,
   writeRateLimiter: RequestHandler,
   previewRateLimiter: RequestHandler,
+  /** Only needed for links that join a party; the friend half works without it. */
+  party?: PartyService,
 ): Router {
   const router = Router()
 
@@ -118,9 +122,17 @@ export function createInviteRoutes(
   })
 
   // POST /api/invites — mint a link.
+  //
+  // `forParty` makes it a "come and play now" link: following it befriends you
+  // *and* puts you in the minter's game, rather than only the first.
   router.post('/', writeRateLimiter, async (req, res) => {
     const userId = await requireUserId(req, authenticator)
-    const body: { invite: Invite } = { invite: await invites.create(userId) }
+    const parsed = createInviteRequestSchema.safeParse(req.body ?? {})
+    if (!parsed.success) throw ApiError.validation('That is not a valid invite.')
+
+    const body: { invite: Invite } = {
+      invite: await invites.create(userId, { forParty: parsed.data.forParty }),
+    }
     res.status(201).json(body)
   })
 
@@ -144,7 +156,7 @@ export function createInviteRoutes(
     const userId = await requireUserId(req, authenticator)
     const token = typeof req.params.token === 'string' ? req.params.token : ''
 
-    const inviterUserId = await invites.accept(token)
+    const { inviterUserId, partyHostUserId } = await invites.accept(token)
     // Opening your own link is a mistake, not an attack — say so plainly
     // rather than creating a self-friendship.
     if (inviterUserId === userId) {
@@ -154,6 +166,15 @@ export function createInviteRoutes(
     // Mutual straight away rather than a request the inviter has to approve —
     // sending the link was the approval.
     const body: FriendListResponse = await friends.acceptInvite(userId, inviterUserId)
+
+    // And then into their game, if that is what the link was for. Deliberately
+    // best-effort: the party may have filled up or the host may have left since
+    // the link was sent, and neither is a reason to undo a friendship that was
+    // just made. The visitor lands in their own lobby instead.
+    if (partyHostUserId) {
+      await party?.join(userId, partyHostUserId).catch(() => undefined)
+    }
+
     res.status(201).json(body)
   })
 

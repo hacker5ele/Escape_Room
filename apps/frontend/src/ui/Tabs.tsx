@@ -1,113 +1,97 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useId, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 /**
- * The tabbed shell for the signed-in page.
+ * The tab strip for the signed-in page.
  *
- * Everything used to be stacked down one narrow column — game status, rooms,
- * leaderboard, friends and the activity log, all at once. That is a lot of
- * unrelated information competing at the same level, and it got worse with
- * every feature added.
+ * Each tab is a **real route**, not a piece of component state — so a tab is
+ * linkable, survives a reload and works with the back button, and no `#` goes
+ * anywhere near the URL (ADR-0040). Only the matched route renders, which is
+ * what keeps friends and chat from polling in a panel nobody is looking at.
  *
- * Three things here are deliberate rather than decorative:
+ * Two things it still owns, because the router does not do them:
  *
- * **Only the active panel is mounted.** Friends and chat poll the API on a
- * timer; keeping all four alive would multiply that polling by four for panels
- * nobody is looking at.
- *
- * **The selection lives in the URL hash**, so a reload keeps you where you
- * were, the browser's back button behaves, and a tab can be linked to
- * directly — `/#friends` opens on friends. `history.replaceState` rather than
- * assigning to `location.hash`, so switching tabs does not fill the back stack
- * with entries the player has to walk out of.
- *
- * **Arrow keys move between tabs**, which is what the WAI-ARIA tabs pattern
- * requires and what anybody navigating by keyboard will try. Selection follows
+ * **Arrow keys move between tabs.** That is what the WAI-ARIA tabs pattern
+ * requires and the first thing anybody on a keyboard tries. Selection follows
  * focus, which is allowed here because switching panels is cheap.
+ *
+ * **A roving `tabindex`** — one stop for the whole strip rather than one per
+ * tab, so tabbing through the page does not mean stopping four times.
  */
 export interface TabDefinition {
-  id: string
+  /** The route this tab selects. Matched exactly. */
+  path: string
   label: string
   /** An unread or waiting count. Omitted or zero renders nothing. */
   badge?: number
-  render: () => React.ReactNode
 }
 
-export function Tabs({ tabs, label }: { tabs: TabDefinition[]; label: string }) {
+export function Tabs({
+  tabs,
+  label,
+  children,
+}: {
+  tabs: TabDefinition[]
+  label: string
+  /** The `<Outlet/>` for whichever tab the path selected. */
+  children: React.ReactNode
+}) {
   const base = useId()
-  const first = tabs[0]?.id ?? ''
-
-  const [activeId, setActiveId] = useState(() => fromHash(tabs, first))
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
   const buttons = useRef(new Map<string, HTMLButtonElement>())
 
-  // The caller builds `tabs` inline, so it is a new array on every render and
-  // depending on it directly would tear down and re-add the listener below
-  // every time. What the effects actually care about is which tabs exist.
-  const ids = tabs.map((tab) => tab.id).join('|')
+  // Exact rather than prefix: every tab path would otherwise also match `/`.
+  const activeIndex = Math.max(
+    0,
+    tabs.findIndex((tab) => tab.path === pathname),
+  )
+  const active = tabs[activeIndex]
 
-  // Someone pasting a link, or using back and forward.
-  useEffect(() => {
-    const onHashChange = () => setActiveId(fromHash(ids.split('|'), first))
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
-  }, [ids, first])
-
-  // A tab can disappear — the set is allowed to change, and does while the
-  // game is still loading — so never leave the page pointing at one that is
-  // no longer there.
-  useEffect(() => {
-    if (!ids.split('|').includes(activeId)) setActiveId(first)
-  }, [ids, activeId, first])
-
-  const select = useCallback((id: string) => {
-    setActiveId(id)
-    window.history.replaceState(null, '', `#${id}`)
-  }, [])
-
-  const onKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      const index = tabs.findIndex((tab) => tab.id === activeId)
-      if (index === -1) return
-
-      let next: number | null = null
-      if (event.key === 'ArrowRight') next = (index + 1) % tabs.length
-      else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length
-      else if (event.key === 'Home') next = 0
-      else if (event.key === 'End') next = tabs.length - 1
-      if (next === null) return
-
-      event.preventDefault()
-      const id = tabs[next]!.id
-      select(id)
-      buttons.current.get(id)?.focus()
+  const go = useCallback(
+    (path: string) => {
+      navigate(path)
+      buttons.current.get(path)?.focus()
     },
-    [tabs, activeId, select],
+    [navigate],
   )
 
-  const active = tabs.find((tab) => tab.id === activeId) ?? tabs[0]
-  if (!active) return null
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const steps: Record<string, number> = {
+      ArrowRight: 1,
+      ArrowDown: 1,
+      ArrowLeft: -1,
+      ArrowUp: -1,
+      Home: -activeIndex,
+      End: tabs.length - 1 - activeIndex,
+    }
+    const step = steps[event.key]
+    if (step === undefined) return
+
+    event.preventDefault()
+    const next = tabs[(activeIndex + step + tabs.length) % tabs.length]
+    if (next) go(next.path)
+  }
 
   return (
     <div className="flex flex-col">
       <div role="tablist" aria-label={label} className="tabs" onKeyDown={onKeyDown}>
         {tabs.map((tab) => {
-          const selected = tab.id === active.id
+          const selected = tab.path === active?.path
           return (
             <button
-              key={tab.id}
+              key={tab.path}
               type="button"
               role="tab"
-              id={`${base}-tab-${tab.id}`}
+              id={`${base}-tab-${tab.path}`}
               aria-selected={selected}
-              aria-controls={`${base}-panel-${tab.id}`}
-              // Roving tabindex: one stop for the whole strip, then arrow
-              // keys within it. Without this, tabbing through the page means
-              // stopping on every tab in turn.
+              aria-controls={`${base}-panel`}
               tabIndex={selected ? 0 : -1}
               ref={(node) => {
-                if (node) buttons.current.set(tab.id, node)
-                else buttons.current.delete(tab.id)
+                if (node) buttons.current.set(tab.path, node)
+                else buttons.current.delete(tab.path)
               }}
-              onClick={() => select(tab.id)}
+              onClick={() => go(tab.path)}
               className="tab"
             >
               {tab.label}
@@ -123,26 +107,18 @@ export function Tabs({ tabs, label }: { tabs: TabDefinition[]; label: string }) 
 
       <div
         role="tabpanel"
-        id={`${base}-panel-${active.id}`}
-        aria-labelledby={`${base}-tab-${active.id}`}
-        // Focusable so that a keyboard user tabbing off the strip lands in the
-        // panel they just chose rather than skipping past its content.
+        id={`${base}-panel`}
+        aria-labelledby={active ? `${base}-tab-${active.path}` : undefined}
+        // Focusable so a keyboard user tabbing off the strip lands in the panel
+        // they just chose rather than skipping past its content.
         tabIndex={0}
-        // Not a `.pane` itself. What a tab holds is one or more panels that
-        // bring their own — the friends tab alone holds the party panel and
-        // the friends list — and wrapping those in another would nest a panel
-        // inside a panel. The strip's bottom rule is the join instead.
+        // Not a `.pane` itself: what a tab holds brings its own, and wrapping
+        // those would nest a panel inside a panel. The strip's bottom rule is
+        // the join instead.
         className="mt-5 flex flex-col gap-5"
       >
-        {active.render()}
+        {children}
       </div>
     </div>
   )
-}
-
-function fromHash(tabs: readonly (TabDefinition | string)[], fallback: string): string {
-  if (typeof window === 'undefined') return fallback
-  const id = window.location.hash.replace(/^#/, '')
-  const known = tabs.map((tab) => (typeof tab === 'string' ? tab : tab.id))
-  return known.includes(id) ? id : fallback
 }

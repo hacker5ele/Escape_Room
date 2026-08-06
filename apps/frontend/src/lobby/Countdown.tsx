@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useEvent } from '../ui/useEvent'
 import { play } from '../audio/sfx'
 
 /**
@@ -15,27 +16,43 @@ import { play } from '../audio/sfx'
 export function Countdown({ onDone }: { onDone: () => void }) {
   const [n, setN] = useState(3)
 
+  // Identity-stable, so the interval below is created once. `onDone` is written
+  // inline at the call site and the lobby re-renders about sixty times a second
+  // while anybody is walking — with it as a dependency the interval was rebuilt
+  // every frame and never survived to its first 700ms tick.
+  const done = useEvent(onDone)
+
   useEffect(() => {
     play('countdown')
 
+    // The count is kept here rather than read back out of state, so nothing in
+    // this interval is a state *updater*. React may call an updater twice — it
+    // does under StrictMode — and an updater that plays a sound and schedules a
+    // timeout would do both of those twice too.
+    let remaining = 3
+    let finish: number | undefined
+
     const timer = window.setInterval(() => {
-      setN((current) => {
-        const next = current - 1
-        if (next <= 0) {
-          window.clearInterval(timer)
-          play('fanfare')
-          // Held briefly so the fanfare is heard as the door opening rather
-          // than as something that happened in the previous screen.
-          window.setTimeout(onDone, 620)
-          return 0
-        }
+      remaining -= 1
+      setN(remaining)
+
+      if (remaining > 0) {
         play('countdown')
-        return next
-      })
+        return
+      }
+
+      window.clearInterval(timer)
+      play('fanfare')
+      // Held briefly so the fanfare is heard as the door opening rather than as
+      // something that happened on the previous screen.
+      finish = window.setTimeout(done, 620)
     }, 700)
 
-    return () => window.clearInterval(timer)
-  }, [onDone])
+    return () => {
+      window.clearInterval(timer)
+      window.clearTimeout(finish)
+    }
+  }, [done])
 
   return (
     <div className="countdown" role="status" aria-live="assertive">

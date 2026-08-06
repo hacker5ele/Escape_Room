@@ -179,7 +179,9 @@ export function createApp(options: AppOptions = {}): Express {
     profileService,
     notificationService,
   )
-  const inviteService = new InviteService(inviteRepository, profileService)
+  // The party is passed so a link minted from the lobby can describe it — and
+  // is constructed above, so the order here matters.
+  const inviteService = new InviteService(inviteRepository, profileService, partyService)
   const roomService = new RoomService(gameService)
 
   const app = express()
@@ -290,6 +292,8 @@ export function createApp(options: AppOptions = {}): Express {
       // stays keyed by IP, because a caller with no account offers nothing else
       // to key on.
       createRateLimiter({ limit: 20, message: 'Too many requests. Wait a moment.' }),
+      // So a link minted from the lobby can join the party as well as befriend.
+      partyService,
     ),
   )
   app.use(

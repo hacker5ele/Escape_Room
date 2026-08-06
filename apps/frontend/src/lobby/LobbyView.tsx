@@ -9,9 +9,11 @@ import { usePresence, toActor } from '../stage/usePresence'
 import { setPhase, useRegisterStageAuth } from '../api/stage'
 import { spawnPoint } from '../stage/scenes'
 import { EmoteBar } from './EmoteBar'
+import { InvitePanel } from './InvitePanel'
 import { Countdown } from './Countdown'
 import { type EmoteName, emoteDuration, emoteSound } from '../character/emotes'
 import { roomDefinition } from '../rooms/registry'
+import { useEvent } from '../ui/useEvent'
 import type { Character } from '../character/parts'
 
 /**
@@ -41,6 +43,9 @@ export function LobbyView({
 }) {
   const { profile } = useAppAuth()
   useRegisterStageAuth()
+
+  // Stable, so the follow-the-host effect is not rebuilt on every render.
+  const enterRoom = useEvent(onEnterRoom)
   const [emote, setEmote] = useState<EmoteName | null>(null)
   const [ready, setReady] = useState(false)
   const [counting, setCounting] = useState(false)
@@ -52,12 +57,24 @@ export function LobbyView({
     ready,
   })
 
-  // A guest follows the host in. The host's own PLAY sets the phase and then
-  // navigates; this is what carries the same move to everybody else, on their
-  // next beat, with no push and no socket.
+  /**
+   * Who decides where the party is.
+   *
+   * **The host's location is the party's location; a guest follows it.** So
+   * arriving in the lobby as host puts the party in the lobby — which is what
+   * makes the back button out of a room work, rather than the server yanking
+   * you straight back in because it still thinks you are there.
+   */
   useEffect(() => {
-    if (phase.kind === 'room' && !counting) onEnterRoom(phase.roomId)
-  }, [phase, counting, onEnterRoom])
+    if (isHost) void setPhase({ kind: 'lobby' })
+  }, [isHost])
+
+  // And a guest goes wherever the party went, including on the first beat after
+  // a reload — landing in the lobby while everybody else is in a room is worse
+  // than being taken to them.
+  useEffect(() => {
+    if (!isHost && phase.kind === 'room' && !counting) enterRoom(phase.roomId)
+  }, [isHost, phase, counting, enterRoom])
 
   /** The first room you have not finished — the one PLAY means by default. */
   const suggested = useMemo<RoomId>(
@@ -88,7 +105,7 @@ export function LobbyView({
     walking: position.walking,
     emote,
     isMe: true,
-    isHost: true,
+    isHost,
   }
 
   function start() {
@@ -187,18 +204,18 @@ export function LobbyView({
                   <span className="text-stock-500">{peer.away ? 'away' : '…'}</span>
                 </li>
               ))}
-              {/* Empty seats, so a party of one reads as room for three more
-                  rather than as a list that happens to be short. */}
-              {Array.from({ length: Math.max(0, 3 - actors.length) }, (_, index) => (
-                <li
-                  key={`seat-${index}`}
-                  className="px-3 py-2 text-sm text-stock-400"
-                >
-                  + invite a friend
-                </li>
-              ))}
             </ul>
           </section>
+
+          {/* Only the host. A guest inviting people into a game that is not
+              theirs to share is refused by the API, so the control is simply
+              not rendered for them. */}
+          {isHost && (
+            <InvitePanel
+              partySize={actors.length + 1}
+              inPartyUserIds={actors.map((peer) => peer.userId)}
+            />
+          )}
 
           <div className="flex flex-col gap-2">
             <button

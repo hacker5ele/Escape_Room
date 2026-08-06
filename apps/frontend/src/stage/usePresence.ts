@@ -166,7 +166,22 @@ export function usePresence({
     if (!enabled) return
 
     let frame = 0
+    let wasEmpty = false
+
     const tick = () => {
+      // Nothing to interpolate when you are alone, and re-rendering the whole
+      // lobby sixty times a second to say so is what starved the countdown's
+      // interval. One empty update, then quiet.
+      if (tracks.current.size === 0) {
+        if (!wasEmpty) {
+          wasEmpty = true
+          setActors([])
+        }
+        frame = requestAnimationFrame(tick)
+        return
+      }
+      wasEmpty = false
+
       const now = performance.now()
       setActors(
         [...tracks.current.values()].map((track) => ({
