@@ -234,7 +234,7 @@ The social layer, added by ADRs 0023–0029:
 | `GET` | `/api/leaderboard/friends` | — | `{ entries }` — you and your friends |
 | `GET` | `/api/leaderboard/global` | — | `{ entries }` — everybody who has started |
 | `GET` | `/api/party` | — | `{ party }` — host, members, `isHost` |
-| `POST` | `/api/stage/heartbeat` | position, emote, ready, hidden | `{ peers, phase, isHost, room }` — 2 Hz |
+| `POST` | `/api/stage/heartbeat` | position, emote, ready, hidden, acted, holding | `{ peers, phase, isHost, room }` — 2 Hz |
 | `POST` | `/api/stage/alive` | `{ hidden }` | `204` — "I still have the game open", 5 s, every screen |
 | `POST` | `/api/stage/phase` | `{ kind, roomId? }` | `204` — host only; moves the whole party |
 | `DELETE` | `/api/stage` | — | `204` — off the stage, still in the party |
@@ -349,6 +349,7 @@ approved the corresponding ADR.
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
 | 2026-08-06 | [0050](docs/adr/0050-the-lost-archive-returns-as-room-four.md) | The Lost Archive comes back as room four, from Eleonora's own commits | Accepted |
+| 2026-08-06 | [0049](docs/adr/0049-press-e-and-five-acts.md) | Walk up to a thing and press E; the sea slows to two and a half minutes; five acts and a full-screen vault | Accepted |
 | 2026-08-06 | [0048](docs/adr/0048-the-hall-floods.md) | Room 01 is a place you play by walking, it is filling up, and it changes shape when a friend is in it | Accepted |
 | 2026-08-05 | [0070](docs/adr/0070-olympus-carpet-race.md) | Olympus becomes a carpet-racing coin challenge, not a riddle sequence; new `POST /api/rooms/:roomId/complete` | Proposed |
 | 2026-08-05 | [0069](docs/adr/0069-room-owns-its-own-finale.md) | A room decides when it's done showing its own finale, via a new `onRoomFinished` callback | Proposed |
@@ -533,17 +534,34 @@ except 0065–0070 (room-03's Sphinx build), which are `Proposed` and still awai
   sluice wheels. The only thing anybody types is the six figures at the vault. That is why the co-op
   cost nothing — positions have been on the heartbeat twice a second since ADR-0038, so a second
   player is another set of coordinates in the same list.
-  - **Standing, not passing.** Being near a station is not enough; you have to have stopped. That is
-    what makes a 2 Hz position sample sufficient — somebody who stopped is still there next beat —
-    and what makes *"you can stop the water, but only by standing still and doing nothing else"*
-    literally true.
+  - **Walk up to a thing and press E** ([ADR-0049](docs/adr/0049-press-e-and-five-acts.md)). A prompt
+    says what E will do before it does it — the earlier version had standing on a station *be* the
+    action, which was elegant and completely mute. The prompt is **chrome, not world**: everything
+    inside the stage is scaled to about 0.2 on a phone, so a tag over the lamp would be four-pixel
+    type. It is also a **button**, because there is no E key on a phone.
+  - Two fields carry it: **`acted`** (an event, consumed by the beat carrying it) and **`holding`**
+    (state, re-sent every beat). Both verified against the position **in the mechanism**, not just in
+    the service — a test caught that with the check only in `HallService`, a hand-made occupant
+    claiming a wheel across the hall pumped it happily. Both **defaulted, not required**: this beat
+    goes out twice a second from every open tab, so required fields would 400 every player who had
+    not reloaded after a deploy.
   - **The water is the clock, the enemy and the gate**, so there is no countdown anywhere in the
-    room. One wheel held holds the level exactly; both push it back; a wheel keeps turning 5 s after
-    you step off, which is the whole solo game — the crossing is 3.5 s.
+    room. **Two and a half minutes** of doing nothing, up from forty-six seconds. One wheel creeps
+    the level back, both push it back properly, and a wheel keeps turning 5 s after you let go —
+    which is the whole solo game against a 3.3 s crossing.
   - **The hall counts you: I or II.** What one person works alone, two have to work together — the
     lamps stop taking a flame singly, the floor opens down the middle and takes what you carry into
     it, and the plaque saying which way to turn your wheel is at the *other* player's end. The count
     is locked while an act runs and re-forms if a partner leaves.
+  - **Five acts, and four different shapes of co-operation.** The lamps want two people at once
+    (within two seconds — a keypress cannot be simultaneous the way standing somewhere can); the
+    index wants a hand-off across a flooded channel; the great wheel puts the plaque telling you
+    which way to turn at your *partner's* end; and the sluice gate only winds while **both** winches
+    are held. Shutting it halves the rise for the rest of the run, which is the only act that pays in
+    mechanics rather than figures — and the only one that is a decision rather than a puzzle.
+  - **The vault is full screen**: six odometer drums on the `.countdown` overlay. A real `<input>`
+    sits behind them, invisible and focused, which gives typing and a mobile numeric keypad for free
+    — and suspends walking, because `useMovement` already ignores keys while a field has focus.
   - **Nothing is sent before it is earned.** `publicData()` is a floor plan; the code arrives a
     fragment at a time as acts finish, so the network tab tells you what playing tells you and no
     sooner. Stronger than merely omitting the answer — there is nothing to work backwards from.

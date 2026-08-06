@@ -1,87 +1,127 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { RoomProps } from './registry'
 import { HallWorld } from './hall/HallWorld'
 import { Bangs, Caption, Fragments, TideGauge } from './hall/HallChrome'
-import { readDetail, readLayout } from './hall/state'
+import { Prompt } from './hall/Prompt'
+import { Vault } from './hall/Vault'
+import { offeredAt, type Interaction } from './hall/actions'
+import { readDetail, readLayout, within, type HallLayout } from './hall/state'
+import { isTypingTarget } from '../stage/useMovement'
+import { play } from '../audio/sfx'
+import { useEvent } from '../ui/useEvent'
 
 /**
  * Room 1 — The Reading Hall, below the harbour, filling up.
  *
- * **The room is a place, not a question.** Everything in it is done by walking
- * somewhere and stopping: the lamps light because you are standing at them, the
- * tablets are carried because you picked them up by standing on them, the
- * wheels pump because somebody is at them. The only thing anybody types in the
- * whole hall is the six figures at the end.
+ * **Walk up to a thing and press E.** An earlier version of this room had
+ * standing on a station *be* the action, which was elegant and completely mute:
+ * you walked into a lamp and it lit with no warning, and you could walk past
+ * the vault without ever learning it was the vault. A room with five acts in it
+ * has to be able to say what its mechanisms are.
  *
- * That is not a stylistic choice, it is what makes the co-op work for free.
- * Everybody's position has been on the heartbeat twice a second since the stage
- * was built (ADR-0038), so a second player needs no new message, no new
- * endpoint and no new state — they are another set of coordinates in the same
- * list, and the mechanism can simply ask whether two of them are in two places
- * at once.
+ * Everything else about how it plays is unchanged, and the co-op still costs
+ * nothing: positions have been on the heartbeat twice a second since ADR-0038,
+ * so a second player is another set of coordinates in the same list. What
+ * pressing E added is one field for the presses and one for what somebody has
+ * hold of — see ADR-0049.
  *
  * **The hall counts you**, and changes shape on the answer. What one person can
- * work alone, two people have to work together: the lamps stop taking a flame
- * singly, the floor opens down the middle, and the plaque telling you which way
- * to turn moves to the other end of the room. See ADR-0048.
- *
- * The water is owned by the server and arrives on the same beat. It is the
- * clock, the enemy and the gate at once, which is why there is no countdown
- * anywhere on this screen.
+ * work alone, two people have to work together.
  */
 
-export function RoomOne({ room, onAnswer, busy, live }: RoomProps) {
-  const [code, setCode] = useState('')
+export function RoomOne({ room, onAnswer, busy, live, actors, onAct, onHold, holding }: RoomProps) {
+  const [atVault, setAtVault] = useState(false)
   const detail = useMemo(() => readDetail(live), [live])
+  const layout = useMemo(() => readLayout(room.data), [room.data])
 
   const act = live?.act ?? 1
-  const drowning = (live?.depth ?? 0) > 78
+  const depth = live?.depth ?? 0
+  const me = actors.find((actor) => actor.isMe)
+  const offer = useOffer(act, detail, layout, me, holding)
+
+  // Walking out of reach lets go of whatever you had. Without this you could
+  // wander the hall pumping a wheel from the far side of the room — the server
+  // refuses it, so the only thing it would actually break is your own belief
+  // about what is happening.
+  const release = useEvent(() => onHold(null))
+  useEffect(() => {
+    if (!holding || !layout || !me) return
+    const station = [...layout.wheels, ...layout.winches].find((one) => one.id === holding)
+    if (station && !within(station, me.x, me.y, layout.radius)) release()
+  }, [holding, layout, me, release])
+
+  const fire = useEvent(() => {
+    if (!offer) return
+
+    if (offer.kind === 'open') {
+      setAtVault(true)
+      play('pop')
+      return
+    }
+    if (offer.kind === 'release') {
+      onHold(null)
+      play('click')
+      return
+    }
+    if (offer.kind === 'hold') {
+      onHold(offer.station.id)
+      // Taking hold of a wheel is also *turning* it, which is what act three
+      // wants. Every other act ignores the press, so one key does both jobs
+      // rather than the room needing a second one for pumping.
+      onAct(offer.station.id)
+      play('click')
+      return
+    }
+
+    onAct(offer.station.id)
+    play('pop')
+  })
+
+  useEffect(() => {
+    const down = (event: KeyboardEvent) => {
+      if (event.code !== 'KeyE' || event.repeat) return
+      // The same guard walking uses: E is a letter before it is a control, and
+      // the vault has a text field in it.
+      if (isTypingTarget(event.target)) return
+      event.preventDefault()
+      fire()
+    }
+    window.addEventListener('keydown', down)
+    return () => window.removeEventListener('keydown', down)
+  }, [fire])
+
+  // Stepping away from the drums closes them, so the screen is never held open
+  // over a room you are no longer standing in.
+  useEffect(() => {
+    if (atVault && offer?.kind !== 'open') setAtVault(false)
+  }, [atVault, offer])
+
+  const drowning = depth > 78
 
   return (
     <div className="hall-chrome" data-drowning={drowning ? '' : undefined}>
       <Bangs flash={detail.flash} />
 
-      <Caption act={act} counted={live?.counted ?? 1} detail={detail} depth={live?.depth ?? 0} />
+      <Caption act={act} counted={live?.counted ?? 1} detail={detail} depth={depth} />
 
       <div className="hall-readouts">
-        <TideGauge depth={live?.depth ?? 0} trend={live?.trend ?? 'rising'} />
+        <TideGauge depth={depth} trend={live?.trend ?? 'rising'} shut={detail.gateShut} />
         <Fragments fragments={detail.fragments} />
       </div>
 
-      {/* The vault only appears once the three acts have given up their figures,
-          and it will not take a code with its dial under water. That last part
-          is the room's whole endgame with a friend in it: somebody has to stay
-          on a wheel at the far end while somebody else stands here and types. */}
-      {act >= 4 && (
-        <form
-          className="hall-vault pointer-events-auto"
-          data-piece=""
-          onSubmit={(event) => {
-            event.preventDefault()
-            onAnswer(code)
-          }}
-        >
-          <label className="hall-gauge-label" htmlFor="hall-code">
-            {detail.keypadDrowned ? 'THE DIAL IS UNDER WATER' : 'SET THE DIAL'}
-          </label>
-          <div className="hall-vault-row">
-            <input
-              id="hall-code"
-              className="field hall-code"
-              value={code}
-              onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-              disabled={busy || detail.keypadDrowned}
-              inputMode="numeric"
-              autoComplete="off"
-              placeholder="······"
-              aria-label="The six figures"
-            />
-            <button type="submit" className="btn" disabled={busy || detail.keypadDrowned}>
-              Open it
-            </button>
-          </div>
-          <p className="hall-vault-note">{room.prompt}</p>
-        </form>
+      <div className="hall-prompt-bar">
+        <Prompt offer={offer} onFire={fire} />
+      </div>
+
+      {atVault && (
+        <Vault
+          fragments={detail.fragments}
+          drowned={detail.keypadDrowned}
+          busy={busy}
+          shake={detail.flash.includes('kachunk')}
+          onSubmit={(code) => onAnswer(code)}
+          onClose={() => setAtVault(false)}
+        />
       )}
     </div>
   )
@@ -95,21 +135,44 @@ export function RoomOne({ room, onAnswer, busy, live }: RoomProps) {
  * walk behind a lamp, stand in front of a pedestal, and watch the water close
  * over your knees. A panel cannot do any of that; it floats in screen pixels.
  */
-export function HallWorldFor({ room, live, actors }: RoomProps) {
+export function HallWorldFor({ room, live, actors, holding }: RoomProps) {
   const layout = useMemo(() => readLayout(room.data), [room.data])
   const detail = useMemo(() => readDetail(live), [live])
 
+  const act = live?.act ?? 1
   const me = actors.find((actor) => actor.isMe)
+  const offer = useOffer(act, detail, layout, me, holding)
+
   if (!layout) return null
 
   return (
     <HallWorld
       layout={layout}
       detail={detail}
-      act={live?.act ?? 1}
+      act={act}
       depth={live?.depth ?? 0}
       actors={actors}
-      me={{ x: me?.x ?? 0, y: me?.y ?? 0 }}
+      offer={offer}
     />
   )
+}
+
+/**
+ * What the room is offering, worked out in both halves.
+ *
+ * Computed twice rather than threaded between them — it is a pure function of
+ * state both halves already hold, and a shared context or a lifted prop would
+ * be more machinery than the arithmetic it saves.
+ */
+function useOffer(
+  act: number,
+  detail: ReturnType<typeof readDetail>,
+  layout: HallLayout | null,
+  me: { userId: string; x: number; y: number } | undefined,
+  holding: string | null,
+): Interaction | null {
+  return useMemo(() => {
+    if (!layout || !me) return null
+    return offeredAt(act, detail, layout, me, holding)
+  }, [act, detail, layout, me, holding])
 }

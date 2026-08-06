@@ -34,6 +34,15 @@ const ACTIVE_MS = 500
  */
 const HIDDEN_MS = 5_000
 
+/**
+ * The shortest gap between two beats forced by a keypress.
+ *
+ * The limit on this endpoint is 240 a minute — two a second with headroom — and
+ * the scheduled beat already uses half of it. A player holding E down would eat
+ * the rest in a couple of seconds without this.
+ */
+const FLUSH_MIN_MS = 250
+
 export interface RemoteActor {
   userId: string
   name: string
@@ -85,6 +94,14 @@ export function usePresence({
 
   const tracks = useRef(new Map<string, Track>())
   const pendingEmote = useRef<EmoteName | null>(null)
+  /** Stations E was pressed at since the last beat. Sent and forgotten. */
+  const pendingActs = useRef<string[]>([])
+  /** What this player has hold of. State so the room can draw it, ref so the beat can send it. */
+  const [holding, setHolding] = useState<string | null>(null)
+  const holdingRef = useRef<string | null>(null)
+  /** Set by the polling effect so a press can beat straight away instead of waiting. */
+  const beatNow = useRef<() => void>(() => {})
+  const lastFlush = useRef(0)
 
   // Read through refs so the polling effect can run once rather than restarting
   // every time a parent re-renders — which, with a character walking, is every
@@ -101,6 +118,44 @@ export function usePresence({
     pendingEmote.current = emote
   }, [])
 
+  /**
+   * Beat right now rather than at the next tick.
+   *
+   * Half a second is a long time to wait for a lamp to light. Everything else
+   * on this channel is a position, which is fine arriving late; a keypress is
+   * not, and a room where E feels sticky is a room that feels broken.
+   *
+   * Debounced, because a player leaning on the key would otherwise spend the
+   * whole rate limit — 240 a minute — on a single lamp.
+   */
+  const flush = useCallback(() => {
+    const at = performance.now()
+    if (at - lastFlush.current < FLUSH_MIN_MS) return
+    lastFlush.current = at
+    beatNow.current()
+  }, [])
+
+  /** Press E at something. Queued for the next beat, which is about to happen. */
+  const act = useCallback(
+    (stationId: string) => {
+      // Capped so a stuck key cannot grow this without bound between beats; the
+      // schema refuses more than eight anyway.
+      if (pendingActs.current.length < 8) pendingActs.current.push(stationId)
+      flush()
+    },
+    [flush],
+  )
+
+  /** Take hold of something, or let go with null. Re-sent every beat until released. */
+  const hold = useCallback(
+    (stationId: string | null) => {
+      holdingRef.current = stationId
+      setHolding(stationId)
+      flush()
+    },
+    [flush],
+  )
+
   useEffect(() => {
     if (!enabled) return
 
@@ -108,6 +163,13 @@ export function usePresence({
     let timer: number | undefined
 
     const beat = async () => {
+      // Taken and cleared *before* the request rather than after it, so a flush
+      // arriving mid-flight cannot send the same press twice. Losing one to a
+      // dropped request is the better failure: pressing E again is nothing, and
+      // picking a tablet up twice is a bug.
+      const acted = pendingActs.current
+      pendingActs.current = []
+
       try {
         // Tells `useLiveness` to stay quiet: this beat renews the same claim,
         // so a player on the stage sends one request per interval, not two.
@@ -115,6 +177,8 @@ export function usePresence({
         const response = await request('/stage/heartbeat', await authRef.current(), {
           method: 'POST',
           body: JSON.stringify({
+            acted,
+            holding: holdingRef.current,
             x: Math.round(position.current.x),
             y: Math.round(position.current.y),
             facing: position.current.facing,
@@ -169,9 +233,17 @@ export function usePresence({
       }
     }
 
+    // Lets `flush` cut the wait short: drop the scheduled beat and go now. The
+    // `finally` in `beat` schedules the next one, so the chain is unbroken.
+    beatNow.current = () => {
+      window.clearTimeout(timer)
+      void beat()
+    }
+
     void beat()
     return () => {
       stopped = true
+      beatNow.current = () => {}
       window.clearTimeout(timer)
     }
   }, [enabled, position])
@@ -221,7 +293,7 @@ export function usePresence({
     return () => cancelAnimationFrame(frame)
   }, [enabled])
 
-  return { actors, phase, isHost, room, sendEmote }
+  return { actors, phase, isHost, room, holding, sendEmote, act, hold }
 }
 
 /**

@@ -659,10 +659,14 @@
 
   /* ---- the sea ---------------------------------------------------------- */
 
-  /* Drawn over everybody, because a player is *in* the water rather than behind
-     it. Positioned by `top` in stage units, which is `floodLine(depth)` — the
-     same function that decides whose chin is under, so the drawing and the rule
-     cannot disagree. */
+  /* Seven layers over one generated wave strip, because one layer reads as
+     wallpaper and two read as water. The parallax between the back and front
+     crests does most of the work — same drawing, different scale and speed,
+     which is how a background painter has always faked depth.
+
+     Everything below the crest is flat ink and a coarse dot screen rather than
+     a texture. A comic draws water with a line and a fill; a gradient-heavy
+     "realistic" sea would undo the print pipeline the whole room rests on. */
   .hall-water {
     position: absolute;
     left: 0;
@@ -671,10 +675,9 @@
     pointer-events: none;
   }
 
-  /* The crest sits *above* the surface, so it cannot be clipped by the water —
-     doing that hid it completely. It gets its own window, exactly one stage
-     wide and as tall as the strip, which contains the scroll horizontally
-     without cutting anything off the top.
+  /* The crests sit *above* the surface, so they cannot be clipped by the water —
+     doing that hid them completely. They get their own window, exactly one
+     stage wide, which contains the scroll horizontally without cutting the top.
 
      Safe to clip here in a way it is not higher up: `overflow` on any ancestor
      of a `.pane` kills its `backdrop-filter`, which is why `.stage-frame` is
@@ -685,47 +688,109 @@
     left: 0;
     right: 0;
     bottom: 100%;
-    height: 118px;
+    height: 130px;
     overflow: hidden;
   }
 
   .hall-water-body {
     position: absolute;
     inset: 0;
-    /* Deliberately not opaque: the shelving and the fallen column stay legible
-       as silhouettes under the surface, which is what makes it read as depth
-       instead of as a blue rectangle laid over the bottom of the picture. */
-    background-color: rgb(11 127 191 / 0.72);
-    /* The coarse plate. 10px against the page's 6px. */
-    background-image: radial-gradient(rgb(6 75 112 / 0.55) 1.7px, transparent 1.8px);
-    background-size: 10px 10px;
+    overflow: hidden;
+    /* Not opaque: the shelving and the fallen column stay legible as
+       silhouettes under the surface, which is what makes it read as depth
+       instead of a blue rectangle over the bottom of the picture. Darker
+       downward, because deep water is darker water. */
+    background-image:
+      linear-gradient(180deg, rgb(11 127 191 / 0.82) 0%, rgb(6 70 107 / 0.94) 78%),
+      radial-gradient(rgb(4 54 82 / 0.55) 1.7px, transparent 1.8px);
+    background-size:
+      100% 100%,
+      10px 10px;
   }
 
-  /* Four copies — A, mirrored, A, mirrored — scrolled by half their width, so
-     the frame it snaps back to is the same drawing it started on. Two copies
-     would tile but not loop: the join would jump every cycle. */
-  /* The crest is a `wide` piece, so the catalogue's `height` was only ever a
-     hint — `process_all.py` scales those to the stage *width*, and the drawing
-     came back 1600×600. Rendered at its own height it stood taller than the
-     lamps and hid the entire act behind a wave.
+  /* Light off the surface, drifting. Three bands at different rates, because
+     two would beat against each other visibly and one would read as a stripe. */
+  .hall-caustic {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 34%;
+    background: linear-gradient(
+      100deg,
+      transparent 0%,
+      rgb(207 230 244 / 0.16) 45%,
+      rgb(207 230 244 / 0.22) 55%,
+      transparent 100%
+    );
+    animation: hall-caustic 17s linear infinite;
+  }
 
-     So the strip is a fixed 150 units and the art is *cropped* into it rather
-     than squashed: the box is exactly one stage wide, so `cover` scales
-     nothing horizontally and simply takes a band out of the middle, which is
-     the band with the crests in it. */
+  .hall-caustic[data-band='2'] {
+    animation-duration: 23s;
+    animation-delay: -8s;
+    opacity: 0.7;
+  }
+
+  .hall-caustic[data-band='3'] {
+    animation-duration: 31s;
+    animation-delay: -19s;
+    opacity: 0.5;
+  }
+
+  @keyframes hall-caustic {
+    from {
+      translate: -40% 0;
+    }
+    to {
+      translate: 300% 0;
+    }
+  }
+
+  .hall-bubble {
+    position: absolute;
+    bottom: -10%;
+    border: 3px solid rgb(207 230 244 / 0.55);
+    border-radius: 50%;
+    animation: hall-bubble linear infinite;
+  }
+
+  @keyframes hall-bubble {
+    from {
+      translate: 0 0;
+      opacity: 0;
+    }
+    12% {
+      opacity: 0.9;
+    }
+    to {
+      translate: 14px -560px;
+      opacity: 0;
+    }
+  }
+
+  /* The drawing is 1600×606: transparent at the top, curling crests through the
+     middle, flat sea below. Only the crests are wanted — taking the solid half
+     as well put a wall of wave across the room and buried the act behind it. */
   .hall-water-crest {
     position: absolute;
     left: 0;
-    top: 0;
-    /* The drawing is 1600×606: transparent at the top, curling crests through
-       the middle, flat sea below. Only the crests are wanted — taking the
-       drawing's solid half as well put a 330-unit wall of wave across the room
-       and buried the act behind it. A shallow band of curl sitting on the
-       body's own colour is what a comic actually draws. */
-    height: 118px;
+    bottom: 0;
+    height: 78px;
     width: 400%;
     display: flex;
     animation: hall-drift 11s linear infinite;
+  }
+
+  /* The far one: bigger, slower, paler, and offset so its troughs do not line
+     up with the near one's. Two layers at one speed is one layer. */
+  .hall-water-crest[data-layer='back'] {
+    height: 106px;
+    /* Faint. The drawing's wave bodies are filled cream — foam, correctly — and
+       at any real opacity two layers of it read as clouds sitting on the sea
+       rather than as one surface with depth behind it. */
+    opacity: 0.26;
+    animation-duration: 19s;
+    animation-direction: reverse;
   }
 
   .hall-water-crest img {
@@ -734,9 +799,13 @@
     display: block;
     max-width: none;
     /* Box and drawing are both one stage wide, so `cover` scales nothing
-       sideways and simply takes the top 330 rows. */
+       sideways and simply takes a band out of the middle. */
     object-fit: cover;
-    object-position: 50% 24%;
+    /* Very high in the drawing. Lower down, the wave bodies are filled cream —
+       foam, correctly drawn — but a thick band of it reads as mounds sitting on
+       the sea rather than as its surface. The curling tips alone are the line a
+       comic actually draws water with. */
+    object-position: 50% 12%;
   }
 
   .hall-water-crest img[data-mirrored] {
@@ -749,9 +818,14 @@
     }
   }
 
-  /* The channel the hall opens down the middle when there are two of you.
-     Not a wall — you wade across it in a stride. What it takes is whatever you
-     are carrying. */
+  /* Deep water gets a heavier ground, so the gauge is not the only thing
+     telling you how much trouble you are in. */
+  .hall-water[data-deep] .hall-water-body {
+    background-image:
+      linear-gradient(180deg, rgb(8 100 149 / 0.78) 0%, rgb(6 62 95 / 0.92) 70%),
+      radial-gradient(rgb(4 54 82 / 0.6) 1.9px, transparent 2px);
+  }
+
   .hall-channel {
     position: absolute;
     background: rgb(6 75 112 / 0.5);
@@ -1047,44 +1121,6 @@
 
   /* ---- the vault -------------------------------------------------------- */
 
-  .hall-vault {
-    position: absolute;
-    left: 50%;
-    bottom: 0.75rem;
-    translate: -50% 0;
-    width: min(28rem, calc(100% - 1.5rem));
-    padding: 0.6rem 0.7rem;
-    border: 3px solid var(--color-stock-900);
-    background: var(--color-stock-50);
-    box-shadow: var(--shadow-print);
-    rotate: -0.3deg;
-  }
-
-  .hall-vault-row {
-    display: flex;
-    gap: 0.4rem;
-    margin-top: 0.3rem;
-  }
-
-  .hall-code {
-    flex: 1;
-    min-width: 0;
-    font-family: var(--font-mono);
-    font-size: 1.1rem;
-    letter-spacing: 0.34em;
-    text-align: center;
-  }
-
-  .hall-vault-note {
-    margin-top: 0.35rem;
-    font-family: var(--font-display);
-    font-size: 0.68rem;
-    line-height: 1.4;
-    color: var(--color-stock-600);
-  }
-
-  /* ---- lettered sound effects -------------------------------------------- */
-
   .hall-bangs {
     position: absolute;
     inset: 0;
@@ -1261,6 +1297,378 @@
     pointer-events: none;
   }
 
+  /* ---- what E does, said out loud ---------------------------------------- */
+
+  /* Chrome rather than world. Anything inside the stage is drawn in 1600×900
+     and scaled once to fit — about 0.2 on a phone — so a tag floating over the
+     lamp would be four-pixel type. The station is ringed instead, and the words
+     live down here at a size somebody can read. */
+  .hall-prompt-bar {
+    position: absolute;
+    left: 50%;
+    bottom: 0.6rem;
+    translate: -50% 0;
+    display: flex;
+    justify-content: center;
+    max-width: calc(100% - 1rem);
+  }
+
+  .hall-prompt {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.7rem 0.4rem 0.4rem;
+    border: 3px solid var(--color-stock-900);
+    background: var(--color-stock-50);
+    box-shadow: var(--shadow-print);
+    rotate: -0.5deg;
+    cursor: pointer;
+    animation: hall-offer 220ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  }
+
+  .hall-prompt:hover,
+  .hall-prompt:focus-visible {
+    background: var(--color-stock-100);
+  }
+
+  /* A key cap. Also the tap target on a phone, where there is no E to press —
+     rule 8 asks for usable, not merely unbroken. */
+  .hall-prompt-key {
+    display: grid;
+    place-items: center;
+    min-width: 1.7rem;
+    padding: 0.15rem 0.3rem;
+    border: 2px solid var(--color-stock-900);
+    background: var(--color-signal-500);
+    box-shadow: var(--shadow-print-sm);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-stock-50);
+  }
+
+  .hall-prompt-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-stock-900);
+  }
+
+  .hall-prompt[data-kind='release'] .hall-prompt-key {
+    background: var(--color-stock-700);
+  }
+
+  .hall-prompt[data-kind='open'] .hall-prompt-key {
+    background: var(--color-solved-500);
+  }
+
+  @keyframes hall-offer {
+    from {
+      scale: 0.85;
+      opacity: 0;
+      translate: 0 6px;
+    }
+  }
+
+  /* ---- the vault, full screen -------------------------------------------- */
+
+  .hall-vault-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgb(24 22 15 / 0.62);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    animation: hall-vault-in 240ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+  }
+
+  .hall-vault-panel {
+    width: min(34rem, 100%);
+    padding: 1rem 1.1rem 1.2rem;
+    border: 4px solid var(--color-stock-900);
+    background: var(--color-stock-50);
+    box-shadow: 8px 8px 0 var(--color-stock-900);
+    rotate: -0.4deg;
+    text-align: center;
+  }
+
+  .hall-vault-panel[data-shake] {
+    animation: hall-shake 320ms steps(2, end) 3;
+  }
+
+  @keyframes hall-shake {
+    50% {
+      translate: 8px 0;
+    }
+  }
+
+  @keyframes hall-vault-in {
+    from {
+      opacity: 0;
+      scale: 0.94;
+    }
+  }
+
+  /* Misregistered, like every other piece of display type in this room: the
+     cyan plate painted first and a hair off, the red sitting on top exactly as
+     it would coming off the second pass of a press. */
+  .hall-vault-title {
+    position: relative;
+    font-family: var(--font-display);
+    font-size: clamp(1.4rem, 6vw, 2.2rem);
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--color-signal-500);
+  }
+
+  .hall-vault-title::before {
+    content: attr(data-text);
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    translate: 3px -2px;
+    color: var(--color-solved-500);
+  }
+
+  .hall-vault-known {
+    margin-top: 0.35rem;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--color-stock-600);
+  }
+
+  .hall-drums {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    gap: 0.3rem;
+    margin-top: 0.9rem;
+  }
+
+  .hall-drum {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+  }
+
+  .hall-drum-nudge {
+    padding: 0.1rem 0.35rem;
+    border: 2px solid var(--color-stock-900);
+    background: var(--color-stock-100);
+    font-size: 0.7rem;
+    line-height: 1;
+    color: var(--color-stock-900);
+    cursor: pointer;
+  }
+
+  .hall-drum-nudge:hover:not(:disabled) {
+    background: var(--color-signal-500);
+    color: var(--color-stock-50);
+  }
+
+  .hall-drum-nudge:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* The window on the drum. Inset and darker than the panel, because a drum
+     sits *in* the mechanism rather than on it. */
+  .hall-drum-face {
+    display: grid;
+    place-items: center;
+    width: 2.4rem;
+    height: 3.1rem;
+    border: 3px solid var(--color-stock-900);
+    background: var(--color-stock-200);
+    box-shadow: inset 0 3px 0 rgb(24 22 15 / 0.18);
+    font-family: var(--font-mono);
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: var(--color-stock-500);
+  }
+
+  .hall-drum-face[data-set] {
+    background: var(--color-stock-50);
+    color: var(--color-stock-900);
+  }
+
+  /* Invisible, focused, and load-bearing: it gives keyboard entry for free, a
+     numeric keypad on a phone, and — because `useMovement` ignores keys while a
+     field has focus — it suspends walking while the vault is open, with no new
+     wiring anywhere. */
+  .hall-drum-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    cursor: default;
+  }
+
+  .hall-vault-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .hall-vault-hint {
+    margin-top: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.06em;
+    color: var(--color-stock-500);
+  }
+
+  /* ---- the rest of the reactivity ---------------------------------------- */
+
+  /* How long a lamp has left, as a ring burning down. Without it "all five at
+     once" is a rule you can only learn by failing. */
+  .hall-burn {
+    position: absolute;
+    left: 0;
+    top: -300px;
+    width: 120px;
+    height: 120px;
+    translate: -50% 0;
+    border-radius: 50%;
+    background: conic-gradient(
+      var(--color-signal-500) calc(var(--burn) * 360deg),
+      transparent 0
+    );
+    mask: radial-gradient(closest-side, transparent 76%, black 78%);
+    -webkit-mask: radial-gradient(closest-side, transparent 76%, black 78%);
+  }
+
+  /* Somebody saying something, over their own head. Drawn as a comic balloon —
+     a wobbled outline rather than a clean ellipse, because a perfect ellipse is
+     a speech bubble in a slide deck. */
+  .hall-balloon-at {
+    pointer-events: none;
+  }
+
+  .hall-balloon {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    translate: -50% 0;
+    white-space: nowrap;
+    padding: 0.5rem 0.8rem;
+    border: 4px solid var(--color-stock-900);
+    border-radius: 48% 52% 46% 54% / 58% 44% 56% 42%;
+    background: var(--color-stock-50);
+    font-family: var(--font-mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--color-stock-900);
+    animation: hall-say 900ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  }
+
+  @keyframes hall-say {
+    from {
+      scale: 0.4;
+      opacity: 0;
+    }
+    70% {
+      scale: 1;
+      opacity: 1;
+    }
+    to {
+      scale: 1;
+      opacity: 0;
+    }
+  }
+
+  /* The order act two wants, up the depth staff. On the wire since the room
+     shipped and never drawn, which made the order unlearnable in the hall. */
+  .hall-staff {
+    position: absolute;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 0.4rem;
+    align-items: center;
+  }
+
+  .hall-staff-mark {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .hall-staff-mark b {
+    font-family: var(--font-mono);
+    font-size: 34px;
+    font-weight: 700;
+    color: var(--color-stock-900);
+  }
+
+  .hall-staff-tablet {
+    position: static !important;
+    width: 74px !important;
+    height: auto !important;
+    margin: 0 !important;
+  }
+
+  /* Act three alone: the pattern stamped on the gearbox. */
+  .hall-pattern {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .hall-pattern-step {
+    padding: 4px 10px;
+    border: 4px solid var(--color-stock-900);
+    background: var(--color-stock-50);
+    font-family: var(--font-mono);
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--color-stock-900);
+  }
+
+  .hall-pattern-step[data-done] {
+    background: var(--color-solved-500);
+    color: var(--color-stock-50);
+  }
+
+  .hall-winch[data-winding] {
+    animation: hall-turn 1.6s linear infinite;
+    transform-origin: 50% 60%;
+  }
+
+  .hall-gatehouse {
+    position: absolute;
+  }
+
+  .hall-gatehouse img {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 300px;
+    height: auto;
+    max-width: none;
+    margin-left: -150px;
+  }
+
+  .hall-gauge-shut {
+    font-family: var(--font-mono);
+    font-size: 0.45rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--color-solved-600);
+  }
+
   @media (width < 30rem) {
     .hall-readouts {
       flex-direction: row;
@@ -1314,18 +1722,56 @@
       overflow: hidden;
     }
 
-    .hall-vault {
-      bottom: 0.4rem;
-      padding: 0.4rem 0.45rem;
+    /* Six drums at 2.4rem each do not fit across 320px. They shrink rather
+       than wrap, because a code split over two lines stops reading as one
+       number — which is the only thing the drums are for. */
+    .hall-drum-face {
+      width: 1.7rem;
+      height: 2.2rem;
+      font-size: 1.1rem;
     }
 
-    .hall-code {
-      font-size: 0.85rem;
-      letter-spacing: 0.2em;
+    .hall-drums {
+      gap: 0.15rem;
+    }
+
+    .hall-vault-panel {
+      padding: 0.7rem 0.6rem 0.9rem;
+      rotate: 0deg;
+      box-shadow: 5px 5px 0 var(--color-stock-900);
+    }
+
+    .hall-prompt-bar {
+      bottom: 0.4rem;
+      width: calc(100% - 0.8rem);
+    }
+
+    .hall-prompt {
+      width: 100%;
+      justify-content: center;
+      rotate: 0deg;
+    }
+
+    .hall-prompt-label {
+      font-size: 0.62rem;
+    }
+
+    /* The balloons and the staff are drawn in stage units, so on a phone they
+       come out at a fifth of this size. Bigger here is the only way they are
+       legible there. */
+    .hall-balloon {
+      font-size: 2.4rem;
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .hall-caustic,
+    .hall-bubble,
+    .hall-winch[data-winding],
+    .hall-balloon,
+    .hall-prompt,
+    .hall-vault-screen,
+    .hall-vault-panel[data-shake],
     .hall-water-crest,
     .hall-wheel[data-running],
     .hall-lamp[data-lit],
