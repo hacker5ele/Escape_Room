@@ -1,25 +1,19 @@
 import type { RoomDefinition } from '../room-definition.js'
 import { asNumber } from '../answer.js'
 
-/**
- * Room 4 — The Door. Answer type: number, from arithmetic.
- *
- * PLACEHOLDER PUZZLE. The owning sub-team replaces the content of this file.
- */
-const DIGITS = [4, 8, 15, 16, 23, 42] as const
-const SOLUTION = DIGITS.reduce((total, digit) => total + digit, 0)
+const DIGITS = [6, 9, 11, 14, 18, 23] as const
+const SOLUTION = DIGITS.filter((digit) => digit % 2 !== 0).reduce((total, digit) => total + digit, 0)
 
 export const room04: RoomDefinition = {
   id: 'room-04',
-  title: 'The Door',
-  intro:
-    'The last door. Six numbers are stencilled above the keypad, and the keypad wants only one.',
-  prompt: 'One number opens it. The six above the keypad are the whole instruction.',
+  title: 'The Abandoned City',
+  intro: 'The last door. Six numbers are stencilled above the keypad, but the keypad does not answer to all of them.',
+  prompt: 'The keypad wants a single number, built from only some of the six above it.',
 
   hints: [
-    'You do not need to reorder them or decode them.',
-    'The keypad wants a single total.',
-    'Add all six together.',
+    'Not every number above the keypad counts.',
+    'The keypad only listens to the odd ones.',
+    'Add the odd numbers together and enter the total.',
   ],
 
   publicData() {

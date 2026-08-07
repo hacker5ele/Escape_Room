@@ -58,6 +58,7 @@ import { createLeaderboardRoutes } from './routes/leaderboard.routes.js'
 import { createPartyRoutes } from './routes/party.routes.js'
 import { createPresenceRoutes } from './routes/presence.routes.js'
 import { PresenceService } from './services/presence.service.js'
+import { HallService } from './services/hall.service.js'
 import { createRoomRoutes } from './routes/rooms.routes.js'
 import {
   createAttemptRateLimiter,
@@ -200,7 +201,11 @@ export function createApp(options: AppOptions = {}): Express {
   // Reads the same map as the party service rather than asking it, which is
   // what makes "I left the lobby" and "I left the game" one expiry instead of
   // two things that can disagree.
-  const presenceService = new PresenceService(live, profileService)
+  // The flooded halls, keyed by host like the phases beside them. Ticked from
+  // the heartbeat rather than from a timer, so a hall nobody is standing in is
+  // not rising (ADR-0048).
+  const hallService = new HallService(live)
+  const presenceService = new PresenceService(live, profileService, hallService, gameService)
   const chatService = new ChatService(
     messageRepository,
     friendService,
@@ -341,6 +346,7 @@ export function createApp(options: AppOptions = {}): Express {
       authenticator,
       createAttemptRateLimiter(options.attemptRateLimit ?? config.attemptRateLimit, authenticator),
       profileService,
+      hallService,
     ),
   )
 

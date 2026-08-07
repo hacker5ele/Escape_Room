@@ -6,6 +6,7 @@ import { play, type SoundName } from '../audio/sfx'
 import { Stage, type Actor } from '../stage/Stage'
 import { useMovement } from '../stage/useMovement'
 import { usePresence, toActor } from '../stage/usePresence'
+import { preloadScene } from '../stage/preload'
 import { leaveStage, setPhase, useRegisterStageAuth } from '../api/stage'
 import { spawnPoint } from '../stage/scenes'
 import { EmoteBar } from './EmoteBar'
@@ -90,6 +91,13 @@ export function LobbyView({
   )
   const [selected, setSelected] = useState<RoomId>(suggested)
 
+  // The room somebody is about to press PLAY on, fetched while they are still
+  // choosing it. Re-run on every change, and each URL is only ever asked for
+  // once, so flicking along the row costs one download per room (ADR-0047).
+  useEffect(() => {
+    void preloadScene(roomDefinition(selected).scene)
+  }, [selected])
+
   const fire = useCallback(
     (name: EmoteName) => {
       setEmote(name)
@@ -160,7 +168,14 @@ export function LobbyView({
         <aside className="flex flex-col gap-4">
           <section className="pane p-4">
             <h2 className="label">Room</h2>
-            <div className="mt-3 grid grid-cols-4 gap-2">
+            {/* One column per room rather than a fixed four, so the picker does
+                not have to be edited again the next time the count changes —
+                which it just did, from four to five. The tiles are square by
+                `aspect-ratio`, so they simply get smaller. */}
+            <div
+              className="mt-3 grid gap-2"
+              style={{ gridTemplateColumns: `repeat(${ROOM_IDS.length}, minmax(0, 1fr))` }}
+            >
               {ROOM_IDS.map((roomId, index) => {
                 const unlocked = isRoomUnlocked(game, roomId)
                 const done = game.solvedRooms.includes(roomId)

@@ -1,0 +1,807 @@
+/* ==========================================================================
+   style.css — cinematic dark-lab aesthetic, ported from the original
+   vanilla prototype. Every rule is scoped under `.room-02` so nothing here
+   can leak into the rest of the app, and every keyframe is prefixed `r2` so
+   it can never collide with another room's animations.
+   ========================================================================== */
+
+.room-02 {
+  --bg-black: #0a0c10;
+  --bg-dark: #12161c;
+  --bg-panel: #1a2029;
+  --steel: #4c7ea8;
+  --steel-bright: #7fb8e8;
+  --white-light: #eef3f8;
+  --terminal-green: #37ff8b;
+  --danger-red: #e33d3d;
+  --warn-yellow: #e3d33d;
+  --text-dim: #8fa0b3;
+
+  position: fixed;
+  inset: 0;
+  font-size: 16px;
+  margin: 0;
+  padding: 0;
+  background: var(--bg-black);
+  color: var(--white-light);
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  overflow: hidden;
+}
+
+.room-02 * { box-sizing: border-box; }
+
+.room-02.shake { animation: r2ScreenShake 0.5s ease-in-out; }
+@keyframes r2ScreenShake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-6px, 3px); }
+  20% { transform: translate(5px, -4px); }
+  30% { transform: translate(-4px, 4px); }
+  40% { transform: translate(6px, 2px); }
+  50% { transform: translate(-3px, -3px); }
+  60% { transform: translate(4px, 3px); }
+  70% { transform: translate(-5px, -2px); }
+  80% { transform: translate(3px, 4px); }
+  90% { transform: translate(-2px, -3px); }
+}
+
+.room-02 .hidden { display: none !important; }
+
+/* ---------------------------------------------------------------------- */
+/* Ambient full-screen fx layers                                          */
+/* ---------------------------------------------------------------------- */
+.room-02 .fx-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.room-02 .rain {
+  background-image: repeating-linear-gradient(
+    100deg,
+    rgba(180, 210, 240, 0.06) 0px,
+    rgba(180, 210, 240, 0.06) 1px,
+    transparent 2px,
+    transparent 40px
+  );
+  animation: r2RainFall 0.6s linear infinite;
+  opacity: 0.5;
+}
+@keyframes r2RainFall {
+  0% { background-position: 0 0; }
+  100% { background-position: -60px 120px; }
+}
+
+.room-02 .flicker {
+  background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.05), transparent 60%);
+  animation: r2FlickerLight 6s infinite;
+}
+@keyframes r2FlickerLight {
+  0%, 92%, 100% { opacity: 1; }
+  93% { opacity: 0.4; }
+  94% { opacity: 0.9; }
+  95% { opacity: 0.3; }
+  96% { opacity: 1; }
+}
+
+.room-02 .vignette {
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%);
+  z-index: 6;
+}
+
+.room-02 .flash {
+  background: rgba(255,255,255,0.9);
+  opacity: 0;
+  z-index: 7;
+}
+.room-02 .flash.active { animation: r2ThunderFlash 0.6s ease-out; }
+@keyframes r2ThunderFlash {
+  0% { opacity: 0; }
+  8% { opacity: 0.85; }
+  15% { opacity: 0.1; }
+  25% { opacity: 0.6; }
+  40% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+.room-02 .lockdown-wash {
+  background: radial-gradient(ellipse at center, rgba(227,61,61,0.0) 30%, rgba(227,61,61,0.0) 100%);
+  z-index: 4;
+  transition: background 0.5s;
+}
+.room-02.lockdown .lockdown-wash {
+  background: radial-gradient(ellipse at center, rgba(227,61,61,0.12) 30%, rgba(227,61,61,0.35) 100%);
+  animation: r2LockdownPulse 1.4s ease-in-out infinite;
+}
+@keyframes r2LockdownPulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.6); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Title / end screens                                                    */
+/* ---------------------------------------------------------------------- */
+.room-02 .screen {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-image:
+    radial-gradient(ellipse at center, rgba(22,29,38,0.75) 0%, rgba(5,7,10,0.92) 100%),
+    url('/images/room-02/horrorforest.jpg');
+  background-size: cover;
+  background-position: center;
+}
+
+.room-02 .title-card {
+  text-align: center;
+  max-width: 640px;
+  padding: 2rem;
+}
+
+.room-02 .glitch-title, .room-02 .mission-complete {
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  line-height: 1.3;
+  letter-spacing: 0.3rem;
+  color: var(--steel-bright);
+  text-shadow: 0 0 20px rgba(127, 184, 232, 0.5);
+  margin: 0 0 1.75rem;
+}
+
+.room-02 .mission-complete { color: var(--terminal-green); text-shadow: 0 0 20px rgba(55,255,139,0.5); }
+.room-02 .mission-complete.failure { color: var(--danger-red); text-shadow: 0 0 20px rgba(227,61,61,0.6); }
+
+.room-02 .subtitle {
+  color: var(--text-dim);
+  letter-spacing: 0.15rem;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+}
+
+.room-02 .title-flavor {
+  color: var(--white-light);
+  line-height: 1.6;
+  margin-bottom: 2rem;
+  font-size: 1.05rem;
+}
+
+.room-02 .btn {
+  cursor: pointer;
+  border: none;
+  border-radius: 4px;
+  padding: 0.8rem 2rem;
+  font-size: 1rem;
+  letter-spacing: 0.1rem;
+  font-weight: 600;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.room-02 .btn:hover { transform: translateY(-2px); }
+.room-02 .btn:active { transform: translateY(0); }
+
+.room-02 .btn-primary {
+  background: var(--steel);
+  color: var(--white-light);
+  box-shadow: 0 0 20px rgba(76,126,168,0.5);
+}
+.room-02 .btn-primary:hover { background: var(--steel-bright); box-shadow: 0 0 30px rgba(127,184,232,0.7); }
+
+.room-02 .btn-danger {
+  background: var(--danger-red);
+  color: white;
+  box-shadow: 0 0 20px rgba(227,61,61,0.5);
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.room-02 .btn-terminal {
+  background: transparent;
+  border: 1px solid var(--terminal-green);
+  color: var(--terminal-green);
+  font-family: 'Consolas', monospace;
+}
+.room-02 .btn-terminal:hover { background: rgba(55,255,139,0.1); }
+
+.room-02 .btn-terminal-sm {
+  background: transparent;
+  border: 1px solid var(--steel);
+  color: var(--steel-bright);
+  font-family: 'Consolas', monospace;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-radius: 3px;
+  margin-bottom: 0.8rem;
+}
+.room-02 .btn-terminal-sm:hover { background: rgba(76,126,168,0.15); }
+
+.room-02 .end-exit {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------------- */
+/* HUD                                                                    */
+/* ---------------------------------------------------------------------- */
+.room-02 .hud {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1.5rem;
+  background: linear-gradient(to bottom, rgba(10,12,16,0.95), rgba(10,12,16,0));
+}
+.room-02 .hud-left { display: flex; flex-direction: column; gap: 0.3rem; }
+.room-02 .hud-title {
+  font-weight: 700;
+  letter-spacing: 0.15rem;
+  color: var(--steel-bright);
+  text-transform: uppercase;
+  font-size: 0.9rem;
+}
+.room-02 .objective {
+  color: var(--white-light);
+  font-size: 0.95rem;
+  background: rgba(26,32,41,0.7);
+  border: 1px solid var(--steel);
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+}
+.room-02.lockdown .objective {
+  border-color: var(--danger-red);
+  color: #ffdada;
+}
+.room-02 .timer-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(26,32,41,0.7);
+  border: 1px solid var(--danger-red);
+  border-radius: 20px;
+  padding: 0.4rem 1rem;
+}
+.room-02 .timer-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.room-02 .timer-text {
+  font-family: 'Consolas', monospace;
+  font-weight: 700;
+  color: #ff8080;
+  font-size: 1rem;
+  letter-spacing: 0.05rem;
+}
+.room-02 .timer-bar.critical { animation: r2LockdownPulse 0.8s infinite; }
+.room-02 .timer-bar.critical .timer-text { color: var(--danger-red); }
+
+.room-02 .hud-right { display: flex; gap: 0.5rem; }
+.room-02 .icon-btn {
+  background: rgba(26,32,41,0.7);
+  border: 1px solid var(--steel);
+  color: var(--steel-bright);
+  border-radius: 20px;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  font-family: 'Consolas', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08rem;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.room-02 .icon-btn:hover { background: rgba(76,126,168,0.3); border-color: var(--steel-bright); color: var(--white-light); }
+
+/* ---------------------------------------------------------------------- */
+/* Scene + hotspots (point-and-click, full background per location)       */
+/* ---------------------------------------------------------------------- */
+.room-02 .badge {
+  font-family: 'Consolas', monospace;
+  font-weight: 700;
+  letter-spacing: 0.05rem;
+  color: var(--steel-bright);
+  border: 1px solid rgba(127,184,232,0.5);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  background: rgba(76,126,168,0.12);
+  font-size: 0.85rem;
+}
+
+.room-02 .scene {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  background-color: var(--bg-dark);
+  background-image: linear-gradient(145deg, #1a222c 0%, #0a0d12 70%);
+  background-size: cover;
+  background-position: center;
+  transition: background-image 0.3s;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Final sprint — the run to the exit, after the override is accepted     */
+/* ---------------------------------------------------------------------- */
+.room-02 .final-sprint {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  background-color: var(--bg-black);
+  background-size: cover;
+  background-position: center;
+  animation:
+    r2SprintZoom 2.6s ease-in forwards,
+    r2SprintJudder 0.3s ease-in-out infinite;
+}
+@keyframes r2SprintZoom {
+  0% { transform: scale(1); filter: brightness(1); }
+  100% { transform: scale(1.5); filter: brightness(0.55); }
+}
+@keyframes r2SprintJudder {
+  0%, 100% { margin: 0; }
+  25% { margin: 4px 0 0 -3px; }
+  50% { margin: -3px 3px 0 0; }
+  75% { margin: 3px -2px 0 2px; }
+}
+
+.room-02 .final-sprint-caption {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 10vh;
+  text-align: center;
+  pointer-events: none;
+}
+.room-02 .final-sprint-caption p {
+  margin: 0 0 0.5rem;
+  color: var(--white-light);
+  font-size: 1.15rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  text-shadow: 0 2px 14px rgba(0,0,0,0.9);
+  opacity: 0;
+  animation: r2CaptionFade 2s ease forwards;
+}
+@keyframes r2CaptionFade {
+  0% { opacity: 0; transform: translateY(10px); }
+  20% { opacity: 1; transform: translateY(0); }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.room-02 .hotspot-layer { position: absolute; inset: 0; }
+
+.room-02 .hotspot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0;
+}
+.room-02 .hotspot-ring {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 2px solid rgba(127,184,232,0.6);
+  box-shadow: 0 0 10px rgba(127,184,232,0.4);
+  animation: r2HotspotPulse 2.2s ease-in-out infinite;
+}
+@keyframes r2HotspotPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(127,184,232,0.35); transform: scale(1); }
+  50% { box-shadow: 0 0 18px rgba(127,184,232,0.8); transform: scale(1.15); }
+}
+.room-02 .hotspot-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.05rem;
+  text-transform: uppercase;
+  color: var(--white-light);
+  background: rgba(10,12,16,0.75);
+  border: 1px solid rgba(127,184,232,0.35);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+.room-02 .hotspot:hover .hotspot-ring { border-color: var(--terminal-green); box-shadow: 0 0 16px rgba(55,255,139,0.6); }
+.room-02 .hotspot:hover .hotspot-label { opacity: 1; transform: translateY(0); }
+
+/* ---------------------------------------------------------------------- */
+/* Facility nav + travel transition                                       */
+/* ---------------------------------------------------------------------- */
+.room-02 .facility-nav { display: flex; gap: 0.5rem; }
+.room-02 .nav-btn {
+  background: rgba(26,32,41,0.7);
+  border: 1px solid var(--steel);
+  color: var(--white-light);
+  border-radius: 20px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.04rem;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.room-02 .nav-btn:hover:not(:disabled) { background: rgba(76,126,168,0.3); }
+.room-02 .nav-btn.active { border-color: var(--terminal-green); color: var(--terminal-green); cursor: default; }
+.room-02 .nav-btn.locked { opacity: 0.4; color: var(--text-dim); cursor: not-allowed; }
+
+.room-02 .travel-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s;
+  font-family: 'Consolas', monospace;
+  letter-spacing: 0.2rem;
+  color: var(--steel-bright);
+  font-size: clamp(1rem, 3vw, 1.5rem);
+}
+.room-02 .travel-transition.active { opacity: 1; }
+
+/* ---------------------------------------------------------------------- */
+/* Modals                                                                  */
+/* ---------------------------------------------------------------------- */
+.room-02 .modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(4,5,7,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: r2FadeIn 0.2s ease-out;
+}
+@keyframes r2FadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.room-02 .modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--steel);
+  border-radius: 10px;
+  width: min(560px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 0 40px rgba(0,0,0,0.6);
+  animation: r2ModalPop 0.25s ease-out;
+}
+@keyframes r2ModalPop {
+  from { transform: scale(0.94); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.room-02 .modal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid rgba(76,126,168,0.3);
+  position: sticky;
+  top: 0;
+  background: var(--bg-panel);
+}
+.room-02 .terminal-header { border-bottom-color: rgba(55,255,139,0.3); }
+.room-02 .modal-title { flex: 1; font-weight: 600; letter-spacing: 0.04rem; }
+.room-02 .modal-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.room-02 .modal-close:hover { color: var(--white-light); }
+
+.room-02 .modal-body {
+  padding: 1.2rem 1.4rem 1.6rem;
+  line-height: 1.6;
+  color: var(--white-light);
+}
+.room-02 .modal-body p { margin: 0 0 0.9rem; }
+.room-02 .modal-body p:last-child { margin-bottom: 0; }
+
+/* ---------------------------------------------------------------------- */
+/* Terminal / computer                                                    */
+/* ---------------------------------------------------------------------- */
+.room-02 .terminal-modal { width: min(560px, 94vw); font-family: 'Consolas', monospace; }
+.room-02 .terminal-body { padding: 1.4rem; color: var(--terminal-green); }
+.room-02 .reveal-lines p { margin: 0 0 0.8rem; line-height: 1.6; }
+.room-02 .terminal-hint { color: var(--warn-yellow); margin-top: 0.6rem; font-size: 0.9rem; }
+.room-02 .static-line { color: var(--text-dim); font-style: italic; letter-spacing: 0.1rem; }
+
+/* ---------------------------------------------------------------------- */
+/* Circuit repair (gates the recovered audio log)                         */
+/* ---------------------------------------------------------------------- */
+.room-02 .circuit-intro { color: var(--white-light); font-family: 'Segoe UI', sans-serif; }
+
+.room-02 .circuit-board {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin: 1.2rem 0;
+}
+.room-02 .circuit-anchor {
+  font-weight: 700;
+  letter-spacing: 0.08rem;
+  color: var(--steel-bright);
+  border: 1px solid var(--steel);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  background: rgba(76,126,168,0.12);
+  font-size: 0.8rem;
+}
+.room-02 .circuit-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 3rem);
+  grid-template-rows: repeat(3, 3rem);
+  gap: 2px;
+  background: #05070a;
+  padding: 4px;
+  border: 1px solid var(--steel);
+  border-radius: 6px;
+}
+.room-02 .circuit-cell { position: relative; width: 3rem; height: 3rem; }
+.room-02 .circuit-cell-empty {
+  background: repeating-linear-gradient(45deg, rgba(0,0,0,0.4) 0 4px, transparent 4px 8px);
+}
+.room-02 .circuit-tile {
+  background: rgba(26,32,41,0.7);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.2s ease, filter 0.2s;
+}
+.room-02 .circuit-tile:hover { filter: brightness(1.4); }
+.room-02 .circuit-tile::before,
+.room-02 .circuit-tile::after {
+  content: '';
+  position: absolute;
+  background: var(--text-dim);
+}
+/* straight (base rotation, edges L/R): full-width bar through the center */
+.room-02 .circuit-straight::before,
+.room-02 .circuit-straight::after {
+  top: calc(50% - 3px);
+  width: 50%;
+  height: 6px;
+}
+.room-02 .circuit-straight::before { left: 0; }
+.room-02 .circuit-straight::after { right: 0; }
+/* corner (base rotation, edges T/R): arm up, arm right */
+.room-02 .circuit-corner::before {
+  top: 0;
+  left: calc(50% - 3px);
+  width: 6px;
+  height: 50%;
+}
+.room-02 .circuit-corner::after {
+  top: calc(50% - 3px);
+  right: 0;
+  width: 50%;
+  height: 6px;
+}
+.room-02 .circuit-tile.live::before,
+.room-02 .circuit-tile.live::after {
+  background: var(--terminal-green);
+  box-shadow: 0 0 8px rgba(55,255,139,0.8);
+}
+
+.room-02 .evidence-modal { width: min(620px, 94vw); }
+.room-02 .evidence-list { display: flex; flex-direction: column; gap: 0.6rem; margin: 1rem 0; }
+.room-02 .evidence-card {
+  text-align: left;
+  background: rgba(26,32,41,0.7);
+  border: 1px solid var(--steel);
+  border-radius: 6px;
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+  color: var(--white-light);
+  font-family: 'Segoe UI', sans-serif;
+}
+.room-02 .evidence-card:hover { border-color: var(--steel-bright); }
+.room-02 .evidence-card.selected { border-color: var(--danger-red); background: rgba(227,61,61,0.12); }
+.room-02 .evidence-subject { display: block; font-weight: 600; margin-bottom: 0.3rem; }
+.room-02 .evidence-body { display: block; font-size: 0.85rem; color: var(--text-dim); line-height: 1.5; }
+.room-02 .evidence-card.selected .evidence-body { color: var(--white-light); }
+
+/* ---------------------------------------------------------------------- */
+/* Lockdown overlay                                                       */
+/* ---------------------------------------------------------------------- */
+.room-02 .lockdown-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: radial-gradient(ellipse at center, rgba(60,5,5,0.9), rgba(10,0,0,0.98));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: r2LockdownPulse 1s infinite;
+}
+.room-02 .lockdown-lines {
+  text-align: center;
+  font-family: 'Consolas', monospace;
+  color: #ff6b6b;
+  font-size: clamp(1rem, 3vw, 1.6rem);
+  letter-spacing: 0.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.room-02 .lockdown-lines .line {
+  opacity: 0;
+  animation: r2LineIn 0.4s ease-out forwards;
+}
+@keyframes r2LineIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Generator / wire puzzle                                                */
+/* ---------------------------------------------------------------------- */
+.room-02 .generator-modal { width: min(480px, 92vw); }
+.room-02 .generator-instructions { padding: 0 1.4rem; color: var(--text-dim); font-size: 0.9rem; }
+.room-02 .wire-board {
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 1rem 1.6rem 1.6rem;
+}
+.room-02 .wire-column { display: flex; flex-direction: column; gap: 0.7rem; flex: 1; }
+.room-02 .wire-terminal {
+  border: 3px solid;
+  border-radius: 6px;
+  padding: 0.8rem;
+  text-align: center;
+  cursor: pointer;
+  font-weight: 700;
+  color: #0a0c10;
+  transition: transform 0.15s, opacity 0.2s;
+}
+.room-02 .wire-terminal:hover { transform: scale(1.04); }
+.room-02 .wire-terminal.selected { outline: 3px solid white; }
+.room-02 .wire-terminal.connected { opacity: 0.35; cursor: default; pointer-events: none; }
+.room-02 .wire-terminal.wrong { animation: r2WrongShake 0.4s; }
+@keyframes r2WrongShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Ending sequence                                                        */
+/* ---------------------------------------------------------------------- */
+.room-02 .ending-sequence {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #04050a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.room-02 .dino-silhouette {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  height: 320px;
+  background: #000;
+  clip-path: polygon(20% 100%, 15% 40%, 5% 35%, 10% 20%, 30% 0%, 55% 5%, 70% 20%, 95% 25%, 100% 35%, 75% 45%, 70% 100%);
+  opacity: 0;
+  filter: drop-shadow(0 0 40px rgba(200,220,255,0.15));
+}
+.room-02 .dino-silhouette.show {
+  animation: r2DinoFlash 0.9s ease-in-out;
+}
+@keyframes r2DinoFlash {
+  0% { opacity: 0; }
+  30% { opacity: 0.9; }
+  55% { opacity: 0.3; }
+  70% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+.room-02 .ending-lines {
+  text-align: center;
+  font-family: 'Consolas', monospace;
+  color: var(--white-light);
+  font-size: clamp(1rem, 3vw, 1.4rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  z-index: 2;
+}
+.room-02 .ending-lines .line {
+  opacity: 0;
+  animation: r2LineIn 0.6s ease-out forwards;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Toast                                                                   */
+/* ---------------------------------------------------------------------- */
+.room-02 .toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-panel);
+  border: 1px solid var(--terminal-green);
+  color: var(--terminal-green);
+  padding: 0.7rem 1.4rem;
+  border-radius: 20px;
+  z-index: 60;
+  font-size: 0.9rem;
+  animation: r2ToastIn 0.3s ease-out;
+}
+@keyframes r2ToastIn {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Inventory bar                                                          */
+/* ---------------------------------------------------------------------- */
+.room-02 .inventory-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem 1.5rem;
+  background: linear-gradient(to top, rgba(10,12,16,0.95), rgba(10,12,16,0));
+}
+.room-02 .inventory-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.15rem;
+  color: var(--text-dim);
+}
+.room-02 .inventory-slots { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.room-02 .inventory-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(26,32,41,0.8);
+  border: 1px solid var(--steel);
+  border-radius: 20px;
+  padding: 0.3rem 0.8rem 0.3rem 0.3rem;
+  font-size: 0.8rem;
+  color: var(--white-light);
+  animation: r2ToastIn 0.3s ease-out;
+}
+
+.room-02 .lock-modal { width: min(420px, 92vw); }
+.room-02 .lock-instructions { color: var(--text-dim); margin-bottom: 0.4rem; }
+.room-02 .password-row { display: flex; gap: 0.6rem; margin-top: 0.8rem; }
+.room-02 .password-input {
+  flex: 1;
+  background: #0b120e;
+  border: 1px solid var(--terminal-green);
+  color: var(--terminal-green);
+  font-family: 'Consolas', monospace;
+  padding: 0.6rem 0.8rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  letter-spacing: 0.05rem;
+}
+.room-02 .password-input:focus { outline: none; box-shadow: 0 0 10px rgba(55,255,139,0.4); }
+.room-02 .password-input.shake { animation: r2ScreenShake 0.4s; }
+.room-02 .terminal-error { color: var(--danger-red); margin-top: 0.8rem; }

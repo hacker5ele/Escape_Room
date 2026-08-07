@@ -3,6 +3,16 @@ import { ROOM_IDS, type GameSession, type RoomId } from '@escape-room/shared'
 import { getRoom, ORDERED_ROOMS, ROOMS } from './index.js'
 import { SOLUTIONS } from './solutions.fixture.js'
 
+/**
+ * Rooms where the fixture "solution" is a choice letter (A-D) rather than a
+ * value computed from the puzzle. For these, the correct option's text is
+ * necessarily visible in `publicData()` as one of the choices shown to the
+ * player — that is not a leak, unlike rooms 1/2/4 where the solution is a
+ * derived value that never needs to appear verbatim on screen. What must
+ * still never leak is *which* letter is correct.
+ */
+const MULTIPLE_CHOICE_ROOMS: readonly RoomId[] = ['room-03']
+
 const freshSession: GameSession = {
   id: '00000000-0000-4000-8000-000000000000',
   userId: 'user_tester',
@@ -79,10 +89,22 @@ describe.each(ROOM_IDS)('%s', (roomId: RoomId) => {
    * where the player can read it. If a solution ends up in there, the room is
    * decorative — see ADR-0006.
    */
-  it('never ships its solution to the browser', () => {
-    const serialized = JSON.stringify(room.publicData(freshSession))
-    expect(serialized).not.toContain(String(solution))
-  })
+  if (MULTIPLE_CHOICE_ROOMS.includes(roomId)) {
+    it('never reveals which choice is correct', () => {
+      const keys = collectKeys(room.publicData(freshSession))
+      // A room-level "this option is right" field would be the actual leak —
+      // the option text itself is meant to be visible, since the player
+      // chooses from it.
+      for (const key of keys) {
+        expect(key).not.toMatch(/correct/i)
+      }
+    })
+  } else {
+    it('never ships its solution to the browser', () => {
+      const serialized = JSON.stringify(room.publicData(freshSession))
+      expect(serialized).not.toContain(String(solution))
+    })
+  }
 
   it('never ships a field that looks like an answer', () => {
     const keys = collectKeys(room.publicData(freshSession))

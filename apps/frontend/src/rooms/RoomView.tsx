@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { GameSession, RoomId, RoomPublicData } from '@escape-room/shared'
+import type { AttemptResponse, GameSession, RoomId, RoomPublicData } from '@escape-room/shared'
 import { attemptRoom, enterRoom, takeHint } from '../api/rooms'
 import { ApiRequestError } from '../api/client'
 import { useAppAuth } from '../auth/useAppAuth'
@@ -8,12 +8,14 @@ import { Stage, type Actor } from '../stage/Stage'
 import { useMovement } from '../stage/useMovement'
 import { usePresence, toActor } from '../stage/usePresence'
 import { leaveStage, setPhase, useRegisterStageAuth } from '../api/stage'
-import { spawnPoint } from '../stage/scenes'
+import { floodLine, spawnPoint } from '../stage/scenes'
 import { EmoteBar } from '../lobby/EmoteBar'
 import { type EmoteName, emoteDuration, emoteSound } from '../character/emotes'
 import type { SoundName } from '../audio/sfx'
 import { isCharacter, type Character } from '../character/parts'
-import { roomDefinition } from './registry'
+import { roomDefinition, type RoomProps } from './registry'
+import { PartyRail } from '../social/PartyRail'
+import { startOrResumeGame } from '../api/game'
 import { useEvent } from '../ui/useEvent'
 
 /**
@@ -34,17 +36,20 @@ type State =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; room: RoomPublicData }
 
+/** How long the splash panel holds before the party is put back in the lobby. */
+const DROWNED_MS = 1_800
+
 export function RoomView({
   roomId,
   game,
   character,
-  onSolved,
+  onGameChange,
   onLeave,
 }: {
   roomId: RoomId
   game: GameSession
   character: Character
-  onSolved: (session: GameSession) => void
+  onGameChange: (session: GameSession) => void
   onLeave: () => void
 }) {
   const { authHeaders, profile } = useAppAuth()
@@ -68,7 +73,17 @@ export function RoomView({
   const leave = useEvent(onLeave)
   const { position, walkTo, stopWalking, current } = useMovement(spawnPoint(0, 1))
   useRegisterStageAuth()
-  const { actors, phase, isHost, sendEmote } = usePresence({
+  const {
+    actors,
+    phase,
+    isHost,
+    room: live,
+    version,
+    holding,
+    sendEmote,
+    act,
+    hold,
+  } = usePresence({
     position: current,
     character,
     ready: false,
@@ -94,10 +109,82 @@ export function RoomView({
     else if (phase.roomId !== roomId) leave()
   }, [isHost, phase, roomId, leave])
 
+  /**
+   * The room killed everybody in it.
+   *
+   * **Latched, and that is not defensive coding — it is the fix.** The first
+   * version told the server to put the party back in the lobby as soon as
+   * `drowned` arrived. The server then dropped the hall, the next beat carried
+   * `room: null`, and `live?.drowned` went from `true` to `undefined` — so
+   * React saw the dependency change, ran the cleanup, **cancelled the timer
+   * that does the leaving**, and left the player standing in a room that had
+   * already reset. Remembering it locally is what makes the departure survive
+   * the state it is reacting to going away.
+   *
+   * Nothing is said to the server until the splash has finished, so a guest
+   * whose beat lands late still sees what happened to them rather than being
+   * teleported out of a room that looked fine.
+   */
+  const [drowned, setDrowned] = useState(false)
+
+  useEffect(() => {
+    if (!live?.drowned || drowned) return
+    setDrowned(true)
+    play('bubble')
+    window.setTimeout(() => play('slide'), 220)
+  }, [live?.drowned, drowned])
+
+  useEffect(() => {
+    if (!drowned) return
+    const timer = window.setTimeout(() => {
+      // The host moves the party; a guest follows on their next beat. Leaving
+      // also drops the phase, so the hall is thrown away either way.
+      if (isHost) void setPhase({ kind: 'lobby' })
+      leave()
+    }, DROWNED_MS)
+    return () => window.clearTimeout(timer)
+  }, [drowned, isHost, leave])
+
   // Held in a ref, and the effect runs on mount only: depending on the function
   // itself would re-enter the room on every render.
   const authRef = useRef(authHeaders)
   authRef.current = authHeaders
+
+  /**
+   * The party's progress, kept live.
+   *
+   * Progress has been shared since ADR-0028, but you only ever found out when
+   * *you* made a request — a partner could finish the room next to you and your
+   * screen would sit there unchanged. The beat now carries a version; when it
+   * moves, somebody did something, and this goes and asks what.
+   *
+   * `POST /api/sessions` is the re-read: it is idempotent and returns the
+   * game, so no endpoint had to be invented for this.
+   *
+   * Starts at the version already seen, so arriving in a room does not fire a
+   * fetch for news that is already on screen.
+   */
+  const seenVersion = useRef(version)
+  const pushGame = useEvent(onGameChange)
+
+  useEffect(() => {
+    if (version === seenVersion.current) return
+    seenVersion.current = version
+
+    let stale = false
+    void (async () => {
+      try {
+        const fresh = await startOrResumeGame(await authRef.current())
+        if (!stale) pushGame(fresh)
+      } catch {
+        // The next thing anybody does will bring it along anyway. A failed
+        // refresh is a screen that is briefly behind, not a broken room.
+      }
+    })()
+    return () => {
+      stale = true
+    }
+  }, [version, pushGame])
 
   useEffect(() => {
     let cancelled = false
@@ -139,8 +226,14 @@ export function RoomView({
     [sendEmote],
   )
 
-  async function answer(value: unknown) {
-    if (busy || solved) return
+  /**
+   * Returns the real result rather than swallowing it, so a `customScene`
+   * room that wants to react to it — see `CustomSceneProps` — can. Every
+   * other room ignores the return value and reads `feedback`/the "Solved"
+   * pane below exactly as before.
+   */
+  async function answer(value: unknown): Promise<AttemptResponse | null> {
+    if (busy || solved) return null
     setBusy(true)
     setFeedback(null)
 
@@ -148,33 +241,40 @@ export function RoomView({
       const result = await attemptRoom(roomId, value, await authRef.current())
       if (result.correct) {
         setSolved(true)
-        play('stamp')
-        window.setTimeout(() => play('fanfare'), 180)
-        // The character celebrates without being asked, which is the cheapest
-        // way to make solving feel like something happened.
-        fire('cheer')
-        onSolved(result.session)
+        onGameChange(result.session)
+        // A room with its own ending has its own idea of what solving sounds
+        // and looks like — the shared stamp/fanfare/cheer would just clash.
+        if (!definition.ownsEnding) {
+          play('stamp')
+          window.setTimeout(() => play('fanfare'), 180)
+          fire('cheer')
+        }
       } else {
         play('slide')
         setFeedback(result.feedback ?? 'Not that. Try again.')
       }
+      return result
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Could not check that answer.')
+      return null
     } finally {
       setBusy(false)
     }
   }
 
-  async function hint() {
-    if (busy) return
+  /** Returns the hint text so a custom-scene room can show it inline, not just RoomView's own list. */
+  async function hint(): Promise<string> {
     setBusy(true)
     try {
       const result = await takeHint(roomId, await authRef.current())
       play('pop')
       setHints((current) => [...current, result.hint])
       setRemaining(result.hintsRemaining)
+      return result.hint
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'No more hints.')
+      const message = error instanceof Error ? error.message : 'No more hints.'
+      setFeedback(message)
+      throw error
     } finally {
       setBusy(false)
     }
@@ -190,6 +290,71 @@ export function RoomView({
     walking: position.walking,
     emote,
     isMe: true,
+  }
+
+  /**
+   * Everybody standing in the room, you first.
+   *
+   * Handed to the room as well as to the stage, because a room built out of
+   * where people are standing needs the same list the stage is drawing from —
+   * two lists would be two answers to "is my friend at the far wheel".
+   */
+  const everybody: Actor[] = [me, ...actors.map(toActor)]
+
+  const roomProps = (room: RoomPublicData): RoomProps => ({
+    room,
+    onAnswer: (value: unknown) => void answer(value),
+    busy,
+    onLeave,
+    live,
+    actors: everybody,
+    onAct: act,
+    onHold: hold,
+    holding,
+  })
+
+  // A custom-scene room takes the entire viewport, not just the column
+  // inside `<main>` below — it draws its own backdrop instead of standing on
+  // the shared Stage. RoomView still owns leaving here, but does not draw
+  // any chrome for it: a custom scene has its own HUD, own corners, own
+  // idea of where a "leave" control belongs, and a floating button placed
+  // by RoomView has already collided with room-02's own mute/restart once.
+  // `onLeave` is handed to the room instead, in `RoomProps`.
+  //
+  // `ownsEnding` keeps rendering the room even after `solved` — the room
+  // shows its own ending instead of RoomView's generic "Solved" pane, so it
+  // has to stay mounted to draw it.
+  if (state.kind === 'ready' && definition.customScene && (!solved || definition.ownsEnding)) {
+    return (
+      <>
+        {definition.render({
+          ...roomProps(state.room),
+          onAnswer: async (value: unknown) => {
+            const result = await answer(value)
+            // `answer` returns null only for the rare cases every other room
+            // shows as inline feedback text — busy, or a network failure.
+            // A `customScene` room has no such text on screen, so this
+            // becomes a rejection its own error handling already expects.
+            if (!result) throw new Error('Could not check that answer.')
+            return result
+          },
+        })}
+
+        {/* Who else is in here. Drawn by the shell rather than the room, so a
+            room author never has to know it exists — and it draws nothing at
+            all when you are playing alone. */}
+        <PartyRail peers={actors} events={game.events} onEmote={fire} />
+
+        {!definition.ownsEnding && feedback && (
+          <p
+            role="alert"
+            className="pane fixed bottom-4 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 p-3 text-sm text-signal-600"
+          >
+            {feedback}
+          </p>
+        )}
+      </>
+    )
   }
 
   return (
@@ -228,23 +393,37 @@ export function RoomView({
         <>
           <p className="prose max-w-[62ch] text-sm text-stock-600">{state.room.intro}</p>
 
-          <Stage
-            scene={definition.scene}
-            actors={[me, ...actors.map(toActor)]}
-            onWalkTo={walkTo}
-            onWalkEnd={stopWalking}
-          >
-            {solved ? (
-              <div className="pane pointer-events-auto p-4 text-center">
-                <p className="font-display text-2xl font-bold text-solved-600">Solved</p>
-                <button type="button" onClick={onLeave} className="btn mt-3">
-                  Onward
-                </button>
-              </div>
-            ) : (
-              definition.render({ room: state.room, onAnswer: (value) => void answer(value), busy })
-            )}
-          </Stage>
+          {solved ? (
+            <div className="pane pointer-events-auto p-4 text-center">
+              <p className="font-display text-2xl font-bold text-solved-600">Solved</p>
+              <button type="button" onClick={onLeave} className="btn mt-3">
+                Onward
+              </button>
+            </div>
+          ) : (
+            <Stage
+              scene={definition.scene}
+              actors={everybody}
+              onWalkTo={walkTo}
+              onWalkEnd={stopWalking}
+              world={definition.renderWorld?.(roomProps(state.room))}
+              waterline={live ? floodLine(live.depth) : null}
+            >
+              {definition.render(roomProps(state.room))}
+            </Stage>
+          )}
+
+          {/* On a stage you can already see each other walking about, so this
+              is here for the half the stage cannot show: what everybody has
+              actually *done*. */}
+          <PartyRail peers={actors} events={game.events} onEmote={fire} />
+
+          {drowned && (
+            <div className="hall-drowned" role="alert">
+              <p>GLUB.</p>
+              <span>The hall has you. Back to the lobby.</span>
+            </div>
+          )}
 
           <EmoteBar onEmote={fire} />
 
@@ -259,7 +438,9 @@ export function RoomView({
               <h2 className="label">Hints</h2>
               <button
                 type="button"
-                onClick={() => void hint()}
+                onClick={() => {
+                  hint().catch(() => {})
+                }}
                 disabled={busy || remaining === 0}
                 className="btn btn-ghost btn-sm"
               >

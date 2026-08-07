@@ -99,6 +99,35 @@ export const heartbeatRequestSchema = z.object({
   /** Same meaning as on `aliveRequestSchema` — a heartbeat is an alive beat that also has a position. */
   hidden: z.boolean(),
   /**
+   * Stations this player has acted on since the last beat, oldest first.
+   *
+   * An *event*, consumed by the beat that carries it: pressing E is a thing you
+   * did once, not a state you are in.
+   *
+   * A room used to derive this from where somebody was standing, and that was
+   * the right call while standing *was* the input — deriving a fact costs
+   * nothing and leaves nothing to forge. Acting is now a choice, and a choice
+   * cannot be derived from a position, so it has to be sent. It is still
+   * **verified**: a station named from the other end of the room, or one this
+   * player is nowhere near, is ignored.
+   *
+   * **Defaulted rather than required**, and that is not politeness. This beat
+   * goes out twice a second from every open tab, so the moment a deploy lands
+   * every player who has not reloaded is running the previous script. Required
+   * fields would 400 all of them until they did, and vanishing out of your
+   * friends' lobby is a strange way to find out a release happened. An old
+   * client simply never acts, which is exactly right.
+   */
+  acted: z.array(z.string().max(32)).max(8).default([]),
+  /**
+   * The station this player is holding onto, or null.
+   *
+   * *State*, unlike `acted` — a wheel is turned for as long as somebody has
+   * hold of it, so this is re-sent on every beat and stored, which is what lets
+   * everybody else in the room see it turning.
+   */
+  holding: z.string().max(32).nullable().default(null),
+  /**
    * An emote just started, or null. Sent once rather than held: peers are told
    * when it began and play it from that offset, so a dance looks synchronised
    * even though the message arrived late.
@@ -129,6 +158,58 @@ export const peerSchema = z.object({
 
 export type Peer = z.infer<typeof peerSchema>
 
+/**
+ * A room that is happening rather than waiting to be answered.
+ *
+ * Most rooms are a question and a box: the browser has everything it needs the
+ * moment it enters, and nothing changes until somebody submits. A room with a
+ * clock in it is not like that — the water rises whether anybody types or not,
+ * and both players have to be looking at the *same* water or co-operating about
+ * it is meaningless.
+ *
+ * So it rides the heartbeat rather than taking an endpoint of its own. That is
+ * the rule `presence.routes.ts` already states — split when the cadences
+ * differ, share when they match — and a room that changes twice a second wants
+ * exactly the cadence presence already runs at.
+ */
+export const liveRoomSchema = z.object({
+  roomId: roomIdSchema,
+  /**
+   * How high the water is: 0 dry, 100 over everybody's head.
+   *
+   * The clock, the enemy and the gate in one number, which is why the room
+   * needs no separate countdown widget.
+   */
+  depth: z.number(),
+  /** Which way it is going right now, so the room can say so without doing arithmetic. */
+  trend: z.enum(['rising', 'holding', 'falling']),
+  /** Which act the hall is in, 1-based. */
+  act: z.number().int().nonnegative(),
+  /**
+   * How many players the room counts.
+   *
+   * Mechanisms change shape on this: what one person can work alone, two people
+   * have to work together. Locked while an act is running so nothing changes
+   * under somebody's hands.
+   */
+  counted: z.number().int().nonnegative(),
+  /** Everybody went under. The shell plays the splash and takes the party back to the lobby. */
+  drowned: z.boolean(),
+  /**
+   * Whatever the current act needs drawn — lamps lit, tablets placed, which
+   * way the far wheel wants turning.
+   *
+   * A record rather than a union of every act, for the same reason
+   * `RoomPublicData.data` is one: it is the seam that lets a room own its own
+   * shape. Rooms 02 to 04 can grow a clock of their own without touching this
+   * package again, which is what ADR-0007 promised sub-teams. Narrow it inside
+   * the room, not here.
+   */
+  detail: z.record(z.string(), z.unknown()),
+})
+
+export type LiveRoom = z.infer<typeof liveRoomSchema>
+
 export const heartbeatResponseSchema = z.object({
   /** The server's clock, so a client with a wrong one still times emotes right. */
   now: z.string(),
@@ -138,6 +219,26 @@ export const heartbeatResponseSchema = z.object({
   phase: partyPhaseSchema,
   /** True when the caller is the host, which decides who sees PLAY. */
   isHost: z.boolean(),
+  /** The room's own state, when the party is standing in one that has a clock. */
+  room: liveRoomSchema.nullable(),
+  /**
+   * How many times the party's game has been written.
+   *
+   * **One integer that makes every room multiplayer.** Progress has been shared
+   * since ADR-0028 — a guest's solves go to the host's game — but you only ever
+   * found out about it when *you* made a request, so a partner could finish a
+   * room and your screen would sit there unchanged. Watching this number is
+   * enough: when it moves, re-read the session, and their solve, their hint and
+   * their wrong answer all arrive on your screen within half a second.
+   *
+   * A version rather than the game itself, because this beat runs twice a
+   * second per player and the answer is almost always "nothing happened".
+   *
+   * **Defaulted**, so a client that arrives before the API has redeployed sees
+   * 0 and simply never refetches, rather than failing to parse every beat and
+   * losing presence entirely.
+   */
+  version: z.number().int().nonnegative().default(0),
 })
 
 export type HeartbeatResponse = z.infer<typeof heartbeatResponseSchema>

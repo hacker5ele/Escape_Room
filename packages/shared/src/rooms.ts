@@ -4,11 +4,16 @@ import { z } from 'zod'
  * The rooms of the game, in the order they are played.
  *
  * This list is part of the interface contract: adding or removing a room here
- * is a contract change and needs an ADR. Both registries — the backend's
+ * is a contract change and needs an ADR.
+ *
+ * **Five is one more than the assignment asks for.** It says two to four
+ * consecutive rooms, and this list has five because five rooms got built —
+ * see ADR-0050. Cutting back to four is deleting one line here and one entry
+ * in each registry, which is the schedule insurance ADR-0007 designed in. Both registries — the backend's
  * `domain/rooms/index.ts` and the frontend's `rooms/registry.ts` — must agree
  * with this list, and the backend has a test that enforces it.
  */
-export const ROOM_IDS = ['room-01', 'room-02', 'room-03', 'room-04'] as const
+export const ROOM_IDS = ['room-01', 'room-02', 'room-03', 'room-04', 'room-05'] as const
 
 export type RoomId = (typeof ROOM_IDS)[number]
 

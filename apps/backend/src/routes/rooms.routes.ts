@@ -2,12 +2,15 @@ import { Router, type RequestHandler } from 'express'
 import {
   attemptRequestSchema,
   type AttemptResponse,
+  type RoomCompleteResponse,
+  type RoomResetResponse,
   type RoomResponse,
   type RoomsResponse,
 } from '@escape-room/shared'
 import type { RoomService } from '../services/room.service.js'
 import type { Actor, GameService } from '../services/game.service.js'
 import type { ProfileService } from '../services/profile.service.js'
+import type { HallService } from '../services/hall.service.js'
 import type { Authenticator } from '../http/authenticator.js'
 import { requirePlayer } from '../http/require-auth.js'
 import { readRoomId } from '../http/request.js'
@@ -19,6 +22,17 @@ export function createRoomRoutes(
   authenticator: Authenticator,
   attemptRateLimiter: RequestHandler,
   profiles?: ProfileService,
+  /**
+   * Only for the rooms that have a clock in them, and only to be told a code
+   * was wrong.
+   *
+   * The alternative was letting `check()` reach the water, and a room's
+   * `check()` is the one function in the codebase that must stay pure — it is
+   * the only place an answer is known (ADR-0006), it is called by tests with a
+   * bare session, and giving it a side effect on shared state is how it would
+   * stop being testable.
+   */
+  halls?: HallService,
 ): Router {
   const router = Router()
 
@@ -79,6 +93,13 @@ export function createRoomRoutes(
       parsed.data.answer,
       await actorFor(userId, game),
     )
+
+    // A wrong code at the vault door and the sea takes a step. It is what makes
+    // ten thousand combinations unguessable in a room you can drown in — the
+    // rate limiter bounds how fast you may guess, and this bounds how many
+    // guesses you survive.
+    if (!body.correct) halls?.penalise(userId, roomId)
+
     res.json(body)
   })
 
@@ -87,6 +108,26 @@ export function createRoomRoutes(
     const roomId = readRoomId(req)
     const { userId, game } = await requirePlayer(req, authenticator, games)
     res.json(await rooms.hint(game, roomId, await actorFor(userId, game)))
+  })
+
+  // POST /api/rooms/:roomId/reset — wipes this room's progress only, leaving
+  // the rest of the game untouched. See ADR-0066: used by room-03's Atlantis
+  // quest, which has no other way to tell the server its own run failed.
+  router.post('/:roomId/reset', async (req, res) => {
+    const roomId = readRoomId(req)
+    const { game } = await requirePlayer(req, authenticator, games)
+    const body: RoomResetResponse = { session: await games.resetRoom(game, roomId) }
+    res.json(body)
+  })
+
+  // POST /api/rooms/:roomId/complete — marks a room solved with no answer
+  // involved, for a room whose final stage(s) are entirely client-side. See
+  // ADR-0070: used once room-03's Olympus carpet race is won.
+  router.post('/:roomId/complete', async (req, res) => {
+    const roomId = readRoomId(req)
+    const { userId, game } = await requirePlayer(req, authenticator, games)
+    const body: RoomCompleteResponse = { session: await rooms.complete(game, roomId, await actorFor(userId, game)) }
+    res.json(body)
   })
 
   return router

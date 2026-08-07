@@ -208,6 +208,8 @@ registration wall rather than a link ([ADR-0024](docs/adr/0024-friend-graph-and-
 | `GET` | `/api/rooms/:roomId` | — | `{ room }` or `403` if locked |
 | `POST` | `/api/rooms/:roomId/attempt` | `{ answer }` | `{ correct, session, feedback? }` |
 | `POST` | `/api/rooms/:roomId/hint` | — | `{ hint, hintsUsed }` |
+| `POST` | `/api/rooms/:roomId/reset` | — | `{ session }` — wipes only this room's progress ([ADR-0066](docs/adr/0066-room-03-hearts-system.md)) |
+| `POST` | `/api/rooms/:roomId/complete` | — | `{ session }` — marks the room solved with no answer, if `canComplete()` allows it ([ADR-0070](docs/adr/0070-olympus-carpet-race.md)) |
 
 The social layer, added by ADRs 0023–0029:
 
@@ -232,7 +234,7 @@ The social layer, added by ADRs 0023–0029:
 | `GET` | `/api/leaderboard/friends` | — | `{ entries }` — you and your friends |
 | `GET` | `/api/leaderboard/global` | — | `{ entries }` — everybody who has started |
 | `GET` | `/api/party` | — | `{ party }` — host, members, `isHost` |
-| `POST` | `/api/stage/heartbeat` | position, emote, ready, hidden | `{ peers, phase, isHost }` — 2 Hz |
+| `POST` | `/api/stage/heartbeat` | position, emote, ready, hidden, acted, holding | `{ peers, phase, isHost, room, version }` — 2 Hz |
 | `POST` | `/api/stage/alive` | `{ hidden }` | `204` — "I still have the game open", 5 s, every screen |
 | `POST` | `/api/stage/phase` | `{ kind, roomId? }` | `204` — host only; moves the whole party |
 | `DELETE` | `/api/stage` | — | `204` — off the stage, still in the party |
@@ -346,6 +348,19 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-07 | [0073](docs/adr/0073-every-room-is-multiplayer.md) | Every room is multiplayer: one version integer on the beat, and a party rail the shell draws | Accepted |
+| 2026-08-07 | [0050](docs/adr/0050-the-lost-archive-returns-as-room-five.md) | The Lost Archive comes back as room five, and the game grows to five rooms | Accepted |
+| 2026-08-06 | [0072](docs/adr/0072-room-04-tuned-for-fairness-and-demo-safety.md) | Room 4 tuned for fairness, checkpoint respawn, real interactive puzzles, and asset weight cut from about 106MB to 13MB | Proposed |
+| 2026-08-05 | [0071](docs/adr/0071-room-04-becomes-a-3d-chase-runner.md) | Room 4 becomes a 3D chase runner built on react three fiber, the only room using that stack | Proposed |
+| 2026-08-06 | [0049](docs/adr/0049-press-e-and-five-acts.md) | Walk up to a thing and press E; the sea slows to two and a half minutes; five acts and a full-screen vault | Accepted |
+| 2026-08-06 | [0048](docs/adr/0048-the-hall-floods.md) | Room 01 is a place you play by walking, it is filling up, and it changes shape when a friend is in it | Accepted |
+| 2026-08-05 | [0070](docs/adr/0070-olympus-carpet-race.md) | Olympus becomes a carpet-racing coin challenge, not a riddle sequence; new `POST /api/rooms/:roomId/complete` | Proposed |
+| 2026-08-05 | [0069](docs/adr/0069-room-owns-its-own-finale.md) | A room decides when it's done showing its own finale, via a new `onRoomFinished` callback | Proposed |
+| 2026-08-05 | [0068](docs/adr/0068-room-completion-vs-attempt-correctness.md) | A correct attempt and a finished room are different things — fixes players being bounced out of room-03 mid-run | Proposed |
+| 2026-08-05 | [0067](docs/adr/0067-olympus-second-act.md) | A third beat after Atlantis: Mount Olympus, a second server-checked riddle act | Proposed, superseded by 0070 |
+| 2026-08-05 | [0066](docs/adr/0066-room-03-hearts-system.md) | A shared 3-hearts system across the Sphinx and Atlantis, plus a room-scoped reset endpoint | Proposed |
+| 2026-08-04 | [0065](docs/adr/0065-room-03-sphinx-riddles.md) | Room 3 is a five-riddle sequence staged from the event log; frontend gets its room shell | Proposed |
+| 2026-08-06 | [0047](docs/adr/0047-art-arrives-before-the-animation.md) | Fetch a screen's art before it arrives; hold any piece that still has none | Accepted |
 | 2026-08-06 | [0046](docs/adr/0046-email-an-absent-friend.md) | Invite a friend who is not on the app and they get an email, with your character in it | Accepted |
 | 2026-08-06 | [0045](docs/adr/0045-membership-is-liveness.md) | Being in a game is a claim you keep alive; close the tab and you leave both | Accepted |
 | 2026-08-05 | [0044](docs/adr/0044-unbuild-into-dots.md) | Screens unbuild into their own halftone dots and rebuild out of them | Accepted |
@@ -393,7 +408,8 @@ approved the corresponding ADR.
 | 2026-08-03 | [0002](docs/adr/0002-monorepo-npm-workspaces.md) | npm workspaces monorepo | Accepted |
 | 2026-08-03 | [0001](docs/adr/0001-project-choice.md) | We build Projekt A, the digital escape room | Accepted |
 
-All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03, the rest as they were written.
+All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03, the rest as they were written —
+except 0065–0070 (room-03's Sphinx build), which are `Proposed` and still await his review.
 
 ### Where the code stands
 
@@ -498,6 +514,23 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
   you are outside it, so nobody is missing from their own board
   ([ADR-0036](docs/adr/0036-global-board-is-a-top-ten.md)). Position comes from `rank` on the wire,
   never from the array index — the eleventh row may be the player in twenty-third place.
+- **Every room is multiplayer** ([ADR-0073](docs/adr/0073-every-room-is-multiplayer.md)). Progress
+  has been shared since ADR-0028, but only room 01 ever *showed* you another person and progress only
+  arrived when **you** made a request — a partner could finish the room beside you and your screen
+  would not move.
+  - **One integer fixes the second half**: `version` on the heartbeat says how many times the party's
+    game has been written. When it moves, the client re-reads the game (`POST /api/sessions`, which
+    is idempotent). Held **in memory** by `GameService`, never read from DynamoDB — the beat runs
+    twice a second per player and the answer is almost always "nothing happened".
+  - **`PartyRail` fixes the first**: who else is in this room, what they last did, and emotes. Drawn
+    by the **shell**, so none of the four rooms other people built were touched to get it, and drawn
+    **only when you are not alone** — rooms 02 and 04 own their whole screen.
+  - What somebody last did is read off the activity log (ADR-0020), so nothing new travels for it.
+    **An event with no actor is the host's** — `actorFor` leaves the game's owner off deliberately,
+    which was fine while the owner was the only reader and makes the host undescribable now that a
+    guest reads it too.
+  - **Room 03 had no heartbeat and no phase at all**, so a host walking into it left their partner in
+    the lobby. `useRoomParty` is the piece both room shells now share.
 - **Co-op play** — invite a friend into your game, or join theirs. Both see the same progress and
   either can solve; the log says who did what. A player points at the *host's* user id rather than a
   synthetic game id, so the games table never had to be re-keyed and no progress was thrown away,
@@ -506,9 +539,57 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
 - **The game** — **Start** on the Rooms tab runs an ink-flood transition into the **lobby**: a
   printed 1950s room your character stands in the middle of and walks around, with an emote bar, a
   room picker and PLAY ([ADR-0037](docs/adr/0037-lobby-stage-and-rooms.md)). PLAY counts down and
-  drops you into the room. **Room 01 is deliberately empty and walkable**; rooms 02–04 are stubs
-  wired to the real `attempt` and `hint` endpoints — a sub-team writes the puzzle in
-  `rooms/room-0N.tsx` and touches nothing else (ADR-0007).
+  drops you into the room. **Rooms 01 and 03 are full builds**; rooms 02 and 04 are stubs wired to
+  the real `attempt` and `hint` endpoints — a sub-team writes the puzzle in `rooms/room-0N.tsx` and
+  touches nothing else (ADR-0007).
+- **Room 03 is "The Sphinx's Reckoning"** (ADR-0065–0070, `Proposed`, pending Nepomuk's review): five
+  ancient riddles in a walkable corridor, an Atlantis artifact-recovery quest, and a top-down Olympus
+  carpet race. It needs a richer, room-owned `RoomProps` contract than the others (hints inline in its
+  own dialogue, a hearts system, a room-scoped reset, and a `complete` step for stages with no
+  server-checked answer), so it renders full-screen rather than through the shared `Stage`/`RoomView`
+  shell — see its own component for how that seam works.
+- **Room 01 — the Reading Hall — is a place, not a question**
+  ([ADR-0048](docs/adr/0048-the-hall-floods.md)). It is under the harbour and filling up, and
+  **everything in it is done by walking somewhere and stopping**: the lamps, the tablets, the two
+  sluice wheels. The only thing anybody types is the six figures at the vault. That is why the co-op
+  cost nothing — positions have been on the heartbeat twice a second since ADR-0038, so a second
+  player is another set of coordinates in the same list.
+  - **Walk up to a thing and press E** ([ADR-0049](docs/adr/0049-press-e-and-five-acts.md)). A prompt
+    says what E will do before it does it — the earlier version had standing on a station *be* the
+    action, which was elegant and completely mute. The prompt is **chrome, not world**: everything
+    inside the stage is scaled to about 0.2 on a phone, so a tag over the lamp would be four-pixel
+    type. It is also a **button**, because there is no E key on a phone.
+  - Two fields carry it: **`acted`** (an event, consumed by the beat carrying it) and **`holding`**
+    (state, re-sent every beat). Both verified against the position **in the mechanism**, not just in
+    the service — a test caught that with the check only in `HallService`, a hand-made occupant
+    claiming a wheel across the hall pumped it happily. Both **defaulted, not required**: this beat
+    goes out twice a second from every open tab, so required fields would 400 every player who had
+    not reloaded after a deploy.
+  - **The water is the clock, the enemy and the gate**, so there is no countdown anywhere in the
+    room. **Two and a half minutes** of doing nothing, up from forty-six seconds. One wheel creeps
+    the level back, both push it back properly, and a wheel keeps turning 5 s after you let go —
+    which is the whole solo game against a 3.3 s crossing.
+  - **The hall counts you: I or II.** What one person works alone, two have to work together — the
+    lamps stop taking a flame singly, the floor opens down the middle and takes what you carry into
+    it, and the plaque saying which way to turn your wheel is at the *other* player's end. The count
+    is locked while an act runs and re-forms if a partner leaves.
+  - **Five acts, and four different shapes of co-operation.** The lamps want two people at once
+    (within two seconds — a keypress cannot be simultaneous the way standing somewhere can); the
+    index wants a hand-off across a flooded channel; the great wheel puts the plaque telling you
+    which way to turn at your *partner's* end; and the sluice gate only winds while **both** winches
+    are held. Shutting it halves the rise for the rest of the run, which is the only act that pays in
+    mechanics rather than figures — and the only one that is a decision rather than a puzzle.
+  - **The vault is full screen**: six odometer drums on the `.countdown` overlay. A real `<input>`
+    sits behind them, invisible and focused, which gives typing and a mobile numeric keypad for free
+    — and suspends walking, because `useMovement` already ignores keys while a field has focus.
+  - **Nothing is sent before it is earned.** `publicData()` is a floor plan; the code arrives a
+    fragment at a time as acts finish, so the network tab tells you what playing tells you and no
+    sooner. Stronger than merely omitting the answer — there is nothing to work backwards from.
+  - **Drowning is the whole party**, sticky on the wire so everyone sees the splash, then back to the
+    lobby with the hall thrown away. A room you can leave halfway through and return to is a room
+    whose clock means nothing.
+  - The halls are one in-memory map keyed by host, **ticked from whichever heartbeat arrives** — no
+    timer, so a hall nobody is in is not rising.
   - **Depth is `z-index`, never DOM order.** Sorting the stage's children by
     position made React reorder keyed nodes as people walked, and **moving a DOM node restarts its
     CSS animations** — the drop-in replayed dozens of times a minute. A test pins the DOM order as
@@ -548,6 +629,16 @@ All of the above were approved by Nepomuk Crhonek — 0001–0011 on 2026-08-03,
     beats from *every* screen, not just the stage — you can be in a friend's game while reading the
     leaderboard. Walking out of the lobby takes your character off the stage at once and leaves you
     in the party, which is the one departure that is a real click rather than a guess.
+  - **A piece does not fly in until it has something to fly in with**
+    ([ADR-0047](docs/adr/0047-art-arrives-before-the-animation.md)). A scene is about a megabyte of
+    scenery and nothing used to fetch it until the stage painted, so on a cold cache the wave
+    animated **empty boxes** and the furniture popped in afterwards. Now the Rooms tab pulls down the
+    lobby (Start is the button on it), the lobby pulls down whichever room is selected, and your own
+    character comes with it — `decode()`, not just `load`, because otherwise the hitch just moves to
+    the frame that draws it. One promise per URL, so flicking along the room row costs one download
+    each. And any piece whose art still has not arrived is **held invisible** rather than animated
+    empty, released the moment it can be drawn, with a 2.5s ceiling because an image that 404s never
+    fires `load`.
   - **Screens unbuild themselves into dots** ([ADR-0044](docs/adr/0044-unbuild-into-dots.md)). The
     whole app is printed as a halftone, so a panel leaving does not slide or fade: an animated dot
     mask at the page's own 6px pitch takes its ink away until only its dots are left, those fade into

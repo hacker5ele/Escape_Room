@@ -8,6 +8,7 @@ import {
   TEST_USER_WITHOUT_NAME,
   TEST_USER_WITHOUT_USERNAME,
 } from './http/test-authenticator.js'
+import { ROOM_IDS } from '@escape-room/shared'
 import { SOLUTIONS } from './domain/rooms/solutions.fixture.js'
 
 const ALICE = 'user_alice'
@@ -227,7 +228,7 @@ describe('room access', () => {
 
     const response = await as(app, ALICE).get('/api/rooms')
     expect(response.status).toBe(200)
-    expect(response.body.rooms).toHaveLength(4)
+    expect(response.body.rooms).toHaveLength(ROOM_IDS.length)
     expect(response.body.rooms[0]).toMatchObject({ id: 'room-01', unlocked: true, solved: false })
     expect(response.body.rooms[1]).toMatchObject({ id: 'room-02', unlocked: false })
     expect(response.body.rooms[0].data).toBeUndefined()
@@ -277,20 +278,47 @@ describe('attempts', () => {
     const app = buildApp()
     await startGame(app, ALICE)
 
-    let body: { session: { solvedRooms: string[]; finishedAt: string | null } } | undefined
-
-    for (const roomId of ['room-01', 'room-02', 'room-03', 'room-04'] as const) {
+    for (const roomId of ['room-01', 'room-02'] as const) {
       const response = await as(app, ALICE)
         .post(`/api/rooms/${roomId}/attempt`)
         .send({ answer: SOLUTIONS[roomId] })
 
       expect(response.status, `${roomId} should accept its solution`).toBe(200)
       expect(response.body.correct, `${roomId} should be solved`).toBe(true)
-      body = response.body
     }
 
-    expect(body?.session.solvedRooms).toHaveLength(4)
-    expect(body?.session.finishedAt).not.toBeNull()
+    // room-03's five riddles are real progress but no longer finish the
+    // room by themselves (ADR-0068) — Atlantis and the Olympus carpet race
+    // both follow, entirely client-side, and only POST .../complete
+    // (ADR-0070) actually marks the room solved once those are cleared too.
+    const SPHINX_ANSWERS = ['A', 'C', 'D', 'D', 'B']
+    for (const answer of SPHINX_ANSWERS) {
+      const response = await as(app, ALICE).post('/api/rooms/room-03/attempt').send({ answer })
+      expect(response.status, 'room-03 should accept its solution').toBe(200)
+      expect(response.body.correct, 'room-03 should accept its solution').toBe(true)
+    }
+
+    const complete = await as(app, ALICE).post('/api/rooms/room-03/complete').send({})
+    expect(complete.status, 'room-03 should be completable after its riddles').toBe(200)
+    expect(complete.body.session.solvedRooms).toContain('room-03')
+
+    const room04 = await as(app, ALICE).post('/api/rooms/room-04/attempt').send({ answer: SOLUTIONS['room-04'] })
+    expect(room04.status, 'room-04 should accept its solution').toBe(200)
+    expect(room04.body.correct, 'room-04 should be solved').toBe(true)
+
+    // The Lost Archive is the last door since ADR-0050 moved it out of room
+    // four to make room for Abigail's.
+    const last = await as(app, ALICE)
+      .post('/api/rooms/room-05/attempt')
+      .send({ answer: SOLUTIONS['room-05'] })
+    expect(last.status, 'room-05 should accept its solution').toBe(200)
+    expect(last.body.correct, 'room-05 should be solved').toBe(true)
+
+    // Counted off the contract rather than written out, so the next room to be
+    // added does not quietly leave this test asserting a game is finished when
+    // it is not.
+    expect(last.body.session.solvedRooms).toHaveLength(ROOM_IDS.length)
+    expect(last.body.session.finishedAt).not.toBeNull()
   })
 
   it('rate-limits repeated attempts so answers cannot be brute-forced', async () => {
@@ -305,6 +333,91 @@ describe('attempts', () => {
     const blocked = await attempt()
     expect(blocked.status).toBe(429)
     expect(blocked.body.error.code).toBe('RATE_LIMITED')
+  })
+
+  describe('room-03 hearts (ADR-0066)', () => {
+    async function unlockRoom03(app: Express) {
+      await startGame(app, ALICE)
+      await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
+      await as(app, ALICE).post('/api/rooms/room-02/attempt').send({ answer: SOLUTIONS['room-02'] })
+    }
+
+    it('a wrong answer costs a heart and re-asks the same riddle, not riddle one', async () => {
+      const app = buildApp()
+      await unlockRoom03(app)
+
+      const before = await as(app, ALICE).get('/api/rooms/room-03')
+      expect(before.body.room.data.hearts).toBe(3)
+      expect(before.body.room.data.riddleNumber).toBe(1)
+
+      // Riddle one's correct letter is 'A', so 'D' is a genuine miss.
+      const wrong = await as(app, ALICE).post('/api/rooms/room-03/attempt').send({ answer: 'D' })
+      expect(wrong.status).toBe(200)
+      expect(wrong.body.correct).toBe(false)
+
+      const after = await as(app, ALICE).get('/api/rooms/room-03')
+      expect(after.body.room.data.hearts).toBe(2)
+      expect(after.body.room.data.riddleNumber).toBe(1)
+    })
+
+    it('losing the third heart resets to riddle one with hearts refilled', async () => {
+      const app = buildApp()
+      await unlockRoom03(app)
+
+      await as(app, ALICE).post('/api/rooms/room-03/attempt').send({ answer: SOLUTIONS['room-03'] })
+      const midway = await as(app, ALICE).get('/api/rooms/room-03')
+      expect(midway.body.room.data.riddleNumber).toBe(2)
+
+      // Three wrong answers on riddle two burns the last heart and restarts.
+      // Riddle two's correct letter is 'C', so 'D' is a genuine miss.
+      await as(app, ALICE).post('/api/rooms/room-03/attempt').send({ answer: 'D' })
+      await as(app, ALICE).post('/api/rooms/room-03/attempt').send({ answer: 'D' })
+      const lastMiss = await as(app, ALICE).post('/api/rooms/room-03/attempt').send({ answer: 'D' })
+      expect(lastMiss.body.feedback).toMatch(/starts its questions over/i)
+
+      const after = await as(app, ALICE).get('/api/rooms/room-03')
+      expect(after.body.room.data.hearts).toBe(3)
+      expect(after.body.room.data.riddleNumber).toBe(1)
+    })
+  })
+
+  describe('room completion without an answer (ADR-0070)', () => {
+    async function unlockRoom03(app: Express) {
+      await startGame(app, ALICE)
+      await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
+      await as(app, ALICE).post('/api/rooms/room-02/attempt').send({ answer: SOLUTIONS['room-02'] })
+    }
+
+    it('refuses to complete room-03 before its five riddles are done', async () => {
+      const app = buildApp()
+      await unlockRoom03(app)
+
+      const tooSoon = await as(app, ALICE).post('/api/rooms/room-03/complete').send({})
+      expect(tooSoon.status).toBe(409)
+      expect(tooSoon.body.error.code).toBe('ROOM_NOT_READY_TO_COMPLETE')
+    })
+
+    it('completes room-03 once its five riddles are done', async () => {
+      const app = buildApp()
+      await unlockRoom03(app)
+
+      for (const answer of ['A', 'C', 'D', 'D', 'B']) {
+        await as(app, ALICE).post('/api/rooms/room-03/attempt').send({ answer })
+      }
+
+      const response = await as(app, ALICE).post('/api/rooms/room-03/complete').send({})
+      expect(response.status).toBe(200)
+      expect(response.body.session.solvedRooms).toContain('room-03')
+    })
+
+    it('refuses to complete a room with no canComplete() of its own', async () => {
+      const app = buildApp()
+      await startGame(app, ALICE)
+
+      const response = await as(app, ALICE).post('/api/rooms/room-01/complete').send({})
+      expect(response.status).toBe(409)
+      expect(response.body.error.code).toBe('ROOM_NOT_READY_TO_COMPLETE')
+    })
   })
 })
 
@@ -382,5 +495,35 @@ describe('hints', () => {
 
     const response = await as(app, ALICE).post('/api/rooms/room-02/hint').send({})
     expect(response.status).toBe(403)
+  })
+})
+
+describe('room reset', () => {
+  it('wipes one room\'s progress without touching any other room', async () => {
+    const app = buildApp()
+    await startGame(app, ALICE)
+
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: SOLUTIONS['room-01'] })
+    await as(app, ALICE).post('/api/rooms/room-02/hint').send({})
+
+    const reset = await as(app, ALICE).post('/api/rooms/room-01/reset').send({})
+
+    expect(reset.status).toBe(200)
+    expect(reset.body.session.solvedRooms).toEqual([])
+    expect(
+      reset.body.session.events.some((event: { roomId?: string }) => event.roomId === 'room-01'),
+    ).toBe(false)
+    expect(
+      reset.body.session.events.some((event: { roomId?: string }) => event.roomId === 'room-02'),
+    ).toBe(true)
+
+    // room-01 is locked again, exactly as if it had never been solved.
+    expect((await as(app, ALICE).get('/api/rooms/room-02')).status).toBe(403)
+  })
+
+  it('requires authentication', async () => {
+    const app = buildApp()
+    const response = await request(app).post('/api/rooms/room-01/reset').send({})
+    expect(response.status).toBe(401)
   })
 })

@@ -61,6 +61,8 @@ async function beat(
       ready: false,
       emote: null,
       hidden: false,
+      acted: [],
+      holding: null,
       ...overrides,
     })
   expect(response.status).toBe(200)
@@ -310,5 +312,168 @@ describe('the party has a size limit', () => {
     const overflow = await as(app, ERIN).post(`/api/party/join/${ALICE}`)
     expect(overflow.status).toBe(409)
     expect(overflow.body.error.code).toBe('PARTY_FULL')
+  })
+})
+
+/**
+ * The Reading Hall, through the whole chain rather than in a unit test.
+ *
+ * `hall.test.ts` already exercises the mechanism by handing it a clock and a
+ * list of occupants. What it cannot show is that the *real* occupants ever
+ * reach it: that a party of two resolves to one hall, that both members are
+ * gathered off the live store, and that standing at a station is noticed.
+ * Everything between the heartbeat and the water was untested until here.
+ *
+ * The assertions are on `trend` rather than on `depth`, deliberately. Depth
+ * moves with wall-clock time and these beats are microseconds apart, so a test
+ * that watched the level would be testing its own scheduler. `trend` is derived
+ * from which wheels are turning *right now* — which is exactly the link in the
+ * chain worth proving.
+ */
+describe('the hall, from the heartbeat', () => {
+  const WEST = { x: 200, y: 800 }
+  const EAST = { x: 1330, y: 800 }
+  const MIDDLE = { x: 800, y: 800 }
+
+  async function partyInTheHall(app: Server) {
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+    await as(app, BOB).post(`/api/party/join/${ALICE}`)
+    // The host's location is the party's location (ADR-0040).
+    await as(app, ALICE).post('/api/stage/phase').send({ kind: 'room', roomId: 'room-01' })
+  }
+
+  it('gives a party standing in it one hall, not one each', async () => {
+    const app = buildApp()
+    await partyInTheHall(app)
+
+    // Only the host takes hold of a wheel — at the far west end of the room.
+    await beat(app, ALICE, { ...WEST, holding: 'wheel-west' })
+
+    // And the guest, standing in the middle and nowhere near it, sees it
+    // turning. A hall of their own would still be rising, which is the whole
+    // point of the assertion: comparing the two depths proves nothing, because
+    // two freshly-created halls start at the same number anyway.
+    const guest = await beat(app, BOB, MIDDLE)
+
+    expect(guest.room?.roomId).toBe('room-01')
+    expect(guest.room?.trend).toBe('holding')
+  })
+
+  it('counts the people actually standing in it', async () => {
+    const app = buildApp()
+    await partyInTheHall(app)
+
+    await beat(app, ALICE, MIDDLE)
+    expect((await beat(app, BOB, MIDDLE)).room?.counted).toBe(2)
+  })
+
+  it('notices two people at the two wheels, and pumps', async () => {
+    const app = buildApp()
+    await partyInTheHall(app)
+
+    expect((await beat(app, ALICE, MIDDLE)).room?.trend).toBe('rising')
+
+    await beat(app, ALICE, { ...WEST, holding: 'wheel-west' })
+    expect((await beat(app, BOB, MIDDLE)).room?.trend).toBe('holding')
+
+    await beat(app, BOB, { ...EAST, holding: 'wheel-east' })
+    expect((await beat(app, ALICE, { ...WEST, holding: 'wheel-west' })).room?.trend).toBe('falling')
+  })
+
+  /**
+   * The whole of what pressing E bought, at the far end of the chain: standing
+   * somewhere is no longer doing something. You have to take hold of it.
+   */
+  it('does not pump for somebody standing at a wheel without taking hold', async () => {
+    const app = buildApp()
+    await partyInTheHall(app)
+
+    expect((await beat(app, ALICE, WEST)).room?.trend).toBe('rising')
+  })
+
+  it('refuses a wheel claimed from the other end of the hall', async () => {
+    const app = buildApp()
+    await partyInTheHall(app)
+
+    const body = await beat(app, ALICE, { ...MIDDLE, holding: 'wheel-west' })
+    expect(body.room?.trend).toBe('rising')
+  })
+
+  it('has no hall at all in the lobby', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE)
+    expect((await beat(app, ALICE, MIDDLE)).room).toBeNull()
+  })
+
+  it('throws the hall away when the party leaves it', async () => {
+    const app = buildApp()
+    await partyInTheHall(app)
+    await beat(app, ALICE, MIDDLE)
+
+    await as(app, ALICE).post('/api/stage/phase').send({ kind: 'lobby' })
+
+    expect((await beat(app, ALICE, MIDDLE)).room).toBeNull()
+  })
+})
+
+/**
+ * The one integer that makes every room multiplayer.
+ *
+ * Progress has been shared since ADR-0028 — a guest's solves go to the host's
+ * game — but a player only ever *learned* about it when they themselves made a
+ * request, so a partner could finish the room beside you and your screen would
+ * sit there unchanged. The beat now carries how many times the party's game has
+ * been written; when it moves, the client goes and asks what happened.
+ *
+ * These assert on movement rather than on the value, deliberately. The exact
+ * number is an implementation detail of however many writes an action happens
+ * to make; that it *changes*, and that it changes for the other player too, is
+ * the contract.
+ */
+describe('the party game version, on the beat', () => {
+  it('does not move while nobody does anything', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE)
+
+    const first = await beat(app, ALICE)
+    const second = await beat(app, ALICE)
+
+    expect(second.version).toBe(first.version)
+  })
+
+  it('moves when the player solves something', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE)
+    const before = (await beat(app, ALICE)).version
+
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: 'nope' })
+
+    expect((await beat(app, ALICE)).version).toBeGreaterThan(before)
+  })
+
+  /** The half that matters: it is the *other* player who has to find out. */
+  it('tells a guest that the host has moved the game on', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+    await as(app, BOB).post(`/api/party/join/${ALICE}`)
+
+    const before = (await beat(app, BOB)).version
+
+    // Alice does something. Bob touches nothing at all.
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: 'nope' })
+
+    expect((await beat(app, BOB)).version).toBeGreaterThan(before)
+  })
+
+  it('does not move for a stranger playing their own game', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE, CAROL)
+
+    const before = (await beat(app, CAROL)).version
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: 'nope' })
+
+    expect((await beat(app, CAROL)).version).toBe(before)
   })
 })

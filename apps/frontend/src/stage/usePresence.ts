@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { HeartbeatResponse, PartyPhase, Peer } from '@escape-room/shared'
+import type { HeartbeatResponse, LiveRoom, PartyPhase, Peer } from '@escape-room/shared'
 import { heartbeatResponseSchema } from '@escape-room/shared'
 import { request } from '../api/client'
 import { markStageBeat } from '../api/stage'
@@ -33,6 +33,15 @@ const ACTIVE_MS = 500
  * looked at another tab for ten seconds.
  */
 const HIDDEN_MS = 5_000
+
+/**
+ * The shortest gap between two beats forced by a keypress.
+ *
+ * The limit on this endpoint is 240 a minute — two a second with headroom — and
+ * the scheduled beat already uses half of it. A player holding E down would eat
+ * the rest in a couple of seconds without this.
+ */
+const FLUSH_MIN_MS = 250
 
 export interface RemoteActor {
   userId: string
@@ -73,9 +82,35 @@ export function usePresence({
   const [actors, setActors] = useState<RemoteActor[]>([])
   const [phase, setPhase] = useState<PartyPhase>({ kind: 'lobby' })
   const [isHost, setIsHost] = useState(true)
+  /**
+   * The room's own state, when the party is standing in one that has a clock.
+   *
+   * Null everywhere else, which is every room but the Reading Hall. It rides
+   * this response rather than a poll of its own because the water changes at
+   * exactly the rate presence already runs at — the rule `presence.routes.ts`
+   * sets out, applied the other way round (ADR-0048).
+   */
+  const [room, setRoom] = useState<LiveRoom | null>(null)
+  /**
+   * How many times the party's game has been written.
+   *
+   * Watched rather than read: when it moves, somebody in the party did
+   * something, and the screen goes and asks what. That one integer is what
+   * makes every room multiplayer — progress has been shared since ADR-0028,
+   * but you only ever learned about it when you yourself made a request.
+   */
+  const [version, setVersion] = useState(0)
 
   const tracks = useRef(new Map<string, Track>())
   const pendingEmote = useRef<EmoteName | null>(null)
+  /** Stations E was pressed at since the last beat. Sent and forgotten. */
+  const pendingActs = useRef<string[]>([])
+  /** What this player has hold of. State so the room can draw it, ref so the beat can send it. */
+  const [holding, setHolding] = useState<string | null>(null)
+  const holdingRef = useRef<string | null>(null)
+  /** Set by the polling effect so a press can beat straight away instead of waiting. */
+  const beatNow = useRef<() => void>(() => {})
+  const lastFlush = useRef(0)
 
   // Read through refs so the polling effect can run once rather than restarting
   // every time a parent re-renders — which, with a character walking, is every
@@ -92,6 +127,44 @@ export function usePresence({
     pendingEmote.current = emote
   }, [])
 
+  /**
+   * Beat right now rather than at the next tick.
+   *
+   * Half a second is a long time to wait for a lamp to light. Everything else
+   * on this channel is a position, which is fine arriving late; a keypress is
+   * not, and a room where E feels sticky is a room that feels broken.
+   *
+   * Debounced, because a player leaning on the key would otherwise spend the
+   * whole rate limit — 240 a minute — on a single lamp.
+   */
+  const flush = useCallback(() => {
+    const at = performance.now()
+    if (at - lastFlush.current < FLUSH_MIN_MS) return
+    lastFlush.current = at
+    beatNow.current()
+  }, [])
+
+  /** Press E at something. Queued for the next beat, which is about to happen. */
+  const act = useCallback(
+    (stationId: string) => {
+      // Capped so a stuck key cannot grow this without bound between beats; the
+      // schema refuses more than eight anyway.
+      if (pendingActs.current.length < 8) pendingActs.current.push(stationId)
+      flush()
+    },
+    [flush],
+  )
+
+  /** Take hold of something, or let go with null. Re-sent every beat until released. */
+  const hold = useCallback(
+    (stationId: string | null) => {
+      holdingRef.current = stationId
+      setHolding(stationId)
+      flush()
+    },
+    [flush],
+  )
+
   useEffect(() => {
     if (!enabled) return
 
@@ -99,6 +172,13 @@ export function usePresence({
     let timer: number | undefined
 
     const beat = async () => {
+      // Taken and cleared *before* the request rather than after it, so a flush
+      // arriving mid-flight cannot send the same press twice. Losing one to a
+      // dropped request is the better failure: pressing E again is nothing, and
+      // picking a tablet up twice is a bug.
+      const acted = pendingActs.current
+      pendingActs.current = []
+
       try {
         // Tells `useLiveness` to stay quiet: this beat renews the same claim,
         // so a player on the stage sends one request per interval, not two.
@@ -106,6 +186,8 @@ export function usePresence({
         const response = await request('/stage/heartbeat', await authRef.current(), {
           method: 'POST',
           body: JSON.stringify({
+            acted,
+            holding: holdingRef.current,
             x: Math.round(position.current.x),
             y: Math.round(position.current.y),
             facing: position.current.facing,
@@ -128,6 +210,8 @@ export function usePresence({
         pendingEmote.current = null
         setPhase(body.phase)
         setIsHost(body.isHost)
+        setRoom(body.room)
+        setVersion(body.version)
 
         const now = performance.now()
         const next = new Map<string, Track>()
@@ -159,9 +243,17 @@ export function usePresence({
       }
     }
 
+    // Lets `flush` cut the wait short: drop the scheduled beat and go now. The
+    // `finally` in `beat` schedules the next one, so the chain is unbroken.
+    beatNow.current = () => {
+      window.clearTimeout(timer)
+      void beat()
+    }
+
     void beat()
     return () => {
       stopped = true
+      beatNow.current = () => {}
       window.clearTimeout(timer)
     }
   }, [enabled, position])
@@ -211,7 +303,7 @@ export function usePresence({
     return () => cancelAnimationFrame(frame)
   }, [enabled])
 
-  return { actors, phase, isHost, sendEmote }
+  return { actors, phase, isHost, room, version, holding, sendEmote, act, hold }
 }
 
 /**

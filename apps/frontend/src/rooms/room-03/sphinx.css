@@ -1,0 +1,447 @@
+/*
+ * Room 3's own theme — amber and sand, carried over from the terminal
+ * prototype's ANSI palette (Escape-Room-NY/sphinx.js). Scoped to
+ * .sphinx-chamber so it never leaks into the rest of the app's look.
+ */
+
+.sphinx-chamber {
+  --sphinx-amber: #e8b04b;
+  --sphinx-amber-bright: #f5d99a;
+  --sphinx-blood: #8a1f1f;
+  --sphinx-blood-bright: #d64545;
+  --sphinx-sand-line: rgba(232, 176, 75, 0.25);
+  --sphinx-bg: #120d08;
+  --sphinx-bg-panel: #1c140c;
+
+  /* A full-screen takeover: this room isn't a card in the page, it's the
+     whole window, so the player is inside the chamber rather than looking
+     at a small preview of it. */
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  border: none;
+  background: radial-gradient(ellipse at top, var(--sphinx-bg-panel), var(--sphinx-bg));
+  padding: 1.25rem clamp(1rem, 4vw, 3rem);
+  font-family: ui-monospace, Consolas, monospace;
+  overflow: hidden;
+}
+
+/* Hieroglyph progress stays centered; hearts pin to the right edge of the
+   same row instead of stacking above/below it, so the corridor's top strip
+   reads as one HUD instead of two competing centered rows. */
+.sphinx-hud-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.85rem;
+}
+
+.sphinx-hud-row .sphinx-hearts {
+  position: absolute;
+  right: 0;
+  margin-bottom: 0;
+}
+
+.sphinx-hud {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.sphinx-hud-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 0.3rem;
+  border: 1px solid rgba(232, 176, 75, 0.2);
+  background: rgba(0, 0, 0, 0.3);
+  transition:
+    border-color 300ms,
+    box-shadow 300ms,
+    background-color 300ms;
+}
+
+.sphinx-hud-tile--lit {
+  border-color: rgba(232, 176, 75, 0.7);
+  background: rgba(232, 176, 75, 0.12);
+  box-shadow: 0 0 10px rgba(232, 176, 75, 0.35);
+}
+
+.sphinx-hud-tile--active {
+  border-color: var(--sphinx-amber-bright);
+  animation: sphinx-hud-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes sphinx-hud-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 6px rgba(232, 176, 75, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(232, 176, 75, 0.55);
+  }
+}
+
+.sphinx-hearts {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.sphinx-heart {
+  filter: drop-shadow(0 0 4px rgba(232, 176, 75, 0.25));
+}
+
+/* Floats over the Atlantis scene the same way the countdown timer does —
+   there is no top HUD bar during free exploration, so hearts need their own
+   fixed position instead of sitting in the normal document flow above the
+   canvas. */
+.sphinx-hearts--atlantis {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.3rem;
+  background: rgba(10, 20, 30, 0.55);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+}
+
+.sphinx-hearts--atlantis .sphinx-hearts {
+  margin-bottom: 0;
+}
+
+.sphinx-riddle-count {
+  color: var(--sphinx-amber);
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  text-align: center;
+  margin: 0 0 0.75rem;
+}
+
+.sphinx-canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: 0.35rem;
+  overflow: hidden;
+  border: 1px solid rgba(232, 176, 75, 0.25);
+  background: #050302;
+}
+
+/* The canvas's backing resolution is kept in lockstep with this element's
+   real CSS size by a ResizeObserver in SphinxGame.tsx, and the game draws
+   its fixed-design-resolution scenes into it with a manual `cover` scale —
+   see applyCoverTransform() there. So the canvas element itself just needs
+   to fill the box; no object-fit is doing any work here. */
+.sphinx-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sphinx-canvas--interactive {
+  cursor: pointer;
+}
+
+.sphinx-hint-text {
+  margin: 0.75rem 0 0;
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: rgba(232, 176, 75, 0.45);
+}
+
+.sphinx-dialogue {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1.25rem 1.5rem 1.5rem;
+  background: linear-gradient(to top, rgba(10, 7, 4, 0.96) 55%, rgba(10, 7, 4, 0));
+  animation: sphinx-fade-in 300ms ease-out;
+}
+
+.sphinx-portrait {
+  display: block;
+  margin: -0.5rem auto 0.25rem;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6));
+}
+
+.sphinx-dialogue--result {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  background: rgba(6, 4, 2, 0.85);
+}
+
+/* The ending chamber's palette — gold on cream rather than amber on black,
+   matching the white-tile/blue-flame/gold room behind it. */
+.sphinx-dialogue--gold {
+  background: rgba(40, 32, 12, 0.35);
+}
+
+.sphinx-dialogue--gold .sphinx-speaker {
+  color: rgba(120, 90, 20, 0.8);
+}
+
+.sphinx-dialogue--gold .sphinx-line {
+  color: #3a2c0a;
+  text-shadow: 0 1px 4px rgba(255, 255, 255, 0.6);
+}
+
+.sphinx-dialogue--gold .sphinx-line--post {
+  color: #8a6710;
+}
+
+/* The waiting room's closing message — shown over that scene's dark
+   violet-blue night sky, not the ending chamber's pale cream, so it needs
+   its own light-on-dark palette rather than --gold's dark-on-cream one
+   (which combined with --result's own dark overlay to render nearly
+   unreadable). Warm, pale gold-white text with a soft glow, close to the
+   waiting room's own angelic-light color. */
+.sphinx-dialogue--finale {
+  background: radial-gradient(ellipse at center, rgba(40, 30, 70, 0.55), rgba(10, 5, 30, 0.9));
+}
+
+.sphinx-dialogue--finale .sphinx-speaker {
+  color: rgba(255, 240, 210, 0.65);
+}
+
+.sphinx-dialogue--finale .sphinx-line {
+  color: #fff8e8;
+  text-shadow: 0 0 18px rgba(255, 230, 170, 0.5);
+}
+
+.sphinx-dialogue--finale .sphinx-line--post {
+  color: #ffe6a8;
+  font-size: 1.1rem;
+  text-shadow: 0 0 20px rgba(255, 220, 150, 0.6);
+}
+
+.sphinx-hint-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 3rem;
+  animation: sphinx-fade-in 400ms ease-out;
+}
+
+.sphinx-riddle-title {
+  margin: 0 0 0.5rem;
+  color: var(--sphinx-amber);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.sphinx-timer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  color: var(--sphinx-amber);
+  font-size: 0.8rem;
+}
+
+/* The Atlantis quest's clock floats at the top of the scene instead of
+   inline in a dialogue box, since there's no dialogue box up during free
+   exploration — only the HUD needs to be visible the whole time.
+   Centered via left/right:0 + width:fit-content + margin:auto rather than
+   left:50%+translateX(-50%) — the transform version can land the element on
+   a sub-pixel offset (half a device pixel), which browsers render by
+   blurring/anti-aliasing the whole element, text included. The margin:auto
+   trick always resolves to a whole-pixel position. */
+.sphinx-timer--atlantis {
+  position: absolute;
+  top: 0.75rem;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 0.4rem 0.9rem;
+  border-radius: 0.3rem;
+  background: rgba(10, 20, 30, 0.55);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  color: #f2dfa0;
+}
+
+/* Stays up the whole time an artifact is carried, unlike the toast messages
+   — otherwise there is no ongoing sign an item was picked up at all. Same
+   margin:auto centering as .sphinx-timer--atlantis, for the same reason. */
+.sphinx-carrying-banner {
+  position: absolute;
+  top: 3.25rem;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 0.35rem 0.9rem;
+  border-radius: 0.3rem;
+  background: rgba(10, 20, 30, 0.55);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  color: #f2dfa0;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* A short-lived caption for Atlantis feedback (found/placed/penalty) that
+   doesn't take over the whole bottom of the screen the way the Sphinx's
+   full dialogue box does — the player is meant to keep exploring, not stop
+   and read a wall of text. */
+.sphinx-dialogue--caption-only {
+  padding: 0.75rem 1.25rem;
+  text-align: center;
+}
+
+.sphinx-dialogue--caption-only .sphinx-line {
+  font-size: 0.85rem;
+  min-height: 0;
+}
+
+.sphinx-speaker {
+  color: rgba(232, 176, 75, 0.5);
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.sphinx-line {
+  color: var(--sphinx-amber-bright);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  min-height: 1.6em;
+}
+
+.sphinx-line--post {
+  margin-top: 1.25rem;
+  color: var(--sphinx-amber);
+}
+
+.sphinx-line--alarm {
+  color: var(--sphinx-blood-bright);
+}
+
+.sphinx-choices {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  animation: sphinx-fade-in 400ms ease-out;
+}
+
+.sphinx-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(232, 176, 75, 0.3);
+  background: transparent;
+  color: rgba(245, 217, 154, 0.75);
+  padding: 0.6rem 0.85rem;
+  text-align: left;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    border-color 150ms,
+    background-color 150ms,
+    color 150ms;
+}
+
+.sphinx-choice:hover {
+  border-color: rgba(232, 176, 75, 0.6);
+}
+
+.sphinx-choice--selected {
+  border-color: var(--sphinx-amber);
+  background: rgba(232, 176, 75, 0.1);
+  color: var(--sphinx-amber-bright);
+}
+
+.sphinx-choice-letter {
+  color: var(--sphinx-amber);
+  font-weight: 600;
+}
+
+.sphinx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  animation: sphinx-fade-in 400ms ease-out;
+}
+
+.sphinx-answer-button {
+  border-radius: 0.25rem;
+  border: none;
+  background: var(--sphinx-amber);
+  color: #1c140c;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.6rem 1.1rem;
+  cursor: pointer;
+  transition:
+    background-color 150ms,
+    opacity 150ms;
+}
+
+.sphinx-answer-button:hover:not(:disabled) {
+  background: var(--sphinx-amber-bright);
+}
+
+.sphinx-answer-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sphinx-hint-button {
+  border-radius: 0.25rem;
+  border: 1px solid rgba(232, 176, 75, 0.4);
+  background: transparent;
+  color: var(--sphinx-amber);
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 0.6rem 1.1rem;
+  cursor: pointer;
+  transition: border-color 150ms;
+}
+
+.sphinx-hint-button:hover {
+  border-color: var(--sphinx-amber);
+}
+
+.sphinx-hint {
+  margin-top: 0.75rem;
+  color: rgba(232, 176, 75, 0.6);
+  font-size: 0.85rem;
+}
+
+@keyframes sphinx-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sphinx-dialogue {
+    animation: none;
+  }
+}

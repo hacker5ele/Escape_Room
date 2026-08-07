@@ -28,11 +28,44 @@ const MAX_WRITE_ATTEMPTS = 3
  * this player is in", which may be somebody else's.
  */
 export class GameService {
+  /**
+   * The version each game was last saved at, in memory.
+   *
+   * Exists so the heartbeat can say *"the party's game has moved on"* without
+   * reading the game. That beat runs twice a second for every player on a
+   * stage; fetching a session from DynamoDB on it would be a database read per
+   * player per half-second, to answer a question that is almost always "no".
+   *
+   * A number rather than the game itself, and lossy on purpose: a fresh process
+   * knows nothing and answers 0 for everybody, which reads as *"nothing has
+   * changed"* until the first write — at which point every client sees it move
+   * and asks for the real thing. Being wrong here costs a refetch that was
+   * going to happen anyway; it can never invent progress or hide it.
+   */
+  readonly #versions = new Map<string, number>()
+
   constructor(
     private readonly repository: GameRepository,
     /** Absent means solo play only — every player is their own host. */
     private readonly party?: LiveStore,
   ) {}
+
+  /**
+   * How many times this game has been written, as far as this process knows.
+   *
+   * Keyed by the *host* — the account the game belongs to — because that is
+   * what a party shares.
+   */
+  versionOf(hostUserId: string): number {
+    return this.#versions.get(hostUserId) ?? 0
+  }
+
+  /** Every write goes through here, so the count cannot drift from the saves. */
+  async #save(game: GameSession): Promise<GameSession> {
+    const saved = await this.repository.save(game)
+    this.#versions.set(saved.userId, saved.version)
+    return saved
+  }
 
   /**
    * Whose game this player is in.
@@ -91,7 +124,7 @@ export class GameService {
       events: [{ at: timestamp, type: 'game_started' }],
       version: 0,
     }
-    return this.repository.save(game)
+    return this.#save(game)
   }
 
   async find(userId: string): Promise<GameSession | null> {
@@ -107,6 +140,22 @@ export class GameService {
   async reset(userId: string): Promise<void> {
     this.party?.release(userId)
     await this.repository.deleteByUserId(userId)
+  }
+
+  /**
+   * Wipes one room's progress only — its events and its `solvedRooms` entry
+   * — leaving the rest of the game untouched. See ADR-0066: this exists so a
+   * client-only sub-mechanic (room-03's Atlantis quest) can trigger a true
+   * "start this room over" without the server having any other way to learn
+   * that happened.
+   */
+  async resetRoom(game: GameSession, roomId: RoomId): Promise<GameSession> {
+    const updated: GameSession = {
+      ...game,
+      solvedRooms: game.solvedRooms.filter((id) => id !== roomId),
+      events: game.events.filter((event) => event.roomId !== roomId),
+    }
+    return this.#save(updated)
   }
 
   /**
@@ -129,7 +178,16 @@ export class GameService {
   }
 
   /**
-   * Logs an answer and, when it is right, marks the room solved — in one save.
+   * Logs an answer and, when the ROOM is actually finished, marks it solved
+   * — in one save.
+   *
+   * `correct` and `roomComplete` are deliberately separate (ADR-0068):
+   * `correct` is whether this one attempt was right (always logged, right
+   * or wrong — the wrong ones are what show where players get stuck).
+   * `roomComplete` is whether the whole room is now done. For a one-shot
+   * room they're the same value; a multi-stage room like room-03 has many
+   * correct answers before the one that actually finishes it, and
+   * `roomComplete` is `false` for all the others.
    *
    * Combined deliberately: writing the event and the progress separately would
    * mean two round trips per attempt and a window where the log and the
@@ -140,6 +198,7 @@ export class GameService {
     roomId: RoomId,
     answer: unknown,
     correct: boolean,
+    roomComplete: boolean,
     actor?: Actor,
   ): Promise<GameSession> {
     // Re-applied against whatever the game looks like at write time, so a
@@ -157,7 +216,7 @@ export class GameService {
         ...by(actor),
       })
 
-      if (correct && !updated.solvedRooms.includes(roomId)) {
+      if (roomComplete && !updated.solvedRooms.includes(roomId)) {
         updated = { ...updated, solvedRooms: [...updated.solvedRooms, roomId] }
         updated = append(updated, { at, type: 'room_solved', roomId, ...by(actor) })
 
@@ -165,6 +224,37 @@ export class GameService {
           updated = { ...updated, finishedAt: at }
           updated = append(updated, { at, type: 'game_completed' })
         }
+      }
+
+      return updated
+    })
+  }
+
+  /**
+   * Marks a room solved directly, with no attempt/answer involved — for a
+   * room whose later stages are entirely client-side (ADR-0070: room-03's
+   * Atlantis quest and Olympus carpet race), so there is no further
+   * server-checked answer left to hang `roomComplete` off of. The room
+   * itself decides when this is allowed to succeed — see
+   * `RoomDefinition.canComplete` — so calling this early (e.g. before the
+   * Sphinx's five riddles are actually done) does nothing.
+   */
+  async completeRoom(game: GameSession, roomId: RoomId, actor?: Actor): Promise<GameSession> {
+    if (game.solvedRooms.includes(roomId)) return game
+
+    return this.#mutate(game, (current) => {
+      if (current.solvedRooms.includes(roomId)) return null
+
+      const at = now()
+      let updated: GameSession = {
+        ...current,
+        solvedRooms: [...current.solvedRooms, roomId],
+      }
+      updated = append(updated, { at, type: 'room_solved', roomId, ...by(actor) })
+
+      if (isGameComplete(updated) && updated.finishedAt === null) {
+        updated = { ...updated, finishedAt: at }
+        updated = append(updated, { at, type: 'game_completed' })
       }
 
       return updated
@@ -208,7 +298,7 @@ export class GameService {
       if (updated === null) return current
 
       try {
-        return await this.repository.save(updated)
+        return await this.#save(updated)
       } catch (error) {
         if (!(error instanceof GameConflictError)) throw error
 
