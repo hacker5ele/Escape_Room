@@ -150,9 +150,10 @@ const DEFINITIONS: Record<RoomId, RoomDefinition> = {
   },
   'room-04': {
     id: 'room-04',
-    title: 'Room Four',
-    tagline: 'The last door.',
+    title: 'The Abandoned City',
+    tagline: 'Find the last living plants to save your planet.',
     scene: 'vault',
+    customScene: true,
     render: (props) => <RoomFour {...props} />,
   },
   'room-05': {

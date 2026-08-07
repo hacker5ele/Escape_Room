@@ -30,6 +30,16 @@ export type SoundName =
   | 'fanfare'
   | 'slide'
   | 'stamp'
+  | 'heartbeat'
+  | 'footstep'
+  | 'ambient'
+  | 'relief'
+  | 'bell1'
+  | 'bell2'
+  | 'bell3'
+  | 'bell4'
+  | 'beat'
+  | 'ascend'
 
 const MUTE_KEY = 'escape-room:muted'
 
@@ -242,6 +252,49 @@ const RECIPES: Record<SoundName, (ctx: AudioContext, out: GainNode) => void> = {
   stamp: (ctx, out) => {
     noise(ctx, out, { duration: 0.07, from: 3200, to: 900, q: 0.7, volume: 0.3 })
     tone(ctx, out, { type: 'triangle', from: 180, to: 60, duration: 0.14, volume: 0.28 })
+  },
+
+  /** One pulse of a chase's heartbeat: a deep thump with no ring to it. */
+  heartbeat: (ctx, out) => {
+    tone(ctx, out, { type: 'sine', from: 90, to: 42, duration: 0.16, volume: 0.32 })
+    noise(ctx, out, { duration: 0.05, from: 220, to: 90, q: 1.4, volume: 0.12 })
+  },
+
+  /** One footfall: a soft low tap, quiet enough to sit under everything else. */
+  footstep: (ctx, out) => {
+    tone(ctx, out, { type: 'sine', from: 140, to: 90, duration: 0.08, volume: 0.09 })
+    noise(ctx, out, { duration: 0.04, from: 300, to: 150, q: 1.2, volume: 0.05 })
+  },
+
+  /** A breath of the empty city: a low swell with a thin wind of noise on it. */
+  ambient: (ctx, out) => {
+    tone(ctx, out, { type: 'sine', from: 58, to: 48, duration: 2.4, volume: 0.05 })
+    noise(ctx, out, { duration: 2.1, from: 420, to: 180, q: 0.5, volume: 0.03 })
+  },
+
+  /** The exhale after a close call: a soft downward sigh, nothing sharp about it. */
+  relief: (ctx, out) => {
+    tone(ctx, out, { type: 'sine', from: 340, to: 200, duration: 0.5, volume: 0.16 })
+    noise(ctx, out, { duration: 0.35, from: 900, to: 300, q: 0.6, volume: 0.08 })
+  },
+
+  /** Four bell tones, one per step of the monastery's pattern puzzle. */
+  bell1: (ctx, out) => tone(ctx, out, { type: 'sine', from: 523, duration: 0.32, volume: 0.22 }),
+  bell2: (ctx, out) => tone(ctx, out, { type: 'sine', from: 659, duration: 0.32, volume: 0.22 }),
+  bell3: (ctx, out) => tone(ctx, out, { type: 'sine', from: 784, duration: 0.32, volume: 0.22 }),
+  bell4: (ctx, out) => tone(ctx, out, { type: 'sine', from: 988, duration: 0.32, volume: 0.22 }),
+
+  /** One pulse of the run's driving beat: a punchy low kick with a click on top. */
+  beat: (ctx, out) => {
+    tone(ctx, out, { type: 'sine', from: 130, to: 55, duration: 0.13, volume: 0.18 })
+    noise(ctx, out, { duration: 0.03, from: 1200, to: 400, q: 1, volume: 0.08 })
+  },
+
+  /** The rise: a triumphant sweep upward, for the moment the wizard is banished. */
+  ascend: (ctx, out) => {
+    tone(ctx, out, { type: 'sine', from: 220, to: 880, duration: 2.2, volume: 0.22 })
+    tone(ctx, out, { type: 'triangle', from: 330, to: 1320, at: 0.2, duration: 2.0, volume: 0.14 })
+    noise(ctx, out, { duration: 1.8, from: 300, to: 3000, q: 0.4, volume: 0.08 })
   },
 }
 
