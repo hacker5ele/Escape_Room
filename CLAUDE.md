@@ -348,6 +348,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-07 | [0050](docs/adr/0050-the-lost-archive-returns-as-room-five.md) | The Lost Archive comes back as room five, and the game grows to five rooms | Accepted |
 | 2026-08-06 | [0049](docs/adr/0049-press-e-and-five-acts.md) | Walk up to a thing and press E; the sea slows to two and a half minutes; five acts and a full-screen vault | Accepted |
 | 2026-08-06 | [0048](docs/adr/0048-the-hall-floods.md) | Room 01 is a place you play by walking, it is filling up, and it changes shape when a friend is in it | Accepted |
 | 2026-08-05 | [0070](docs/adr/0070-olympus-carpet-race.md) | Olympus becomes a carpet-racing coin challenge, not a riddle sequence; new `POST /api/rooms/:roomId/complete` | Proposed |

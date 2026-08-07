@@ -109,6 +109,7 @@ export interface RoomDefinition {
 import { HallWorldFor, RoomOne } from './room-01'
 import { RoomTwo } from './room-02'
 import { RoomFour } from './room-04'
+import { RoomFive } from './room-05'
 
 const DEFINITIONS: Record<RoomId, RoomDefinition> = {
   'room-01': {
@@ -153,6 +154,14 @@ const DEFINITIONS: Record<RoomId, RoomDefinition> = {
     tagline: 'The last door.',
     scene: 'vault',
     render: (props) => <RoomFour {...props} />,
+  },
+  'room-05': {
+    id: 'room-05',
+    title: 'The Lost Archive',
+    tagline: 'Ten marks, out of Rome, Greece, Egypt and Troy.',
+    scene: 'vault',
+    customScene: true,
+    render: (props) => <RoomFive {...props} />,
   },
 }
 
