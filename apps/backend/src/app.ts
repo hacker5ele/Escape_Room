@@ -205,7 +205,7 @@ export function createApp(options: AppOptions = {}): Express {
   // the heartbeat rather than from a timer, so a hall nobody is standing in is
   // not rising (ADR-0048).
   const hallService = new HallService(live)
-  const presenceService = new PresenceService(live, profileService, hallService)
+  const presenceService = new PresenceService(live, profileService, hallService, gameService)
   const chatService = new ChatService(
     messageRepository,
     friendService,

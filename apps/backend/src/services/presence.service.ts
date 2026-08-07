@@ -9,6 +9,7 @@ import { PRESENCE_AWAY_MS, STAGE_BOUNDS } from '@escape-room/shared'
 import type { LiveStore, Standing } from './live-store.js'
 import type { ProfileService } from './profile.service.js'
 import type { HallService } from './hall.service.js'
+import type { GameService } from './game.service.js'
 
 /**
  * Who is standing where.
@@ -33,6 +34,13 @@ export class PresenceService {
     private readonly live: LiveStore,
     private readonly profiles: ProfileService,
     private readonly halls: HallService,
+    /**
+     * Only ever asked for a version number, never for a game.
+     *
+     * That is the whole point: the beat says *whether* the party's progress
+     * moved, and the client fetches the game itself only when it did.
+     */
+    private readonly games: GameService,
   ) {}
 
   /**
@@ -104,6 +112,7 @@ export class PresenceService {
       phase,
       isHost: host === userId,
       room,
+      version: this.games.versionOf(host),
     }
   }
 

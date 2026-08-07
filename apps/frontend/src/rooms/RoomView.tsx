@@ -14,6 +14,8 @@ import { type EmoteName, emoteDuration, emoteSound } from '../character/emotes'
 import type { SoundName } from '../audio/sfx'
 import { isCharacter, type Character } from '../character/parts'
 import { roomDefinition, type RoomProps } from './registry'
+import { PartyRail } from '../social/PartyRail'
+import { startOrResumeGame } from '../api/game'
 import { useEvent } from '../ui/useEvent'
 
 /**
@@ -41,13 +43,13 @@ export function RoomView({
   roomId,
   game,
   character,
-  onSolved,
+  onGameChange,
   onLeave,
 }: {
   roomId: RoomId
   game: GameSession
   character: Character
-  onSolved: (session: GameSession) => void
+  onGameChange: (session: GameSession) => void
   onLeave: () => void
 }) {
   const { authHeaders, profile } = useAppAuth()
@@ -76,6 +78,7 @@ export function RoomView({
     phase,
     isHost,
     room: live,
+    version,
     holding,
     sendEmote,
     act,
@@ -147,6 +150,42 @@ export function RoomView({
   const authRef = useRef(authHeaders)
   authRef.current = authHeaders
 
+  /**
+   * The party's progress, kept live.
+   *
+   * Progress has been shared since ADR-0028, but you only ever found out when
+   * *you* made a request — a partner could finish the room next to you and your
+   * screen would sit there unchanged. The beat now carries a version; when it
+   * moves, somebody did something, and this goes and asks what.
+   *
+   * `POST /api/sessions` is the re-read: it is idempotent and returns the
+   * game, so no endpoint had to be invented for this.
+   *
+   * Starts at the version already seen, so arriving in a room does not fire a
+   * fetch for news that is already on screen.
+   */
+  const seenVersion = useRef(version)
+  const pushGame = useEvent(onGameChange)
+
+  useEffect(() => {
+    if (version === seenVersion.current) return
+    seenVersion.current = version
+
+    let stale = false
+    void (async () => {
+      try {
+        const fresh = await startOrResumeGame(await authRef.current())
+        if (!stale) pushGame(fresh)
+      } catch {
+        // The next thing anybody does will bring it along anyway. A failed
+        // refresh is a screen that is briefly behind, not a broken room.
+      }
+    })()
+    return () => {
+      stale = true
+    }
+  }, [version, pushGame])
+
   useEffect(() => {
     let cancelled = false
 
@@ -202,7 +241,7 @@ export function RoomView({
       const result = await attemptRoom(roomId, value, await authRef.current())
       if (result.correct) {
         setSolved(true)
-        onSolved(result.session)
+        onGameChange(result.session)
         // A room with its own ending has its own idea of what solving sounds
         // and looks like — the shared stamp/fanfare/cheer would just clash.
         if (!definition.ownsEnding) {
@@ -301,6 +340,11 @@ export function RoomView({
           },
         })}
 
+        {/* Who else is in here. Drawn by the shell rather than the room, so a
+            room author never has to know it exists — and it draws nothing at
+            all when you are playing alone. */}
+        <PartyRail peers={actors} events={game.events} onEmote={fire} />
+
         {!definition.ownsEnding && feedback && (
           <p
             role="alert"
@@ -368,6 +412,11 @@ export function RoomView({
               {definition.render(roomProps(state.room))}
             </Stage>
           )}
+
+          {/* On a stage you can already see each other walking about, so this
+              is here for the half the stage cannot show: what everybody has
+              actually *done*. */}
+          <PartyRail peers={actors} events={game.events} onEmote={fire} />
 
           {drowned && (
             <div className="hall-drowned" role="alert">
