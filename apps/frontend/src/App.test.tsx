@@ -223,7 +223,7 @@ describe('App', () => {
 
     it('shows the username and progress', async () => {
       open()
-      expect(await screen.findByText(/alice42 — 1\/4 rooms solved/)).toBeInTheDocument()
+      expect(await screen.findByText(new RegExp(`alice42 — 1/${ROOM_IDS.length} rooms solved`))).toBeInTheDocument()
     })
 
     it('sends the Clerk token to the API', async () => {
@@ -271,7 +271,7 @@ describe('App', () => {
       // Which room you are on is true regardless of what you are looking at,
       // so the status strip sits outside the tabs rather than inside one.
       await userEvent.click(screen.getByRole('tab', { name: /leaderboard/i }))
-      expect(screen.getByText(/alice42 — 1\/4 rooms solved/)).toBeInTheDocument()
+      expect(screen.getByText(new RegExp(`alice42 — 1/${ROOM_IDS.length} rooms solved`))).toBeInTheDocument()
       expect(screen.queryByTestId('room-01')).not.toBeInTheDocument()
     })
 
@@ -435,7 +435,7 @@ describe('App', () => {
           lastName: 'Crhonek',
         })
       })
-      expect(await screen.findByText(/1\/4 rooms solved/)).toBeInTheDocument()
+      expect(await screen.findByText(new RegExp(`1/${ROOM_IDS.length} rooms solved`))).toBeInTheDocument()
     })
 
     it('asks only for the name when Clerk already has a username', async () => {

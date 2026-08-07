@@ -159,6 +159,11 @@ export function Stage({
         // Only a primary press, so a right-click or a second finger does not
         // send the character somewhere unexpected.
         if (event.button !== 0) return
+        // A press on the room's own UI must reach that UI untouched. Capturing
+        // the pointer here retargets the click that follows to this frame
+        // instead of whatever was actually pressed — a plain button (no form,
+        // no Enter-key fallback) then never fires at all.
+        if (event.target instanceof Element && event.target.closest('.stage-chrome')) return
         event.currentTarget.setPointerCapture(event.pointerId)
         pointTo(event)
       }}

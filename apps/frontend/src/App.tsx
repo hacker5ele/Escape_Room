@@ -10,7 +10,7 @@ import {
   useParams,
 } from 'react-router-dom'
 import { SignInButton, SignUpButton, UserButton } from '@clerk/react'
-import type { GameSession, RoomPublicData } from '@escape-room/shared'
+import type { AttemptResponse, GameSession, RoomId, RoomPublicData } from '@escape-room/shared'
 import { isRoomId, isRoomUnlocked, ROOM_IDS } from '@escape-room/shared'
 import {
   ApiRequestError,
@@ -36,6 +36,8 @@ import { isCharacter, type Character } from './character/parts'
 import { Tabs } from './ui/Tabs'
 import { LobbyView } from './lobby/LobbyView'
 import { RoomView } from './rooms/RoomView'
+import { Room02 } from './rooms/room-02/Room02'
+import { LOCKS } from './rooms/room-02/story'
 import { ROOM_COMPONENTS } from './rooms/room-03-registry'
 import { previewRoomIdFromLocation, RoomPreview } from './rooms/preview'
 import { unlockAudio } from './audio/sfx'
@@ -43,6 +45,67 @@ import { useLiveness } from './stage/useLiveness'
 import { preloadCharacter, preloadScene } from './stage/preload'
 import { Assemble, LEAVE_TOTAL_MS, unbuild } from './fx/Assemble'
 import { isInviteToken } from './routing'
+
+/**
+ * Temporary local preview: `?preview=room-02` renders Room 2 directly, with a
+ * fake session and no network calls, so it can be looked at without a working
+ * Clerk/API setup. Remove once every room is wired up through the real flow
+ * and this stops earning its keep.
+ */
+const FAKE_SESSION: GameSession = {
+  id: '00000000-0000-0000-0000-000000000000',
+  userId: 'preview-user',
+  username: 'preview',
+  playerName: 'Preview',
+  solvedRooms: [],
+  startedAt: new Date().toISOString(),
+  finishedAt: null,
+  hintsUsed: 0,
+  events: [],
+  version: 1,
+}
+
+const FAKE_ROOM: RoomPublicData = {
+  id: 'room-02',
+  order: 2,
+  title: 'Genesis Protocol',
+  intro: 'Preview mode.',
+  prompt: 'Preview mode — no backend involved.',
+  data: {},
+  hintsAvailable: 0,
+}
+
+function PreviewRoom({ roomId }: { roomId: RoomId }) {
+  if (roomId !== 'room-02') {
+    return <p className="p-8 font-mono text-sm text-vault-300">No preview built for {roomId}.</p>
+  }
+  return (
+    <Suspense fallback={<p className="p-8 font-mono text-sm text-vault-300">Loading room…</p>}>
+      <Room02
+        room={FAKE_ROOM}
+        onSubmit={async (answer: unknown): Promise<AttemptResponse> => {
+          // No backend in preview mode, so the exit override is checked
+          // against the frontend's own answer text instead of the server.
+          const normalized = typeof answer === 'string' ? answer.trim().toLowerCase() : ''
+          const correct = normalized === LOCKS.exit.answer.toLowerCase()
+          return {
+            correct,
+            feedback: correct ? undefined : 'Preview mode — checked locally, no backend involved.',
+            session: FAKE_SESSION,
+          }
+        }}
+        onHint={async () => ({
+          hint: 'Preview mode — no real hints.',
+          hintsUsed: 0,
+          hintsRemaining: 0,
+        })}
+        onLeave={() => {
+          window.location.href = '/'
+        }}
+      />
+    </Suspense>
+  )
+}
 
 /**
  * Every screen the app has, addressed by a real path.
@@ -59,10 +122,14 @@ import { isInviteToken } from './routing'
 export function App() {
   useLegacyHashRedirect()
 
-  // Dev-only shortcut: `?preview=room-03` renders that room directly, with
+  // Dev-only shortcut: `?preview=<roomId>` renders that room directly, with
   // mock data and no network calls, bypassing sign-in and the router
-  // entirely — see rooms/preview.tsx.
+  // entirely. Room 2 has its own mock (`PreviewRoom` below, predating this);
+  // every other previewable room goes through `rooms/preview.tsx`.
   const previewRoomId = previewRoomIdFromLocation()
+  if (previewRoomId === 'room-02') {
+    return <PreviewRoom roomId={previewRoomId} />
+  }
   if (previewRoomId) {
     return <RoomPreview roomId={previewRoomId} />
   }

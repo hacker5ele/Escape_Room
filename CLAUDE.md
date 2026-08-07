@@ -348,6 +348,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-07 | [0050](docs/adr/0050-the-lost-archive-returns-as-room-five.md) | The Lost Archive comes back as room five, and the game grows to five rooms | Accepted |
 | 2026-08-06 | [0072](docs/adr/0072-room-04-tuned-for-fairness-and-demo-safety.md) | Room 4 tuned for fairness, checkpoint respawn, real interactive puzzles, and asset weight cut from about 106MB to 13MB | Proposed |
 | 2026-08-05 | [0071](docs/adr/0071-room-04-becomes-a-3d-chase-runner.md) | Room 4 becomes a 3D chase runner built on react three fiber, the only room using that stack | Proposed |
 | 2026-08-06 | [0049](docs/adr/0049-press-e-and-five-acts.md) | Walk up to a thing and press E; the sea slows to two and a half minutes; five acts and a full-screen vault | Accepted |

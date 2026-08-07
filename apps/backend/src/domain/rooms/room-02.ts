@@ -2,46 +2,42 @@ import type { RoomDefinition } from '../room-definition.js'
 import { asText } from '../answer.js'
 
 /**
- * Room 2 — The Archive. Answer type: text.
+ * Room 2 — Genesis Protocol. Answer type: text.
  *
- * PLACEHOLDER PUZZLE. The owning sub-team replaces the content of this file.
+ * The puzzle itself (locations, terminals, code locks, the power router, the
+ * evacuation timer) is a self-contained experience owned by the frontend
+ * folder at `apps/frontend/src/rooms/room-02/` — this room has no dynamic
+ * `publicData()` to hand over. The one thing that has to be server-authoritative
+ * is the exit override, so that is the only value this file ever checks.
  */
-const SOLUTION = 'ESCAPE ROOM'
-
-/** ROT13 of the solution. Safe to send to the browser — it is the puzzle. */
-const CIPHER_TEXT = 'RFPNCR EBBZ'
+const SOLUTION = 'SEVERE'
 
 export const room02: RoomDefinition = {
   id: 'room-02',
-  title: 'The Archive',
+  title: 'Genesis Protocol',
   intro:
-    'Shelves of paper, all of it nonsense. One index card has been pinned to the door at eye height.',
-  prompt: 'Two words, scrambled by a very old trick. Type them as they should read.',
+    'The power failed while you were still inside Kepler Biogenetics, Site 9. Something else got out when it did.',
+  prompt:
+    'Investigate the facility, recover what the company tried to bury, and clear the emergency exit before containment fails. Submit the exit override once you have it.',
 
   hints: [
-    'Every letter has been shifted by the same amount through the alphabet.',
-    'The shift is exactly half the alphabet — 13 letters. Shifting again undoes it.',
-    'The first letter R becomes E.',
+    'Start in the laboratory: the DNA analysis station and the recovered audio log both hide pieces of the story.',
+    'The exit override is not typed at random — it is the aggression classification the DNA station assigns the specimen that got loose.',
+    'Reopen the DNA Analysis Station and read its final line: "Aggression index: ___." That word is the override.',
   ],
 
   publicData() {
-    return { cipherText: CIPHER_TEXT, alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' }
+    return {}
   },
 
   check(answer) {
     const text = asText(answer)
     if (text === null) {
-      return { correct: false, feedback: 'Type the two words as text.' }
+      return { correct: false, feedback: 'Type the override as text.' }
     }
     if (text === SOLUTION) {
       return { correct: true }
     }
-    if (text === CIPHER_TEXT) {
-      return { correct: false, feedback: 'That is the card as written. Decode it first.' }
-    }
-    if (text.replace(/\s/g, '') === SOLUTION.replace(/\s/g, '')) {
-      return { correct: true }
-    }
-    return { correct: false, feedback: 'Not it. Check the shift.' }
+    return { correct: false, feedback: 'Override rejected.' }
   },
 }

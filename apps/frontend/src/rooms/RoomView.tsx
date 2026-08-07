@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { GameSession, RoomId, RoomPublicData } from '@escape-room/shared'
+import type { AttemptResponse, GameSession, RoomId, RoomPublicData } from '@escape-room/shared'
 import { attemptRoom, enterRoom, takeHint } from '../api/rooms'
 import { ApiRequestError } from '../api/client'
 import { useAppAuth } from '../auth/useAppAuth'
@@ -187,8 +187,14 @@ export function RoomView({
     [sendEmote],
   )
 
-  async function answer(value: unknown) {
-    if (busy || solved) return
+  /**
+   * Returns the real result rather than swallowing it, so a `customScene`
+   * room that wants to react to it — see `CustomSceneProps` — can. Every
+   * other room ignores the return value and reads `feedback`/the "Solved"
+   * pane below exactly as before.
+   */
+  async function answer(value: unknown): Promise<AttemptResponse | null> {
+    if (busy || solved) return null
     setBusy(true)
     setFeedback(null)
 
@@ -196,18 +202,22 @@ export function RoomView({
       const result = await attemptRoom(roomId, value, await authRef.current())
       if (result.correct) {
         setSolved(true)
-        play('stamp')
-        window.setTimeout(() => play('fanfare'), 180)
-        // The character celebrates without being asked, which is the cheapest
-        // way to make solving feel like something happened.
-        fire('cheer')
         onSolved(result.session)
+        // A room with its own ending has its own idea of what solving sounds
+        // and looks like — the shared stamp/fanfare/cheer would just clash.
+        if (!definition.ownsEnding) {
+          play('stamp')
+          window.setTimeout(() => play('fanfare'), 180)
+          fire('cheer')
+        }
       } else {
         play('slide')
         setFeedback(result.feedback ?? 'Not that. Try again.')
       }
+      return result
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Could not check that answer.')
+      return null
     } finally {
       setBusy(false)
     }
@@ -256,6 +266,7 @@ export function RoomView({
     room,
     onAnswer: (value: unknown) => void answer(value),
     busy,
+    onLeave,
     live,
     actors: everybody,
     onAct: act,
@@ -264,23 +275,33 @@ export function RoomView({
   })
 
   // A custom-scene room takes the entire viewport, not just the column
-  // inside `<main>` below — see `.room1-scene`. RoomView still owns leaving
-  // and feedback here, the same as it does for every other room; they just
-  // float above the scene instead of sitting in the normal page flow,
-  // because there is no page flow left to sit in once the scene covers it.
-  // No hints panel — this room's own ten levels are the help.
-  if (state.kind === 'ready' && definition.customScene && !solved) {
+  // inside `<main>` below — it draws its own backdrop instead of standing on
+  // the shared Stage. RoomView still owns leaving here, but does not draw
+  // any chrome for it: a custom scene has its own HUD, own corners, own
+  // idea of where a "leave" control belongs, and a floating button placed
+  // by RoomView has already collided with room-02's own mute/restart once.
+  // `onLeave` is handed to the room instead, in `RoomProps`.
+  //
+  // `ownsEnding` keeps rendering the room even after `solved` — the room
+  // shows its own ending instead of RoomView's generic "Solved" pane, so it
+  // has to stay mounted to draw it.
+  if (state.kind === 'ready' && definition.customScene && (!solved || definition.ownsEnding)) {
     return (
       <>
-        {definition.render(roomProps(state.room))}
+        {definition.render({
+          ...roomProps(state.room),
+          onAnswer: async (value: unknown) => {
+            const result = await answer(value)
+            // `answer` returns null only for the rare cases every other room
+            // shows as inline feedback text — busy, or a network failure.
+            // A `customScene` room has no such text on screen, so this
+            // becomes a rejection its own error handling already expects.
+            if (!result) throw new Error('Could not check that answer.')
+            return result
+          },
+        })}
 
-        <div className="fixed top-4 right-4 z-50">
-          <button type="button" onClick={onLeave} className="btn btn-ghost btn-sm">
-            Leave the room
-          </button>
-        </div>
-
-        {feedback && (
+        {!definition.ownsEnding && feedback && (
           <p
             role="alert"
             className="pane fixed bottom-4 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 p-3 text-sm text-signal-600"
