@@ -168,7 +168,14 @@ export function LobbyView({
         <aside className="flex flex-col gap-4">
           <section className="pane p-4">
             <h2 className="label">Room</h2>
-            <div className="mt-3 grid grid-cols-4 gap-2">
+            {/* One column per room rather than a fixed four, so the picker does
+                not have to be edited again the next time the count changes —
+                which it just did, from four to five. The tiles are square by
+                `aspect-ratio`, so they simply get smaller. */}
+            <div
+              className="mt-3 grid gap-2"
+              style={{ gridTemplateColumns: `repeat(${ROOM_IDS.length}, minmax(0, 1fr))` }}
+            >
               {ROOM_IDS.map((roomId, index) => {
                 const unlocked = isRoomUnlocked(game, roomId)
                 const done = game.solvedRooms.includes(roomId)

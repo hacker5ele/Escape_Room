@@ -19,4 +19,5 @@ export const SOLUTIONS: Record<RoomId, unknown> = {
   'room-02': 'ESCAPE ROOM',
   'room-03': 'A',
   'room-04': 108,
+  'room-05': '7931473781',
 }
