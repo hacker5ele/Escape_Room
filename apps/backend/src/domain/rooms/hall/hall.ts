@@ -6,7 +6,8 @@ import {
   STATION_RADIUS,
   TABLETS,
   WHEELS,
-  isWorking,
+  WINCHES,
+  isNear,
   type Station,
 } from './layout.js'
 
@@ -14,16 +15,25 @@ import {
  * The Reading Hall, sinking.
  *
  * The whole mechanism, as one state object and one `tick`. It is deliberately
- * pure — `tick` takes the time and who is standing where and returns the next
- * state — so the water can be tested by handing it a clock rather than by
- * waiting for one. `hall.service.ts` next door is the only thing that holds any
- * of it in memory.
+ * pure — `tick` takes the time, who is standing where, and what they just did,
+ * and returns the next state — so the water can be tested by handing it a clock
+ * rather than by waiting for one. `hall.service.ts` is the only thing that
+ * holds any of it in memory.
  *
- * **Everything here is played by standing somewhere.** There is no clicking and
- * no typing anywhere in this room except the final code, which is why the whole
- * thing runs off positions that the heartbeat was already carrying twice a
- * second (ADR-0038). Adding a friend costs no new machinery at all: they are
- * simply another set of coordinates in the same list.
+ * **Everything is done by pressing E at something.** An earlier version had
+ * standing on a station *be* the action, which was elegant and completely mute:
+ * you walked into a lamp and it lit with no warning, and you could walk past
+ * the vault without ever learning it was the vault. A room with four
+ * mechanisms in it has to be able to say what they are.
+ *
+ * Two kinds of input come off the heartbeat as a result. `acted` is an event —
+ * the stations somebody pressed E at since the last beat, consumed by the beat
+ * that carries them. `holding` is state — the winch or wheel somebody currently
+ * has hold of, re-sent every beat, which is what lets everybody else in the
+ * room watch it turn.
+ *
+ * **The hall counts you**, and changes shape on the answer. What one person can
+ * work alone, two people have to work together.
  */
 
 // ---- the tide -------------------------------------------------------------
@@ -32,49 +42,67 @@ import {
 export const DROWN_DEPTH = 100
 
 /** Not quite dry at the start: the sea is already in the room when you arrive. */
-export const START_DEPTH = 12
-
-/** Depth per second with nobody on a wheel. Fifty seconds from a standing start. */
-export const RISE_PER_SECOND = 1.9
+export const START_DEPTH = 10
 
 /**
- * And per second for each wheel somebody is standing at.
+ * Depth per second with nobody on a wheel.
  *
- * Equal to the rise on purpose, which is what produces the three states the
- * room is built on: **nobody pumping and it rises, one wheel and it holds,
- * both wheels and it falls.** One wheel holding exactly level is the line the
- * whole difficulty curve balances on — alone you can stop the clock, but only
- * by standing still and therefore doing nothing else.
+ * **Two and a half minutes** from a standing start to drowned. The first
+ * version of this room ran at 1.9 and killed you in forty-six seconds, which is
+ * not enough time to read a caption, let alone think about a puzzle — the water
+ * stopped being a clock and became a hurry.
  */
-export const PUMP_PER_SECOND = 1.9
+export const RISE_PER_SECOND = 0.6
 
 /**
- * A wheel keeps turning for this long after the last person steps off it.
+ * And per second for each wheel being turned.
  *
- * This is the entire solo game. The hall is 1200 units between the wheels and
- * walking is 340 a second, so a crossing takes about 3.5s and leaves ~1.5s of
- * overlap at the far end — a lone player sprinting flat out drains perhaps a
- * third of what two people standing still manage. Enough to survive on, never
- * enough to be comfortable.
+ * Deliberately *larger* than the rise, which gives the room three states rather
+ * than two: nobody pumping and it climbs, **one wheel and it creeps back**,
+ * both wheels and it falls properly. An earlier version had pump exactly cancel
+ * rise, which was a tidier rule and a worse game — one player could only ever
+ * tread water, and clearing the last thirty points before the vault took a
+ * minute and a half of two people standing still.
+ */
+export const PUMP_PER_SECOND = 0.85
+
+/**
+ * What shutting the sluice gate is worth: the sea comes in at half the rate for
+ * the rest of the run.
+ *
+ * Act IV is the only act that pays in *mechanics* rather than in figures, and
+ * this is the payment. It is also the only reason to spend twenty seconds
+ * holding a winch while the water climbs unchecked, which is exactly the
+ * decision the act is made of.
+ */
+export const SHUT_GATE_RELIEF = 0.5
+
+/**
+ * A wheel keeps turning for this long after the last person lets go of it.
+ *
+ * This is the entire solo game. The hall is 1130 units between the wheels and
+ * walking is 340 a second, so a crossing takes about 3.3s and leaves a moment
+ * of overlap at the far end — a lone player sprinting flat out gains ground,
+ * slowly. Enough to survive on, never enough to be comfortable.
  */
 export const RATCHET_MS = 5_000
 
 /** The sea takes the next step when an act falls. */
-export const SURGE_ACT = 12
+export const SURGE_ACT = 8
 
 /** And a lurch when somebody gets it wrong. Brute force is not survivable. */
-export const SURGE_MISTAKE = 8
-
-/** A lamp burns for this long once it catches. */
-export const LAMP_MS = 12_000
+export const SURGE_MISTAKE = 6
 
 /**
- * Above this the keypad is under water and will not take a code.
+ * A lamp burns for this long once it catches.
  *
- * Not picked: measured. The dial sits 210 units up a post standing at y 865, so
- * `floodLine` puts its face under at 41.3 — and a rule that fires at a
- * different number from the one you can see is a rule players will call a bug.
+ * Longer than it was, because lighting one is now a keypress rather than a side
+ * effect of walking into it — the route still has to be planned, but it no
+ * longer has to be run at a sprint with no margin.
  */
+export const LAMP_MS = 16_000
+
+/** Above this the vault's drums are under water and will not take a code. */
 export const KEYPAD_DEPTH = 41
 
 /**
@@ -85,6 +113,25 @@ export const KEYPAD_DEPTH = 41
  * mechanism that has become impossible for one.
  */
 export const REFORM_MS = 5_000
+
+/**
+ * How far apart two presses may be and still count as together.
+ *
+ * A keypress cannot be simultaneous the way standing in a place can, so
+ * "at the same time" has to become "within a moment of each other". Two seconds
+ * is long enough to count down out loud and short enough that one person cannot
+ * sprint between the two ends and do both.
+ */
+export const PAIR_WINDOW_MS = 2_000
+
+/** How long one person must hold the winch alone to shut the gate. */
+export const WIND_ALONE_MS = 22_000
+
+/** And how long two people holding both winches take. */
+export const WIND_TOGETHER_MS = 7_000
+
+/** Wound progress bleeds away when nobody is holding on. */
+const UNWIND_PER_SECOND = 0.6
 
 /**
  * The most time one tick may account for.
@@ -98,11 +145,8 @@ const MAX_TICK_MS = 10_000
 
 // ---- what an act needs ----------------------------------------------------
 
-/** Act III wants four correct turns; act I wants four pairs, with two players. */
+/** Act I wants four pairs with two players; act III wants four turns. */
 const ROUNDS = 4
-
-/** Act III solo: how long a wheel must be held to wind the ratchet on one notch. */
-const RATCHET_HOLD_S = 3
 
 /**
  * Which pairs of lamps the hall asks for, with two people in it.
@@ -118,6 +162,26 @@ const LAMP_PAIRS: readonly (readonly [string, string])[] = [
   ['lamp-2', 'lamp-4'],
 ] as const
 
+export interface Step {
+  wheel: string
+  /** Which way it has to be turned, which is which way the player is facing. */
+  dir: 1 | -1
+}
+
+/**
+ * Act III alone: the pattern stamped on the gearbox.
+ *
+ * Fixed rather than drawn at random, so a hall that is replayed or re-formed is
+ * the same puzzle rather than a new one — and so a player who dies to the water
+ * halfway through has learned something worth keeping.
+ */
+const SEQUENCE: readonly Step[] = [
+  { wheel: 'wheel-west', dir: 1 },
+  { wheel: 'wheel-east', dir: -1 },
+  { wheel: 'wheel-east', dir: 1 },
+  { wheel: 'wheel-west', dir: -1 },
+] as const
+
 /**
  * The three fragments of the code, one per act.
  *
@@ -129,8 +193,11 @@ const LAMP_PAIRS: readonly (readonly [string, string])[] = [
  */
 export const FRAGMENTS: readonly string[] = ['62', '05', '39'] as const
 
-/** What the three fragments spell. The only thing `check()` accepts. */
+/** What the three fragments spell. The only thing `check()` ever accepts. */
 export const HALL_CODE = FRAGMENTS.join('')
+
+/** Acts I to III award a fragment each; IV shuts the gate; V is the vault. */
+export const FRAGMENT_ACTS = 3
 
 // ---- state ----------------------------------------------------------------
 
@@ -140,12 +207,20 @@ export interface Occupant {
   y: number
   facing: 1 | -1
   walking: boolean
+  /** The station they currently have hold of. Verified against position already. */
+  holding: string | null
+}
+
+/** What one player pressed E at, on the beat being processed. */
+export interface Acted {
+  userId: string
+  stations: readonly string[]
 }
 
 export interface HallState {
   depth: number
   lastTick: number
-  /** 1–3 are the acts that award fragments; 4 is the vault. */
+  /** 1–3 award fragments, 4 shuts the gate, 5 is the vault. */
   act: number
   /** The party size this act was formed for. Only ever 1 or 2 — the hall counts I or II. */
   counted: number
@@ -156,22 +231,24 @@ export interface HallState {
   wheelUntil: Record<string, number>
   /** Per lamp, when its flame goes out. */
   lampOut: Record<string, number>
-  /** Act I with two players: which pair the hall is asking for. */
+  /** Act I with two players: which pair, and who lit which half when. */
   pairIndex: number
-  /** Act II: tablets seated so far, in the order they went in. */
+  pairLitAt: Record<string, number>
+  pairLitBy: Record<string, string>
+  /** Act II: tablets seated so far, and who is carrying what. */
   seated: string[]
-  /** Act II: who is carrying what. */
   carrying: Record<string, string>
-  /** Act III: rounds turned correctly. */
-  turns: number
-  /** Act III with two players: which way each wheel has to be facing this round. */
-  wantWest: 1 | -1
-  wantEast: 1 | -1
-  /** Act III alone: which wheel the ratchet wants next, and how long it has been held. */
-  ratchetAt: string
-  ratchetHeld: number
-  /** Things that happened on this tick and want a noise and a splash. Cleared on read. */
+  /** Act III: how far into the sequence, or how many rounds turned together. */
+  step: number
+  turned: Record<string, number>
+  turnedBy: Record<string, string>
+  /** Act IV: how far the gate is wound shut, 0 to 1, and whether it stayed. */
+  wound: number
+  gateShut: boolean
+  /** Things that happened on this tick and want a noise. Cleared on read. */
   flash: string[]
+  /** What each player should be shown saying, this tick. Cleared on read. */
+  says: Record<string, string>
 }
 
 export function beginHall(now: number, counted: number): HallState {
@@ -185,14 +262,17 @@ export function beginHall(now: number, counted: number): HallState {
     wheelUntil: {},
     lampOut: {},
     pairIndex: 0,
+    pairLitAt: {},
+    pairLitBy: {},
     seated: [],
     carrying: {},
-    turns: 0,
-    wantWest: 1,
-    wantEast: -1,
-    ratchetAt: 'wheel-west',
-    ratchetHeld: 0,
+    step: 0,
+    turned: {},
+    turnedBy: {},
+    wound: 0,
+    gateShut: false,
     flash: [],
+    says: {},
   }
 }
 
@@ -211,7 +291,12 @@ function countOf(partySize: number): number {
  * keeping the process awake to flood an empty room. The same reasoning as
  * `LiveStore.#sweep`.
  */
-export function tickHall(state: HallState, now: number, occupants: Occupant[]): HallState {
+export function tickHall(
+  state: HallState,
+  now: number,
+  occupants: Occupant[],
+  acted: Acted = { userId: '', stations: [] },
+): HallState {
   // Drowning is terminal. The state stays exactly as it died until the party
   // leaves the room and a fresh one is begun, so every client gets at least one
   // beat carrying `drowned` and can play the splash before anybody moves.
@@ -220,6 +305,7 @@ export function tickHall(state: HallState, now: number, occupants: Occupant[]): 
   const seconds = Math.min(MAX_TICK_MS, Math.max(0, now - state.lastTick)) / 1000
   state.lastTick = now
   state.flash = []
+  state.says = {}
 
   recount(state, now, occupants)
 
@@ -228,11 +314,13 @@ export function tickHall(state: HallState, now: number, occupants: Occupant[]): 
   const held = pumpWheels(state, now, occupants)
 
   let surge = 0
-  if (state.act === 1) surge += actOne(state, now, occupants)
-  else if (state.act === 2) surge += actTwo(state, occupants)
-  else if (state.act === 3) surge += actThree(state, seconds, occupants)
+  if (state.act === 1) surge += actOne(state, now, occupants, acted)
+  else if (state.act === 2) surge += actTwo(state, occupants, acted)
+  else if (state.act === 3) surge += actThree(state, now, occupants, acted)
+  else if (state.act === 4) surge += actFour(state, seconds, occupants)
 
-  const rate = RISE_PER_SECOND - PUMP_PER_SECOND * held
+  const rising = RISE_PER_SECOND * (state.gateShut ? SHUT_GATE_RELIEF : 1)
+  const rate = rising - PUMP_PER_SECOND * held
   state.depth = clamp(state.depth + rate * seconds + surge, 0, DROWN_DEPTH)
 
   if (state.depth >= DROWN_DEPTH) {
@@ -273,18 +361,28 @@ function recount(state: HallState, now: number, occupants: Occupant[]): void {
 
   state.lampOut = {}
   state.pairIndex = 0
+  state.pairLitAt = {}
+  state.pairLitBy = {}
   state.seated = []
   state.carrying = {}
-  state.turns = 0
-  state.ratchetAt = 'wheel-west'
-  state.ratchetHeld = 0
+  state.step = 0
+  state.turned = {}
+  state.turnedBy = {}
+  state.wound = 0
 }
 
-/** Refreshes each wheel's ratchet, and answers how many are turning right now. */
+/**
+ * Refreshes each wheel's ratchet, and answers how many are turning right now.
+ *
+ * A wheel turns because somebody has **hold** of it — not because somebody is
+ * standing near it. Which means walking past a wheel on the way somewhere no
+ * longer silently starts pumping, and a player who wants the water held has to
+ * choose to stay there.
+ */
 function pumpWheels(state: HallState, now: number, occupants: Occupant[]): number {
   let held = 0
   for (const wheel of WHEELS) {
-    if (occupants.some((player) => isWorking(wheel, player))) {
+    if (occupants.some((player) => hasHoldOf(player, wheel))) {
       state.wheelUntil[wheel.id] = now + RATCHET_MS
     }
     if ((state.wheelUntil[wheel.id] ?? 0) > now) held += 1
@@ -292,20 +390,54 @@ function pumpWheels(state: HallState, now: number, occupants: Occupant[]): numbe
   return held
 }
 
+/**
+ * Somebody has hold of a station if they say so **and** they are standing close
+ * enough for that to be true.
+ *
+ * Checked here rather than only in the service that assembles the occupants,
+ * because this file is where the mechanism actually lives and it should not
+ * depend on having been handed clean input. A test caught it the other way
+ * round: with the check only in the service, a hand-made occupant claiming a
+ * wheel at the far end of the hall pumped it happily.
+ */
+function hasHoldOf(player: Occupant, station: Station): boolean {
+  return player.holding === station.id && isNear(station, player)
+}
+
+/** Everything this player pressed E at, that they were actually near. */
+function pressesOn(
+  acted: Acted,
+  occupants: Occupant[],
+  stations: readonly Station[],
+): { player: Occupant; station: Station }[] {
+  const player = occupants.find((one) => one.userId === acted.userId)
+  if (!player) return []
+
+  const out: { player: Occupant; station: Station }[] = []
+  for (const id of acted.stations) {
+    const station = stations.find((one) => one.id === id)
+    // Verified rather than trusted. A station named from the other end of the
+    // hall is not one this player could have pressed E at.
+    if (station && isNear(station, player)) out.push({ player, station })
+  }
+  return out
+}
+
 // ---- act I: light the hall ------------------------------------------------
 
-function actOne(state: HallState, now: number, occupants: Occupant[]): number {
-  if (state.counted >= 2) return actOnePaired(state, now, occupants)
+function actOne(state: HallState, now: number, occupants: Occupant[], acted: Acted): number {
+  const presses = pressesOn(acted, occupants, LAMPS)
 
-  // Alone: standing at a lamp lights it, and it burns for twelve seconds. All
-  // five have to be alight at the same moment, so this is a route problem —
+  if (state.counted >= 2) return actOnePaired(state, now, presses)
+
+  // Alone: pressing E at a lamp lights it, and it burns for sixteen seconds.
+  // All five have to be alight at the same moment, so this is a route problem —
   // which order leaves the first one you lit still going when you reach the
   // last.
-  for (const lamp of LAMPS) {
-    if (occupants.some((player) => isWorking(lamp, player))) {
-      if ((state.lampOut[lamp.id] ?? 0) <= now) state.flash.push(`lit:${lamp.id}`)
-      state.lampOut[lamp.id] = now + LAMP_MS
-    }
+  for (const { station } of presses) {
+    state.lampOut[station.id] = now + LAMP_MS
+    state.flash.push(`lit:${station.id}`)
+    state.says[acted.userId] = 'LIT!'
   }
 
   if (LAMPS.every((lamp) => (state.lampOut[lamp.id] ?? 0) > now)) return finishAct(state)
@@ -315,35 +447,50 @@ function actOne(state: HallState, now: number, occupants: Occupant[]): number {
 /**
  * With two in the hall the lamps will not take a flame singly.
  *
- * The archive was worked by a pair of scribes and it will not accept one person
+ * The archive was worked by a pair of scribes and will not accept one person
  * doing both jobs, so the hall names two lamps at opposite ends and both have
- * to be stood at *by different people at the same moment*. Four pairs, and
- * neither of you can see what the other is standing next to.
+ * to be lit **within a moment of each other, by different people**.
+ *
+ * A window rather than an instant, because a keypress cannot be simultaneous
+ * the way standing somewhere can. Two seconds is long enough to count down out
+ * loud and short enough that nobody can sprint between the ends and do both.
  */
-function actOnePaired(state: HallState, now: number, occupants: Occupant[]): number {
+function actOnePaired(
+  state: HallState,
+  now: number,
+  presses: { player: Occupant; station: Station }[],
+): number {
   const pair = LAMP_PAIRS[state.pairIndex]
   if (!pair) return finishAct(state)
 
-  const [westId, eastId] = pair
-  const west = LAMPS.find((lamp) => lamp.id === westId)
-  const east = LAMPS.find((lamp) => lamp.id === eastId)
-  if (!west || !east) return 0
+  for (const { player, station } of presses) {
+    if (!pair.includes(station.id)) {
+      // The wrong lamp entirely. Lit, briefly, so it is obvious what happened.
+      state.lampOut[station.id] = now + 1_200
+      state.says[player.userId] = 'NOT THAT ONE'
+      continue
+    }
+    state.pairLitAt[station.id] = now
+    state.pairLitBy[station.id] = player.userId
+    state.lampOut[station.id] = now + PAIR_WINDOW_MS
+    state.flash.push(`lit:${station.id}`)
+    state.says[player.userId] = 'NOW!'
+  }
 
-  const onWest = occupants.filter((player) => isWorking(west, player))
-  const onEast = occupants.filter((player) => isWorking(east, player))
+  const [west, east] = pair
+  const westAt = state.pairLitAt[west] ?? 0
+  const eastAt = state.pairLitAt[east] ?? 0
+  const together =
+    westAt > 0 &&
+    eastAt > 0 &&
+    Math.abs(westAt - eastAt) <= PAIR_WINDOW_MS &&
+    state.pairLitBy[west] !== state.pairLitBy[east]
 
-  // Shown lit while somebody is there, so each of you can see your own half
-  // working even though only the pair counts.
-  if (onWest.length > 0) state.lampOut[westId] = now + 1_000
-  if (onEast.length > 0) state.lampOut[eastId] = now + 1_000
-
-  // Two *different* people. One player cannot be at both ends, but saying so
-  // explicitly is what stops a stale position standing in for a second pair of
-  // hands.
-  const together = onWest.some((a) => onEast.some((b) => b.userId !== a.userId))
   if (!together) return 0
 
   state.pairIndex += 1
+  state.pairLitAt = {}
+  state.pairLitBy = {}
   state.flash.push('lit:pair')
 
   if (state.pairIndex >= LAMP_PAIRS.length) return finishAct(state)
@@ -352,48 +499,44 @@ function actOnePaired(state: HallState, now: number, occupants: Occupant[]): num
 
 // ---- act II: the index ----------------------------------------------------
 
-function actTwo(state: HallState, occupants: Occupant[]): number {
+function actTwo(state: HallState, occupants: Occupant[], acted: Acted): number {
   let surge = 0
 
+  // Carrying a tablet into the channel loses it, and that is still a rule about
+  // *walking* rather than about pressing anything — the channel only exists
+  // with two people in the hall, and it is what strands two of the five tablets
+  // on the wrong side of the room.
   for (const player of occupants) {
     const carried = state.carrying[player.userId]
-
-    // Carrying a tablet into the channel loses it. The channel only exists with
-    // two people in the hall, and it is what strands two of the five tablets on
-    // the wrong side of the room.
     if (carried && state.counted >= 2 && inChannel(player.x)) {
       delete state.carrying[player.userId]
       state.flash.push('sploosh')
-      continue
+      state.says[player.userId] = 'NO!'
     }
+  }
 
-    if (carried) {
-      surge += seatIfAtPedestal(state, player, carried)
-      continue
-    }
+  for (const { player, station } of pressesOn(acted, occupants, TABLETS)) {
+    if (state.carrying[player.userId]) continue
+    if (state.seated.includes(station.id)) continue
+    if (Object.values(state.carrying).includes(station.id)) continue
 
-    // Empty-handed: standing on a tablet picks it up. A tablet somebody else is
-    // already carrying, or one already seated, is not on the floor to be found.
-    const tablet = TABLETS.find(
-      (candidate) =>
-        isWorking(candidate, player) &&
-        !state.seated.includes(candidate.id) &&
-        !Object.values(state.carrying).includes(candidate.id),
-    )
-    if (tablet) {
-      state.carrying[player.userId] = tablet.id
-      state.flash.push(`took:${tablet.id}`)
-    }
+    state.carrying[player.userId] = station.id
+    state.flash.push(`took:${station.id}`)
+    state.says[player.userId] = 'GOT IT'
+  }
+
+  for (const { player, station } of pressesOn(acted, occupants, PEDESTALS)) {
+    const carried = state.carrying[player.userId]
+    if (!carried) continue
+    surge += seat(state, player, station, carried)
   }
 
   if (state.seated.length >= ORDER.length) return surge + finishAct(state)
   return surge
 }
 
-function seatIfAtPedestal(state: HallState, player: Occupant, carried: string): number {
+function seat(state: HallState, player: Occupant, pedestal: Station, carried: string): number {
   const next = state.seated.length
-  const pedestal = PEDESTALS.find((candidate) => isWorking(candidate, player))
-  if (!pedestal) return 0
 
   // Only the next pedestal in the row is open, and only for the tablet the tide
   // staff says belongs in it. Anything else is spat straight back out.
@@ -401,11 +544,13 @@ function seatIfAtPedestal(state: HallState, player: Occupant, carried: string): 
     state.seated.push(carried)
     delete state.carrying[player.userId]
     state.flash.push(`seated:${carried}`)
+    state.says[player.userId] = 'THAT ONE'
     return 0
   }
 
   delete state.carrying[player.userId]
   state.flash.push('kachunk')
+  state.says[player.userId] = 'WRONG!'
   return SURGE_MISTAKE
 }
 
@@ -415,75 +560,138 @@ function inChannel(x: number): boolean {
 
 // ---- act III: the great wheel ---------------------------------------------
 
-function actThree(state: HallState, seconds: number, occupants: Occupant[]): number {
-  if (state.counted >= 2) return actThreePaired(state, occupants)
+function actThree(state: HallState, now: number, occupants: Occupant[], acted: Acted): number {
+  const presses = pressesOn(acted, occupants, WHEELS)
+  if (state.counted >= 2) return actThreePaired(state, now, presses)
 
-  // Alone: a ratchet. Hold one wheel until it winds on a notch, then the
-  // counterweight has to be reset at the *other* wheel before it will take
-  // another. Four notches, and the crossing between them is the cost.
-  const wheel = WHEELS.find((candidate) => candidate.id === state.ratchetAt)
-  if (!wheel) return 0
+  // Alone: a pattern stamped on the gearbox — which wheel, and which way. Turn
+  // them in that order. One wrong step and it starts again, which is what makes
+  // it a thing to remember rather than a thing to grind.
+  let surge = 0
+  for (const { player, station } of presses) {
+    const want = SEQUENCE[state.step]
+    if (!want) break
 
-  if (!occupants.some((player) => isWorking(wheel, player))) {
-    state.ratchetHeld = 0
-    return 0
+    if (station.id === want.wheel && player.facing === want.dir) {
+      state.step += 1
+      state.flash.push('clang')
+      state.says[player.userId] = `${state.step} OF ${SEQUENCE.length}`
+      if (state.step >= SEQUENCE.length) return surge + finishAct(state)
+      continue
+    }
+
+    state.step = 0
+    state.flash.push('kachunk')
+    state.says[player.userId] = 'IT SLIPS BACK'
+    surge += SURGE_MISTAKE
   }
 
-  state.ratchetHeld += seconds
-  if (state.ratchetHeld < RATCHET_HOLD_S) return 0
-
-  state.ratchetHeld = 0
-  state.turns += 1
-  state.ratchetAt = state.ratchetAt === 'wheel-west' ? 'wheel-east' : 'wheel-west'
-  state.flash.push('clang')
-
-  if (state.turns >= ROUNDS) return finishAct(state)
-  return 0
+  return surge
 }
 
 /**
- * With two, the wheels have to be turned the same way at the same time — and
- * **the plaque saying which way is at the other player's end.**
+ * With two, both wheels have to be turned the same way within a moment of each
+ * other — and **the plaque saying which way is at the other player's end.**
  *
  * Each of you can read what your partner has to do and not what you have to do,
  * so the only way through is to say it out loud. It is one carved sign at each
  * end of the room and it is the most co-operative thing in the game.
  *
- * Which way a wheel is being turned is which way the player is facing, and
- * `facing` has been on the heartbeat since the stage was built. Nothing new
- * travels for this at all.
+ * Which way a wheel is turned is which way the player is facing, and `facing`
+ * has been on the heartbeat since the stage was built. Nothing new travels for
+ * this at all.
  */
-function actThreePaired(state: HallState, occupants: Occupant[]): number {
-  const west = WHEELS.find((wheel) => wheel.id === 'wheel-west')
-  const east = WHEELS.find((wheel) => wheel.id === 'wheel-east')
-  if (!west || !east) return 0
+function actThreePaired(
+  state: HallState,
+  now: number,
+  presses: { player: Occupant; station: Station }[],
+): number {
+  const want = wantedTurns(state.step)
 
-  const onWest = occupants.filter(
-    (player) => isWorking(west, player) && player.facing === state.wantWest,
-  )
-  const onEast = occupants.filter(
-    (player) => isWorking(east, player) && player.facing === state.wantEast,
-  )
+  for (const { player, station } of presses) {
+    const dir = station.id === 'wheel-west' ? want.west : want.east
+    if (player.facing !== dir) {
+      state.flash.push('kachunk')
+      state.says[player.userId] = 'WRONG WAY'
+      continue
+    }
+    state.turned[station.id] = now
+    state.turnedBy[station.id] = player.userId
+    state.flash.push('clang')
+    state.says[player.userId] = 'TURNING!'
+  }
 
-  const together = onWest.some((a) => onEast.some((b) => b.userId !== a.userId))
+  const westAt = state.turned['wheel-west'] ?? 0
+  const eastAt = state.turned['wheel-east'] ?? 0
+  const together =
+    westAt > 0 &&
+    eastAt > 0 &&
+    Math.abs(westAt - eastAt) <= PAIR_WINDOW_MS &&
+    state.turnedBy['wheel-west'] !== state.turnedBy['wheel-east']
+
   if (!together) return 0
 
-  state.turns += 1
-  state.flash.push('clang')
+  state.step += 1
+  state.turned = {}
+  state.turnedBy = {}
 
-  if (state.turns >= ROUNDS) return finishAct(state)
-
-  // A fresh pair of directions, derived from the round rather than drawn at
-  // random — the same round always wants the same thing, so a hall that is
-  // re-formed or replayed is the same puzzle rather than a new one.
-  state.wantWest = state.turns % 2 === 0 ? 1 : -1
-  state.wantEast = state.turns % 3 === 0 ? 1 : -1
+  if (state.step >= ROUNDS) return finishAct(state)
   return 0
+}
+
+/**
+ * Which way each wheel wants turning this round.
+ *
+ * Derived from the round rather than drawn at random, so the same round always
+ * wants the same thing — a hall that is re-formed or replayed is the same
+ * puzzle rather than a new one.
+ */
+export function wantedTurns(step: number): { west: 1 | -1; east: 1 | -1 } {
+  return {
+    west: step % 2 === 0 ? 1 : -1,
+    east: step % 3 === 0 ? -1 : 1,
+  }
+}
+
+// ---- act IV: the sluice gate ----------------------------------------------
+
+/**
+ * Shut the gate the sea is coming in through.
+ *
+ * The only act that pays in mechanics rather than in figures: the water comes
+ * in at **half the rate** for the rest of the run. It is also the only act with
+ * no puzzle in it at all, deliberately — it is a decision. Winding costs
+ * twenty-odd seconds during which nobody is on the pump wheels and the water
+ * climbs unchecked, and the question is whether you can afford it.
+ *
+ * Alone it is a long hold on one winch. Together, **both winches at once** and
+ * it takes seven seconds — and it only moves while both are held, so a pair
+ * genuinely has to commit to it at the same moment.
+ */
+function actFour(state: HallState, seconds: number, occupants: Occupant[]): number {
+  const held = WINCHES.filter((winch) =>
+    occupants.some((player) => hasHoldOf(player, winch)),
+  ).length
+  const paired = state.counted >= 2
+
+  const winding = paired ? held >= WINCHES.length : held >= 1
+  if (winding) {
+    state.wound += seconds / ((paired ? WIND_TOGETHER_MS : WIND_ALONE_MS) / 1000)
+  } else {
+    state.wound -= (UNWIND_PER_SECOND * seconds) / 10
+  }
+  state.wound = clamp(state.wound, 0, 1)
+
+  if (state.wound < 1) return 0
+
+  state.gateShut = true
+  state.flash.push('gate')
+  return finishAct(state)
 }
 
 // ---- finishing ------------------------------------------------------------
 
-/** An act falls, the sea takes the next step, and a fragment of the code appears. */
+/** An act falls, the sea takes the next step, and a fragment may appear. */
 function finishAct(state: HallState): number {
   state.act += 1
   state.flash.push('act')
@@ -493,54 +701,80 @@ function finishAct(state: HallState): number {
 /**
  * The fragments this hall has earned.
  *
- * One per act finished, and **never one more**. This is the whole of the room's
- * secret-keeping: `publicData()` carries positions and nothing else, so a
- * player reading the network tab learns the code at exactly the speed a player
- * doing the work learns it.
+ * One per act finished, up to three, and **never one more**. This is the whole
+ * of the room's secret-keeping: `publicData()` carries positions and nothing
+ * else, so a player reading the network tab learns the code at exactly the
+ * speed a player doing the work learns it.
  */
 export function earnedFragments(state: HallState): string[] {
-  return FRAGMENTS.slice(0, Math.max(0, Math.min(FRAGMENTS.length, state.act - 1)))
+  return FRAGMENTS.slice(0, Math.max(0, Math.min(FRAGMENT_ACTS, state.act - 1)))
 }
 
 /** Everything the room draws, and nothing it should not know yet. */
 export function publicHall(state: HallState, now: number): Record<string, unknown> {
-  const lamps: Record<string, boolean> = {}
-  for (const lamp of LAMPS) lamps[lamp.id] = (state.lampOut[lamp.id] ?? 0) > now
+  // Milliseconds left rather than a boolean, so a lamp can be drawn burning
+  // down. The room has to be able to show you the thing it is about to take
+  // away, or "all five at once" is a rule you can only learn by failing.
+  const lamps: Record<string, number> = {}
+  for (const lamp of LAMPS) lamps[lamp.id] = Math.max(0, (state.lampOut[lamp.id] ?? 0) - now)
 
-  const wheels: Record<string, boolean> = {}
-  for (const wheel of WHEELS) wheels[wheel.id] = (state.wheelUntil[wheel.id] ?? 0) > now
+  const wheels: Record<string, number> = {}
+  for (const wheel of WHEELS) wheels[wheel.id] = Math.max(0, (state.wheelUntil[wheel.id] ?? 0) - now)
 
   const paired = state.counted >= 2
+  const turns = wantedTurns(state.step)
 
   return {
     lamps,
     wheels,
+    lampLife: LAMP_MS,
     pair: state.act === 1 && paired ? (LAMP_PAIRS[state.pairIndex] ?? null) : null,
     pairsDone: state.pairIndex,
+    pairsNeeded: LAMP_PAIRS.length,
     // The seating order only appears once the act that needs it begins — it is
     // painted on the tide staff, and the staff is under water until then.
     order: state.act === 2 ? [...ORDER] : null,
     seated: [...state.seated],
     carrying: { ...state.carrying },
     channel: state.act === 2 && paired,
-    turns: state.turns,
-    // Each sign describes the *far* wheel. That is the puzzle, not a mistake.
-    signWest: state.act === 3 && paired ? state.wantEast : null,
-    signEast: state.act === 3 && paired ? state.wantWest : null,
-    ratchetAt: state.act === 3 && !paired ? state.ratchetAt : null,
-    ratchetHeld: state.ratchetHeld,
+    // Alone, the whole pattern; together, only the plaques — and each plaque
+    // describes the *far* wheel. That is the puzzle, not a mistake.
+    sequence: state.act === 3 && !paired ? SEQUENCE.map((step) => ({ ...step })) : null,
+    step: state.step,
+    steps: paired ? ROUNDS : SEQUENCE.length,
+    signWest: state.act === 3 && paired ? turns.east : null,
+    signEast: state.act === 3 && paired ? turns.west : null,
+    wound: state.wound,
+    gateShut: state.gateShut,
     fragments: earnedFragments(state),
     keypadDrowned: state.depth > KEYPAD_DEPTH,
     radius: STATION_RADIUS,
     flash: [...state.flash],
+    says: { ...state.says },
   }
 }
+
+/**
+ * Which way the sea is going, in the three words the gauge has room for.
+ *
+ * Derived from the **rate** rather than from a count of wheels, because those
+ * two stopped agreeing when pump grew past rise: one wheel used to hold the
+ * level exactly and now creeps it back, so counting wheels would have the gauge
+ * saying "holding" while the water visibly fell.
+ *
+ * `holding` therefore means *barely moving* — the one-wheel case — which is
+ * what a player needs told apart from two wheels actually making progress.
+ */
+const CREEPING = 0.5
 
 export function tideTrend(state: HallState, now: number): 'rising' | 'holding' | 'falling' {
   let held = 0
   for (const wheel of WHEELS) if ((state.wheelUntil[wheel.id] ?? 0) > now) held += 1
-  if (held >= 2) return 'falling'
-  if (held === 1) return 'holding'
+
+  const rising = RISE_PER_SECOND * (state.gateShut ? SHUT_GATE_RELIEF : 1)
+  const rate = rising - PUMP_PER_SECOND * held
+  if (rate <= -CREEPING) return 'falling'
+  if (rate < 0) return 'holding'
   return 'rising'
 }
 
@@ -559,6 +793,3 @@ function clamp(value: number, low: number, high: number): number {
   if (!Number.isFinite(value)) return low
   return Math.min(high, Math.max(low, value))
 }
-
-/** Exposed for the room's layout payload and for the tests. */
-export const HALL_STATIONS: readonly Station[] = [...WHEELS, ...LAMPS, ...PEDESTALS, ...TABLETS]

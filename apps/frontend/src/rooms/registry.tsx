@@ -40,6 +40,18 @@ export interface RoomProps {
   live: LiveRoom | null
   /** Everybody standing in the room, you included, already interpolated. */
   actors: Actor[]
+  /**
+   * Press E at something.
+   *
+   * The shell carries it and knows nothing about what a station *is* — that is
+   * the room's business. Sent on the next beat, which the shell brings forward
+   * so it does not feel late.
+   */
+  onAct: (stationId: string) => void
+  /** Take hold of something, or let go with null. Re-sent every beat until released. */
+  onHold: (stationId: string | null) => void
+  /** What this player currently has hold of. */
+  holding: string | null
 }
 
 /**

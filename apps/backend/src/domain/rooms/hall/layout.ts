@@ -42,7 +42,19 @@ export const STATION_RADIUS = 95
  */
 export const WHEELS: readonly Station[] = [
   { id: 'wheel-west', x: 200, y: 800 },
-  { id: 'wheel-east', x: 1400, y: 800 },
+  { id: 'wheel-east', x: 1330, y: 800 },
+] as const
+
+/**
+ * Act IV. The two winches that shut the sluice gate.
+ *
+ * Nearer each other than the pump wheels, because winding is a long hold rather
+ * than a sprint — the distance between them is not the puzzle here, committing
+ * to it at the same time is.
+ */
+export const WINCHES: readonly Station[] = [
+  { id: 'winch-west', x: 470, y: 800 },
+  { id: 'winch-east', x: 1130, y: 800 },
 ] as const
 
 /** Act I. Five oil lamps across the hall. */
@@ -100,6 +112,7 @@ export const CHANNEL = { minX: 770, maxX: 830 } as const
 /** Every station in the hall, so a lookup does not have to know which act it is. */
 export const STATIONS: readonly Station[] = [
   ...WHEELS,
+  ...WINCHES,
   ...LAMPS,
   ...PEDESTALS,
   ...TABLETS,
@@ -111,25 +124,22 @@ export function stationById(id: string): Station | undefined {
 }
 
 /**
- * Is this player working this station?
+ * Is this player close enough to work this station?
  *
- * **Standing, not passing.** Being inside the radius is not enough — the player
- * has to have stopped. That one extra condition does a surprising amount of
- * work:
+ * Position only. An earlier version also required the player to have *stopped*,
+ * which was doing two jobs: telling a deliberate act apart from walking past,
+ * and making a twice-a-second position sample enough to run a room on.
  *
- * - Walking the length of the hall no longer trips every station on the way.
- * - A twice-a-second position sample is suddenly enough to run a room on.
- *   Somebody who has stopped is still there on the next beat; somebody walking
- *   through a 95-unit circle at 340 units a second might not be sampled inside
- *   it at all, and a mechanism that misses inputs is worse than a slow one.
- * - It makes "you can stop the water, but only by standing still and doing
- *   nothing" literally true rather than a rule the room has to explain.
+ * Pressing E does both of those jobs better and says so out loud, so this is
+ * back to being what its name suggests — a distance check, used to decide what
+ * the prompt offers and to verify that a station somebody claims to have acted
+ * on is one they could actually reach.
+ *
+ * Deliberately generous, and it can be true while walking. A player who presses
+ * E as they arrive should get the thing they were obviously aiming at, not a
+ * lesson about coming to a complete stop first.
  */
-export function isWorking(
-  station: Station,
-  player: { x: number; y: number; walking: boolean },
-): boolean {
-  if (player.walking) return false
+export function isNear(station: Station, player: { x: number; y: number }): boolean {
   return Math.hypot(player.x - station.x, player.y - station.y) <= STATION_RADIUS
 }
 
@@ -137,6 +147,7 @@ export function isWorking(
 export function publicLayout() {
   return {
     wheels: WHEELS.map(plain),
+    winches: WINCHES.map(plain),
     lamps: LAMPS.map(plain),
     pedestals: PEDESTALS.map(plain),
     tablets: TABLETS.map(plain),
