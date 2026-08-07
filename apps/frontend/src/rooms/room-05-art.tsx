@@ -1,7 +1,7 @@
 /**
  * Inline SVG for the Reading Hall's own scene. No image files: cheaper than a
  * sprite sheet for a handful of flat shapes, and this room opts out of the
- * shared Stage art entirely (see the note in `room-04.tsx`). Placeholder art
+ * shared Stage art entirely (see the note in `room-05.tsx`). Placeholder art
  * pending Inaam's Figma pass — see the note in `index.css`.
  */
 

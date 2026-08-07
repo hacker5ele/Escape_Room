@@ -4,6 +4,7 @@ import { room01 } from './room-01.js'
 import { room02 } from './room-02.js'
 import { room03 } from './room-03.js'
 import { room04 } from './room-04.js'
+import { room05 } from './room-05.js'
 
 /**
  * The room registry.
@@ -19,6 +20,7 @@ export const ROOMS: Record<RoomId, RoomDefinition> = {
   'room-02': room02,
   'room-03': room03,
   'room-04': room04,
+  'room-05': room05,
 }
 
 /** The rooms in playing order. */

@@ -8,6 +8,7 @@ import {
   TEST_USER_WITHOUT_NAME,
   TEST_USER_WITHOUT_USERNAME,
 } from './http/test-authenticator.js'
+import { ROOM_IDS } from '@escape-room/shared'
 import { SOLUTIONS } from './domain/rooms/solutions.fixture.js'
 
 const ALICE = 'user_alice'
@@ -227,7 +228,7 @@ describe('room access', () => {
 
     const response = await as(app, ALICE).get('/api/rooms')
     expect(response.status).toBe(200)
-    expect(response.body.rooms).toHaveLength(4)
+    expect(response.body.rooms).toHaveLength(ROOM_IDS.length)
     expect(response.body.rooms[0]).toMatchObject({ id: 'room-01', unlocked: true, solved: false })
     expect(response.body.rooms[1]).toMatchObject({ id: 'room-02', unlocked: false })
     expect(response.body.rooms[0].data).toBeUndefined()
@@ -305,8 +306,19 @@ describe('attempts', () => {
     expect(room04.status, 'room-04 should accept its solution').toBe(200)
     expect(room04.body.correct, 'room-04 should be solved').toBe(true)
 
-    expect(room04.body.session.solvedRooms).toHaveLength(4)
-    expect(room04.body.session.finishedAt).not.toBeNull()
+    // The Lost Archive is the last door since ADR-0050 moved it out of room
+    // four to make room for Abigail's.
+    const last = await as(app, ALICE)
+      .post('/api/rooms/room-05/attempt')
+      .send({ answer: SOLUTIONS['room-05'] })
+    expect(last.status, 'room-05 should accept its solution').toBe(200)
+    expect(last.body.correct, 'room-05 should be solved').toBe(true)
+
+    // Counted off the contract rather than written out, so the next room to be
+    // added does not quietly leave this test asserting a game is finished when
+    // it is not.
+    expect(last.body.session.solvedRooms).toHaveLength(ROOM_IDS.length)
+    expect(last.body.session.finishedAt).not.toBeNull()
   })
 
   it('rate-limits repeated attempts so answers cannot be brute-forced', async () => {

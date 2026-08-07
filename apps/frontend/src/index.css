@@ -1236,7 +1236,7 @@
      So on a narrow screen the readout stops being a gauge and becomes a chip.
      The tube is the first thing to go — it is the most expensive 7rem in the
      room and it says exactly what the word beside it says. */
-  /* Room 4 — the Lost Archive, a dark scene built from the stock ramp's own
+  /* Room 5 — the Lost Archive, a dark scene built from the stock ramp's own
      dark end rather than a second palette: stock-950/900 standing in for
      stone and old wood until Inaam's Figma has a real backdrop. Anything
      actually readable inside it — a clue panel, the answer field — stays
@@ -1248,7 +1248,7 @@
      halftone screen, nothing of the page showing anywhere around it. Leaving,
      feedback and hints still work — `RoomView` floats them above this on
      their own, since there is no page flow left for them to sit in. */
-  .room4-scene {
+  .room5-scene {
     position: fixed;
     inset: 0;
     z-index: 40;
@@ -1271,7 +1271,7 @@
 
   /* The floor: faint flagstone joints, denser toward the bottom edge so it
      reads as receding rather than tiled flat. */
-  .room4-scene::after {
+  .room5-scene::after {
     content: '';
     position: absolute;
     inset: auto 0 0 0;

@@ -121,6 +121,7 @@ describe('activity log', () => {
     await as(app).post('/api/rooms/room-03/complete').send({})
 
     await as(app).post('/api/rooms/room-04/attempt').send({ answer: SOLUTIONS['room-04'] })
+    await as(app).post('/api/rooms/room-05/attempt').send({ answer: SOLUTIONS['room-05'] })
 
     const log = await events(app)
     const completed = log.filter((event) => event.type === 'game_completed')
