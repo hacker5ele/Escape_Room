@@ -116,6 +116,7 @@ export function RunnerScene({
             triggering={triggeringVisionId === vision.id}
             paused={paused}
             landscapeRef={landscapeRef}
+            resetKey={respawnRequest?.nonce}
             onReach={() => onReachVision(vision)}
           />
         </Suspense>

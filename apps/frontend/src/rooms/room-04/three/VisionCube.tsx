@@ -17,6 +17,7 @@ interface VisionCubeProps {
   triggering: boolean
   paused: React.MutableRefObject<boolean>
   landscapeRef: React.MutableRefObject<Group | null>
+  resetKey?: number
   onReach: () => void
 }
 
@@ -36,7 +37,7 @@ function useNormalizedBoxModel(src: string) {
 }
 
 export function VisionCube(props: VisionCubeProps) {
-  const { vision, playerPos, hidden, triggering, paused, onReach } = props
+  const { vision, playerPos, hidden, triggering, paused, resetKey, onReach } = props
   const instance = useNormalizedBoxModel(vision.boxGlb)
   const groupRef = useRef<Group>(null)
   const burstRef = useRef<PointLight>(null)
@@ -54,7 +55,16 @@ export function VisionCube(props: VisionCubeProps) {
   })
 
   return (
-    <Encounter x={vision.x} z={vision.z} color={vision.color} hidden={hidden} playerPos={playerPos} paused={paused} onReach={onReach}>
+    <Encounter
+      x={vision.x}
+      z={vision.z}
+      color={vision.color}
+      hidden={hidden}
+      playerPos={playerPos}
+      paused={paused}
+      resetKey={resetKey}
+      onReach={onReach}
+    >
       <group ref={groupRef}>
         <primitive object={instance} />
         <pointLight ref={burstRef} color={vision.color} distance={8} intensity={0} />

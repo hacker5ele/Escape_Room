@@ -223,6 +223,7 @@ export function Room04({ room, onAnswer, onLeave }: CustomSceneProps) {
     setOpenVision(null)
     paused.current = false
   }
+  const handleVisionTimeoutStable = useEvent(handleVisionTimeout)
 
   function handleVisionSkip() {
     setOpenVision(null)
@@ -296,7 +297,7 @@ export function Room04({ room, onAnswer, onLeave }: CustomSceneProps) {
 
       {introPhase !== 'done' && <IntroBox fading={introPhase === 'opening'} onAnswered={handleIntroAnswered} />}
 
-      <VisionModal vision={openVision} onSolved={handleVisionSolved} onTimeout={handleVisionTimeout} onClose={handleVisionSkip} />
+      <VisionModal vision={openVision} onSolved={handleVisionSolved} onTimeout={handleVisionTimeoutStable} onClose={handleVisionSkip} />
 
       <PrizeReveal open={prizeShown} />
 

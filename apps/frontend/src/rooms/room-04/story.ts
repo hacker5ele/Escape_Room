@@ -29,7 +29,7 @@ export function pathCenterX(z: number): number {
   return Math.sin((WORLD.startZ - z) * PATH_FREQUENCY) * PATH_AMPLITUDE
 }
 
-export const VISION_TIMER = 40
+export const VISION_TIMER = 30
 
 export const GUARDIAN_HOMES: readonly { x: number; z: number }[] = [
   { x: -25, z: -8 },

@@ -70,14 +70,12 @@ export function IntroBox({ fading, onAnswered }: IntroBoxProps) {
           )}
         </div>
       </div>
-      {showObjective && !textFading && (
-        <div className="r4-intro-guardian">
-          <div className="r4-intro-guardian-model">
-            <GuardianPreview />
-          </div>
-          <p className="r4-intro-guardian-warning">{GUARDIAN_WARNING}</p>
+      <div className="r4-intro-guardian">
+        <div className="r4-intro-guardian-model">
+          <GuardianPreview />
         </div>
-      )}
+        <p className="r4-intro-guardian-warning">{GUARDIAN_WARNING}</p>
+      </div>
     </div>
   )
 }
