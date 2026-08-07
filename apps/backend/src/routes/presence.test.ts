@@ -416,3 +416,64 @@ describe('the hall, from the heartbeat', () => {
     expect((await beat(app, ALICE, MIDDLE)).room).toBeNull()
   })
 })
+
+/**
+ * The one integer that makes every room multiplayer.
+ *
+ * Progress has been shared since ADR-0028 — a guest's solves go to the host's
+ * game — but a player only ever *learned* about it when they themselves made a
+ * request, so a partner could finish the room beside you and your screen would
+ * sit there unchanged. The beat now carries how many times the party's game has
+ * been written; when it moves, the client goes and asks what happened.
+ *
+ * These assert on movement rather than on the value, deliberately. The exact
+ * number is an implementation detail of however many writes an action happens
+ * to make; that it *changes*, and that it changes for the other player too, is
+ * the contract.
+ */
+describe('the party game version, on the beat', () => {
+  it('does not move while nobody does anything', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE)
+
+    const first = await beat(app, ALICE)
+    const second = await beat(app, ALICE)
+
+    expect(second.version).toBe(first.version)
+  })
+
+  it('moves when the player solves something', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE)
+    const before = (await beat(app, ALICE)).version
+
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: 'nope' })
+
+    expect((await beat(app, ALICE)).version).toBeGreaterThan(before)
+  })
+
+  /** The half that matters: it is the *other* player who has to find out. */
+  it('tells a guest that the host has moved the game on', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE, BOB)
+    await befriend(app, ALICE, BOB)
+    await as(app, BOB).post(`/api/party/join/${ALICE}`)
+
+    const before = (await beat(app, BOB)).version
+
+    // Alice does something. Bob touches nothing at all.
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: 'nope' })
+
+    expect((await beat(app, BOB)).version).toBeGreaterThan(before)
+  })
+
+  it('does not move for a stranger playing their own game', async () => {
+    const app = buildApp()
+    await signIn(app, ALICE, CAROL)
+
+    const before = (await beat(app, CAROL)).version
+    await as(app, ALICE).post('/api/rooms/room-01/attempt').send({ answer: 'nope' })
+
+    expect((await beat(app, CAROL)).version).toBe(before)
+  })
+})

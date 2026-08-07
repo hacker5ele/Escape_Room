@@ -40,6 +40,8 @@ import { Room02 } from './rooms/room-02/Room02'
 import { LOCKS } from './rooms/room-02/story'
 import { ROOM_COMPONENTS } from './rooms/room-03-registry'
 import { previewRoomIdFromLocation, RoomPreview } from './rooms/preview'
+import { useRoomParty } from './rooms/useRoomParty'
+import { PartyRail } from './social/PartyRail'
 import { unlockAudio } from './audio/sfx'
 import { useLiveness } from './stage/useLiveness'
 import { preloadCharacter, preloadScene } from './stage/preload'
@@ -629,7 +631,14 @@ function RoomRoute() {
   // ADR-0070) — none of which RoomView's contract (onAnswer/busy, an
   // external hint list, an instant "Solved" swap) supports. See ADR-0065.
   if (roomId === 'room-03') {
-    return <Room03Route game={game} onLeave={() => travel('/lobby')} onGameChange={setGame} />
+    return (
+      <Room03Route
+        game={game}
+        character={character}
+        onLeave={() => travel('/lobby')}
+        onGameChange={setGame}
+      />
+    )
   }
 
   return (
@@ -637,7 +646,7 @@ function RoomRoute() {
       roomId={roomId}
       game={game}
       character={character}
-      onSolved={setGame}
+      onGameChange={setGame}
       onLeave={() => travel('/lobby')}
     />
   )
@@ -660,10 +669,12 @@ type RoomState =
  */
 function Room03Route({
   game,
+  character,
   onLeave,
   onGameChange,
 }: {
   game: GameSession
+  character: Character
   onLeave: () => void
   onGameChange: (game: GameSession) => void
 }) {
@@ -672,6 +683,18 @@ function Room03Route({
   authRef.current = authHeaders
 
   const roomId = 'room-03' as const
+
+  // Room 3 draws its own screen and so had none of this: no beat, so nobody
+  // could see you were in it; no phase, so a host walking in here left their
+  // partner standing in the lobby; and no way to learn that somebody else had
+  // moved the game on. Shared with `RoomView` rather than written twice.
+  const { actors, version: partyVersion, fire } = useRoomParty({
+    roomId,
+    character,
+    onGameChange,
+    onLeave,
+  })
+  void partyVersion
 
   // The room actually on screen can lag behind the server's own idea of
   // "solved" on purpose: the server may already consider room-03 solved
@@ -788,6 +811,10 @@ function Room03Route({
           setFinished(true)
         }}
       />
+
+      {/* Room 3 draws its own screen, so the shell cannot put this anywhere
+          for it — the same rail every other room gets, added here by hand. */}
+      <PartyRail peers={actors} events={game.events} onEmote={fire} />
     </Suspense>
   )
 }
