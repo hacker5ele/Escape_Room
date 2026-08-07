@@ -221,6 +221,24 @@ export const heartbeatResponseSchema = z.object({
   isHost: z.boolean(),
   /** The room's own state, when the party is standing in one that has a clock. */
   room: liveRoomSchema.nullable(),
+  /**
+   * How many times the party's game has been written.
+   *
+   * **One integer that makes every room multiplayer.** Progress has been shared
+   * since ADR-0028 — a guest's solves go to the host's game — but you only ever
+   * found out about it when *you* made a request, so a partner could finish a
+   * room and your screen would sit there unchanged. Watching this number is
+   * enough: when it moves, re-read the session, and their solve, their hint and
+   * their wrong answer all arrive on your screen within half a second.
+   *
+   * A version rather than the game itself, because this beat runs twice a
+   * second per player and the answer is almost always "nothing happened".
+   *
+   * **Defaulted**, so a client that arrives before the API has redeployed sees
+   * 0 and simply never refetches, rather than failing to parse every beat and
+   * losing presence entirely.
+   */
+  version: z.number().int().nonnegative().default(0),
 })
 
 export type HeartbeatResponse = z.infer<typeof heartbeatResponseSchema>

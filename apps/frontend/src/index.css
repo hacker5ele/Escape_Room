@@ -2428,6 +2428,126 @@
    is exactly the fallback on a browser without `@property`: three visible steps
    rather than a dissolve, with the travel and the fade intact. Degrades, does
    not break. */
+  /* ---- who else is in this room ------------------------------------------
+
+     Drawn over whatever the room is doing, by the shell, so no room author has
+     to know it exists — and drawn *only when you are not alone*. Rooms 2 and 4
+     fill the screen with their own thing, and a panel sitting on top of them
+     for a solo player would be a cost with no benefit at all. */
+  .party-rail {
+    position: fixed;
+    top: 0.6rem;
+    right: 0.6rem;
+    /* Above a room's own fixed overlays, below the vault screen (80) and the
+       drowning splash (90) — both of which are the room saying something that
+       matters more than who is standing next to you. */
+    z-index: 70;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    align-items: flex-end;
+    max-width: min(20rem, calc(100vw - 1.2rem));
+    padding: 0.45rem;
+    border: 3px solid var(--color-stock-900);
+    background: var(--color-stock-50);
+    box-shadow: var(--shadow-print-sm);
+    rotate: -0.4deg;
+  }
+
+  .party-rail-people {
+    display: flex;
+    gap: 0.45rem;
+  }
+
+  .party-rail-person {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 5rem;
+    text-align: center;
+  }
+
+  /* Their character, at rail size, playing whatever emote they just fired.
+     On a stage you would see that over their head; in a room with no stage
+     this is the only place it can land, and it is already on the beat. */
+  .party-rail-portrait {
+    display: grid;
+    place-items: end center;
+    width: 100%;
+    height: 4.4rem;
+    overflow: hidden;
+    border: 2px solid var(--color-stock-900);
+    background: var(--color-stock-100);
+  }
+
+  .party-rail-name {
+    margin-top: 0.15rem;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--color-stock-900);
+  }
+
+  .party-rail-doing {
+    font-family: var(--font-mono);
+    font-size: 0.5rem;
+    line-height: 1.3;
+    color: var(--color-stock-500);
+  }
+
+  /* Somebody nobody has heard from for a while. Faded rather than removed —
+     the same rule the stage uses, so "away" means one thing everywhere. */
+  .party-rail-person[data-away] {
+    opacity: 0.45;
+  }
+
+  .party-rail .emote-bar {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.2rem;
+  }
+
+  /* Eight of them have to sit on one line inside a 20rem rail, or the rail
+     grows a second row and starts taking a corner of somebody's room. */
+  .party-rail .emote-key {
+    padding: 0.12rem 0.22rem;
+    font-size: 0.44rem;
+    letter-spacing: 0.02em;
+  }
+
+  /* On a phone the rail would take a third of the screen. Portraits only, and
+     smaller — you still see who is here and what they are doing, which is the
+     part that could not be got any other way. */
+  @media (width < 30rem) {
+    .party-rail {
+      top: 0.4rem;
+      right: 0.4rem;
+      padding: 0.3rem;
+      rotate: 0deg;
+    }
+
+    .party-rail-person {
+      width: 3.1rem;
+    }
+
+    .party-rail-portrait {
+      height: 3.1rem;
+    }
+
+    .party-rail-doing {
+      display: none;
+    }
+
+    .party-rail .emote-bar {
+      display: none;
+    }
+  }
+
 @property --dot-r {
   syntax: '<length>';
   inherits: false;
@@ -2621,6 +2741,8 @@
       scale: 1;
     }
   }
+
+
 }
 
 @media (prefers-reduced-motion: reduce) {

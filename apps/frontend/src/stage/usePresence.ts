@@ -91,6 +91,15 @@ export function usePresence({
    * sets out, applied the other way round (ADR-0048).
    */
   const [room, setRoom] = useState<LiveRoom | null>(null)
+  /**
+   * How many times the party's game has been written.
+   *
+   * Watched rather than read: when it moves, somebody in the party did
+   * something, and the screen goes and asks what. That one integer is what
+   * makes every room multiplayer — progress has been shared since ADR-0028,
+   * but you only ever learned about it when you yourself made a request.
+   */
+  const [version, setVersion] = useState(0)
 
   const tracks = useRef(new Map<string, Track>())
   const pendingEmote = useRef<EmoteName | null>(null)
@@ -202,6 +211,7 @@ export function usePresence({
         setPhase(body.phase)
         setIsHost(body.isHost)
         setRoom(body.room)
+        setVersion(body.version)
 
         const now = performance.now()
         const next = new Map<string, Track>()
@@ -293,7 +303,7 @@ export function usePresence({
     return () => cancelAnimationFrame(frame)
   }, [enabled])
 
-  return { actors, phase, isHost, room, holding, sendEmote, act, hold }
+  return { actors, phase, isHost, room, version, holding, sendEmote, act, hold }
 }
 
 /**

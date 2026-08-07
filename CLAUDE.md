@@ -234,7 +234,7 @@ The social layer, added by ADRs 0023–0029:
 | `GET` | `/api/leaderboard/friends` | — | `{ entries }` — you and your friends |
 | `GET` | `/api/leaderboard/global` | — | `{ entries }` — everybody who has started |
 | `GET` | `/api/party` | — | `{ party }` — host, members, `isHost` |
-| `POST` | `/api/stage/heartbeat` | position, emote, ready, hidden, acted, holding | `{ peers, phase, isHost, room }` — 2 Hz |
+| `POST` | `/api/stage/heartbeat` | position, emote, ready, hidden, acted, holding | `{ peers, phase, isHost, room, version }` — 2 Hz |
 | `POST` | `/api/stage/alive` | `{ hidden }` | `204` — "I still have the game open", 5 s, every screen |
 | `POST` | `/api/stage/phase` | `{ kind, roomId? }` | `204` — host only; moves the whole party |
 | `DELETE` | `/api/stage` | — | `204` — off the stage, still in the party |
@@ -348,6 +348,7 @@ approved the corresponding ADR.
 
 | Date | ADR | Decision | Status |
 | --- | --- | --- | --- |
+| 2026-08-07 | [0073](docs/adr/0073-every-room-is-multiplayer.md) | Every room is multiplayer: one version integer on the beat, and a party rail the shell draws | Accepted |
 | 2026-08-07 | [0050](docs/adr/0050-the-lost-archive-returns-as-room-five.md) | The Lost Archive comes back as room five, and the game grows to five rooms | Accepted |
 | 2026-08-06 | [0072](docs/adr/0072-room-04-tuned-for-fairness-and-demo-safety.md) | Room 4 tuned for fairness, checkpoint respawn, real interactive puzzles, and asset weight cut from about 106MB to 13MB | Proposed |
 | 2026-08-05 | [0071](docs/adr/0071-room-04-becomes-a-3d-chase-runner.md) | Room 4 becomes a 3D chase runner built on react three fiber, the only room using that stack | Proposed |
@@ -513,6 +514,23 @@ except 0065–0070 (room-03's Sphinx build), which are `Proposed` and still awai
   you are outside it, so nobody is missing from their own board
   ([ADR-0036](docs/adr/0036-global-board-is-a-top-ten.md)). Position comes from `rank` on the wire,
   never from the array index — the eleventh row may be the player in twenty-third place.
+- **Every room is multiplayer** ([ADR-0073](docs/adr/0073-every-room-is-multiplayer.md)). Progress
+  has been shared since ADR-0028, but only room 01 ever *showed* you another person and progress only
+  arrived when **you** made a request — a partner could finish the room beside you and your screen
+  would not move.
+  - **One integer fixes the second half**: `version` on the heartbeat says how many times the party's
+    game has been written. When it moves, the client re-reads the game (`POST /api/sessions`, which
+    is idempotent). Held **in memory** by `GameService`, never read from DynamoDB — the beat runs
+    twice a second per player and the answer is almost always "nothing happened".
+  - **`PartyRail` fixes the first**: who else is in this room, what they last did, and emotes. Drawn
+    by the **shell**, so none of the four rooms other people built were touched to get it, and drawn
+    **only when you are not alone** — rooms 02 and 04 own their whole screen.
+  - What somebody last did is read off the activity log (ADR-0020), so nothing new travels for it.
+    **An event with no actor is the host's** — `actorFor` leaves the game's owner off deliberately,
+    which was fine while the owner was the only reader and makes the host undescribable now that a
+    guest reads it too.
+  - **Room 03 had no heartbeat and no phase at all**, so a host walking into it left their partner in
+    the lobby. `useRoomParty` is the piece both room shells now share.
 - **Co-op play** — invite a friend into your game, or join theirs. Both see the same progress and
   either can solve; the log says who did what. A player points at the *host's* user id rather than a
   synthetic game id, so the games table never had to be re-keyed and no progress was thrown away,

@@ -28,11 +28,44 @@ const MAX_WRITE_ATTEMPTS = 3
  * this player is in", which may be somebody else's.
  */
 export class GameService {
+  /**
+   * The version each game was last saved at, in memory.
+   *
+   * Exists so the heartbeat can say *"the party's game has moved on"* without
+   * reading the game. That beat runs twice a second for every player on a
+   * stage; fetching a session from DynamoDB on it would be a database read per
+   * player per half-second, to answer a question that is almost always "no".
+   *
+   * A number rather than the game itself, and lossy on purpose: a fresh process
+   * knows nothing and answers 0 for everybody, which reads as *"nothing has
+   * changed"* until the first write — at which point every client sees it move
+   * and asks for the real thing. Being wrong here costs a refetch that was
+   * going to happen anyway; it can never invent progress or hide it.
+   */
+  readonly #versions = new Map<string, number>()
+
   constructor(
     private readonly repository: GameRepository,
     /** Absent means solo play only — every player is their own host. */
     private readonly party?: LiveStore,
   ) {}
+
+  /**
+   * How many times this game has been written, as far as this process knows.
+   *
+   * Keyed by the *host* — the account the game belongs to — because that is
+   * what a party shares.
+   */
+  versionOf(hostUserId: string): number {
+    return this.#versions.get(hostUserId) ?? 0
+  }
+
+  /** Every write goes through here, so the count cannot drift from the saves. */
+  async #save(game: GameSession): Promise<GameSession> {
+    const saved = await this.repository.save(game)
+    this.#versions.set(saved.userId, saved.version)
+    return saved
+  }
 
   /**
    * Whose game this player is in.
@@ -91,7 +124,7 @@ export class GameService {
       events: [{ at: timestamp, type: 'game_started' }],
       version: 0,
     }
-    return this.repository.save(game)
+    return this.#save(game)
   }
 
   async find(userId: string): Promise<GameSession | null> {
@@ -122,7 +155,7 @@ export class GameService {
       solvedRooms: game.solvedRooms.filter((id) => id !== roomId),
       events: game.events.filter((event) => event.roomId !== roomId),
     }
-    return this.repository.save(updated)
+    return this.#save(updated)
   }
 
   /**
@@ -265,7 +298,7 @@ export class GameService {
       if (updated === null) return current
 
       try {
-        return await this.repository.save(updated)
+        return await this.#save(updated)
       } catch (error) {
         if (!(error instanceof GameConflictError)) throw error
 
