@@ -18,8 +18,6 @@ export const PRIZE_GLB = '/rooms/room-04/prize/cacti.glb'
 
 export const WORLD = {
   startZ: 9,
-  wizardZ: -140,
-  doorZ: -175,
   endZ: -195,
   speed: 6,
 } as const
@@ -31,7 +29,7 @@ export function pathCenterX(z: number): number {
   return Math.sin((WORLD.startZ - z) * PATH_FREQUENCY) * PATH_AMPLITUDE
 }
 
-export const VISION_TIMER = 40
+export const VISION_TIMER = 30
 
 export const GUARDIAN_HOMES: readonly { x: number; z: number }[] = [
   { x: -25, z: -8 },
@@ -114,14 +112,4 @@ export const STORY = {
     'A shutter creaks somewhere above, then falls still.',
     'Dust drifts through a shaft of grey light between the buildings.',
   ],
-  finaleWizardLines: [
-    'Footsteps behind you. Closer than they were.',
-    'The air turns cold — he felt the crystal open too.',
-    'A staff cracks against stone, somewhere back the way you came.',
-    'Do not look back. Run.',
-  ],
-  wizardConfrontation: 'The wizard steps out of the smoke and blocks the path, staff raised, runes burning red.',
-  wizardBanished: 'The wand answers. A pulse of arcane light drives him back into a side street. The path is clear.',
-  wizardNeedsWand: 'You have no wand. Whatever the battlefield vision asked of you, answer it now.',
-  doorIntro: 'The last door. Six rune-stones are set above the lock, but the lock does not answer to all of them.',
 } as const

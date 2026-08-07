@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import type { Vector3 } from 'three'
 
@@ -9,11 +9,25 @@ interface ProximityTriggerProps {
   radius?: number
   disabled?: boolean
   paused: React.MutableRefObject<boolean>
+  resetKey?: number
   onTrigger: () => void
 }
 
-export function ProximityTrigger({ playerPos, x, z, radius = 2.2, disabled = false, paused, onTrigger }: ProximityTriggerProps) {
+export function ProximityTrigger({
+  playerPos,
+  x,
+  z,
+  radius = 2.2,
+  disabled = false,
+  paused,
+  resetKey,
+  onTrigger,
+}: ProximityTriggerProps) {
   const firedRef = useRef(false)
+
+  useEffect(() => {
+    firedRef.current = false
+  }, [resetKey])
 
   useFrame(() => {
     if (disabled || firedRef.current || paused.current) return

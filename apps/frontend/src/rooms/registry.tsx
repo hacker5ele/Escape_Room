@@ -154,7 +154,11 @@ const DEFINITIONS: Record<RoomId, RoomDefinition> = {
     tagline: 'Find the last living plants to save your planet.',
     scene: 'vault',
     customScene: true,
-    render: (props) => <RoomFour {...props} />,
+    ownsEnding: true,
+    // `RoomFour` (./room-04.tsx) expects `CustomSceneProps` — safe because
+    // `RoomView` only ever calls `render` with that wider shape when
+    // `customScene` is set, which it is, right above.
+    render: (props) => <RoomFour {...(props as CustomSceneProps)} />,
   },
   'room-05': {
     id: 'room-05',

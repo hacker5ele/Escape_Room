@@ -27,8 +27,9 @@ export function TensionOverlay({ dangerRef }: { dangerRef: DangerLevelRef }) {
         play('heartbeat')
         nextBeatAt.current = now + MAX_INTERVAL_MS - (MAX_INTERVAL_MS - MIN_INTERVAL_MS) * level
       }
-      if (level > CLOSE_CALL_THRESHOLD) {
+      if (level > CLOSE_CALL_THRESHOLD && !wasEscalated.current) {
         wasEscalated.current = true
+        play('heartbeat')
       } else if (wasEscalated.current && level < RELEASE_THRESHOLD) {
         wasEscalated.current = false
         play('relief')
