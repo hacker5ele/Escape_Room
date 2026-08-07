@@ -6,7 +6,6 @@ describe('roomReducer', () => {
     const state = createInitialState()
     expect(state.visionsSolved.size).toBe(0)
     expect(state.hasWand).toBe(false)
-    expect(state.wizardBanished).toBe(false)
   })
 
   it('records a solved vision without granting a wand for a hint reward', () => {
@@ -20,11 +19,5 @@ describe('roomReducer', () => {
     expect(state.hasWand).toBe(true)
     state = roomReducer(state, { type: 'SOLVE_VISION', id: 'urban', reward: 'hint' })
     expect(state.hasWand).toBe(true)
-  })
-
-  it('banishes the wizard independently of vision progress', () => {
-    const state = roomReducer(createInitialState(), { type: 'BANISH_WIZARD' })
-    expect(state.wizardBanished).toBe(true)
-    expect(state.visionsSolved.size).toBe(0)
   })
 })

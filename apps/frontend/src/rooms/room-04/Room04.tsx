@@ -1,20 +1,19 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { Vector3 } from 'three'
-import type { RoomProps } from '../registry'
+import type { CustomSceneProps } from '../registry'
 import './style.css'
 import { play } from '../../audio/sfx'
 import { useEvent } from '../../ui/useEvent'
-import { VISIONS, STORY, WORLD, GUARDIAN_HOMES, pathCenterX, type VisionDef } from './story'
+import { VISIONS, STORY, WORLD, GUARDIAN_HOMES, type VisionDef } from './story'
 import { createInitialState, roomReducer } from './state'
 import { IntroBox } from './components/IntroBox'
 import { Hud } from './components/Hud'
 import { VisionModal } from './components/VisionModal'
-import { ConfrontationModal } from './components/ConfrontationModal'
-import { DoorPanel } from './components/DoorPanel'
 import { Toast } from './components/Toast'
 import { Minimap } from './components/Minimap'
 import { PrizeReveal } from './components/PrizeReveal'
 import { LossReveal } from './components/LossReveal'
+import { WinReveal } from './components/WinReveal'
 import { RoomTimer } from './components/RoomTimer'
 import { TensionOverlay } from './components/TensionOverlay'
 import { RunnerScene, type RespawnRequest } from './three/RunnerScene'
@@ -22,24 +21,21 @@ import type { CharacterState } from './three/Character'
 
 type IntroPhase = 'gate' | 'opening' | 'done'
 
-const BOOST_DURATION = 6
 const GRACE_PERIOD_MS = 9000
-const ASCEND_DURATION_MS = 4200
+const BOOST_DURATION = 6
 
-export function Room04({ room, onAnswer, busy }: RoomProps) {
+export function Room04({ room, onAnswer, onLeave }: CustomSceneProps) {
   const [state, dispatch] = useReducer(roomReducer, undefined, createInitialState)
   const [introPhase, setIntroPhase] = useState<IntroPhase>('gate')
   const [openVision, setOpenVision] = useState<VisionDef | null>(null)
   const [triggeringVisionId, setTriggeringVisionId] = useState<VisionDef['id'] | null>(null)
   const [foundVisionIds, setFoundVisionIds] = useState<Set<VisionDef['id']>>(new Set())
-  const [confrontationOpen, setConfrontationOpen] = useState(false)
-  const [doorReached, setDoorReached] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
   const [finalCelebrate, setFinalCelebrate] = useState<'backflip' | 'dance' | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [respawnRequest, setRespawnRequest] = useState<RespawnRequest | null>(null)
   const [prizeShown, setPrizeShown] = useState(false)
-  const [finaleActive, setFinaleActive] = useState(false)
+  const [won, setWon] = useState(false)
   const toastTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const celebrateTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const finalCelebrateTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -58,11 +54,8 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
   const [caughtReacting, setCaughtReacting] = useState(false)
   const caughtReactingTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const guardianPositions = useRef(GUARDIAN_HOMES.map((home) => new Vector3(home.x, 0, home.z))).current
-  const wizardPosition = useRef(new Vector3(pathCenterX(WORLD.wizardZ), 0, WORLD.wizardZ)).current
   const movingRef = useRef({ isMoving: false })
   const graceActive = useRef(true)
-  const [ascending, setAscending] = useState(false)
-  const hasAscendedRef = useRef(false)
   const [lost, setLost] = useState(false)
 
   const paused = useRef(true)
@@ -70,8 +63,6 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
   stateRef.current = state
   const introPhaseRef = useRef(introPhase)
   introPhaseRef.current = introPhase
-  const finaleActiveRef = useRef(finaleActive)
-  finaleActiveRef.current = finaleActive
 
   function showToast(message: string, duration = 3200) {
     setToastMessage(message)
@@ -107,13 +98,12 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
     let timeout: ReturnType<typeof setTimeout>
     function scheduleAmbient() {
       const solvedCount = stateRef.current.visionsSolved.size
-      const pace = finaleActiveRef.current ? 0.3 : Math.max(0.35, 1 - solvedCount * 0.12)
+      const pace = Math.max(0.35, 1 - solvedCount * 0.12)
       timeout = setTimeout(
         () => {
-          if (introPhaseRef.current === 'done' && !paused.current && !stateRef.current.wizardBanished) {
-            const lines = finaleActiveRef.current ? STORY.finaleWizardLines : STORY.ambientWizardLines
-            const line = lines[Math.floor(Math.random() * lines.length)]
-            if (line) showToast(line, finaleActiveRef.current ? 1800 : 3200)
+          if (introPhaseRef.current === 'done' && !paused.current) {
+            const line = STORY.ambientWizardLines[Math.floor(Math.random() * STORY.ambientWizardLines.length)]
+            if (line) showToast(line, 3200)
           }
           scheduleAmbient()
         },
@@ -175,6 +165,13 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
     }, 500)
   }
 
+  async function finishRoom() {
+    const digits = (room.data.digits as number[] | undefined) ?? []
+    const answer = digits.filter((digit) => digit % 2 !== 0).reduce((total, digit) => total + digit, 0)
+    await onAnswer(answer).catch(() => undefined)
+    setWon(true)
+  }
+
   function handleVisionSolved(id: VisionDef['id'], reward: 'hint' | 'wand') {
     const vision = VISIONS.find((v) => v.id === id)
     dispatch({ type: 'SOLVE_VISION', id, reward })
@@ -189,9 +186,7 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
       clearTimeout(prizeTimeout.current)
       prizeTimeout.current = setTimeout(() => {
         setPrizeShown(false)
-        setFinaleActive(true)
-        paused.current = false
-        showToast('Something behind you just woke up.', 2600)
+        void finishRoom()
       }, 4000)
       return
     }
@@ -234,42 +229,6 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
     paused.current = false
   }
 
-  function handleReachWizard() {
-    setConfrontationOpen(true)
-  }
-
-  function handleGrantWand() {
-    const wandVision = VISIONS.find((v) => v.reward === 'wand')
-    if (wandVision) dispatch({ type: 'SOLVE_VISION', id: wandVision.id, reward: 'wand' })
-  }
-
-  function handleBanish() {
-    if (!state.hasWand) return
-    dispatch({ type: 'BANISH_WIZARD' })
-    triggerCelebrate()
-  }
-
-  function handleConfrontationClose() {
-    setConfrontationOpen(false)
-    if (state.wizardBanished && !hasAscendedRef.current) {
-      hasAscendedRef.current = true
-      setAscending(true)
-      play('ascend')
-      showToast('For a moment, everything is light.', 2600)
-      setTimeout(() => {
-        setAscending(false)
-        paused.current = false
-      }, ASCEND_DURATION_MS)
-      return
-    }
-    paused.current = false
-  }
-
-  function handleReachDoor() {
-    setDoorReached(true)
-    paused.current = true
-  }
-
   function handlePowerCollected(elapsedTime: number) {
     boostRef.current.activeUntil = elapsedTime + BOOST_DURATION
     setBoosted(true)
@@ -287,11 +246,9 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
       ? 'dance'
       : finalCelebrate === 'backflip' || celebrate
         ? 'celebrate'
-        : confrontationOpen && !state.wizardBanished
-          ? 'fight'
-          : introPhase === 'gate' || openVision || confrontationOpen || doorReached
-            ? 'idle'
-            : 'running'
+        : introPhase === 'gate' || openVision
+          ? 'idle'
+          : 'running'
 
   return (
     <div className={`room-04${captureFlash ? ' r4-shaking' : ''}`}>
@@ -306,8 +263,6 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
           playerPos={playerPos}
           paused={paused}
           visionsSolved={state.visionsSolved}
-          wizardBanished={state.wizardBanished}
-          finaleActive={finaleActive}
           characterState={characterState}
           introPhase={introPhase}
           triggeringVisionId={triggeringVisionId}
@@ -315,13 +270,9 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
           dangerRef={dangerRef}
           boostRef={boostRef}
           guardianPositions={guardianPositions}
-          wizardPosition={wizardPosition}
           movingRef={movingRef}
           graceActive={graceActive}
-          ascending={ascending}
           onReachVision={handleReachVision}
-          onReachWizard={handleReachWizard}
-          onReachDoor={handleReachDoor}
           onGuardianCaught={handleGuardianCaught}
           onPowerCollected={handlePowerCollected}
         />
@@ -333,14 +284,11 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
 
       {captureFlash && <div className="r4-capture-flash" />}
 
-      {ascending && <div className="r4-ascension-flash" />}
-
-      {!prizeShown && (
+      {!prizeShown && !won && (
         <Minimap
           playerPos={playerPos}
           visionsSolved={state.visionsSolved}
-          guardianPositions={finaleActive ? [] : guardianPositions}
-          wizardPosition={finaleActive ? wizardPosition : null}
+          guardianPositions={guardianPositions}
           tutorial={introPhase !== 'done'}
         />
       )}
@@ -349,26 +297,9 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
 
       <VisionModal vision={openVision} onSolved={handleVisionSolved} onTimeout={handleVisionTimeout} onClose={handleVisionSkip} />
 
-      <ConfrontationModal
-        open={confrontationOpen}
-        hasWand={state.hasWand}
-        banished={state.wizardBanished}
-        onGrantWand={handleGrantWand}
-        onBanish={handleBanish}
-        onClose={handleConfrontationClose}
-      />
-
-      {doorReached && !prizeShown && (
-        <div className="r4-door-overlay">
-          <DoorPanel
-            digits={(room.data.digits as number[] | undefined) ?? []}
-            busy={busy}
-            onAnswer={(value) => onAnswer(Number(value))}
-          />
-        </div>
-      )}
-
       <PrizeReveal open={prizeShown} />
+
+      <WinReveal open={won} onLeave={onLeave} />
 
       <LossReveal open={lost} />
 

@@ -204,35 +204,6 @@
   }
 }
 
-.room-04 .r4-ascension-flash {
-  position: absolute;
-  inset: 0;
-  z-index: 22;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(255, 233, 168, 0.95) 0%,
-    rgba(255, 207, 122, 0.4) 45%,
-    rgba(255, 207, 122, 0) 75%
-  );
-  animation: r4-ascension-glow 4.2s ease-in-out forwards;
-}
-
-@keyframes r4-ascension-glow {
-  0% {
-    opacity: 0;
-  }
-  15% {
-    opacity: 0.9;
-  }
-  70% {
-    opacity: 0.75;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
 .room-04.r4-shaking {
   animation: r4-shake 400ms ease-in-out;
 }
@@ -254,10 +225,6 @@
   80% {
     transform: translate(8px, 3px);
   }
-}
-
-.room-04 .r4-warning {
-  color: var(--warn);
 }
 
 .room-04 .r4-modal-backdrop {
@@ -546,51 +513,6 @@
   color: #ff4d4d;
 }
 
-.room-04 .r4-door-overlay {
-  position: absolute;
-  inset: 0;
-  background: #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 12;
-}
-
-.room-04 .r4-door-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  max-width: 480px;
-  padding: 24px;
-}
-
-.room-04 .r4-door-visual {
-  width: 160px;
-  height: 220px;
-  border: 2px solid var(--border);
-  border-radius: 6px 6px 60px 60px;
-  background: #000;
-  transition: box-shadow 0.6s, border-color 0.6s;
-}
-
-.room-04 .r4-rune-stones {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.room-04 .r4-rune-stone {
-  min-width: 36px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #000;
-  color: #fff;
-  font-weight: 600;
-}
-
 .room-04 .r4-minimap-wrap {
   position: absolute;
   top: 128px;
@@ -656,10 +578,6 @@
   height: 7px;
   border-radius: 50%;
   box-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
-}
-
-.room-04 .r4-minimap-box-locked {
-  opacity: 0.4;
 }
 
 .room-04 .r4-minimap-player {
@@ -785,28 +703,36 @@
 }
 
 .room-04 .r4-intro-guardian {
+  position: absolute;
+  top: 380px;
+  right: 18px;
+  z-index: 5;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  width: 150px;
   animation: r4-intro-reveal 0.6s ease;
 }
 
 .room-04 .r4-intro-guardian-model {
-  width: 160px;
-  height: 160px;
+  width: 150px;
+  height: 150px;
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.85);
+  border: 1px solid var(--border-bright);
   overflow: hidden;
 }
 
 .room-04 .r4-intro-guardian-warning {
   color: #7a1f1f;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
-  max-width: 420px;
-  line-height: 1.4;
+  max-width: 150px;
+  line-height: 1.35;
   margin: 0;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
 }
 
 .room-04 .r4-intro-question-block {

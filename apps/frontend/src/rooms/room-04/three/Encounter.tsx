@@ -10,7 +10,6 @@ interface EncounterProps {
   lightDistance?: number
   radius?: number
   hidden: boolean
-  disabled?: boolean
   playerPos: React.MutableRefObject<Vector3>
   paused: React.MutableRefObject<boolean>
   onReach: () => void
@@ -25,7 +24,6 @@ export function Encounter({
   lightDistance = 7,
   radius,
   hidden,
-  disabled = false,
   playerPos,
   paused,
   onReach,
@@ -37,7 +35,7 @@ export function Encounter({
     <group position={[x, 0, z]}>
       {children}
       <pointLight color={color} intensity={lightIntensity} distance={lightDistance} />
-      <ProximityTrigger playerPos={playerPos} x={x} z={z} radius={radius} disabled={disabled} paused={paused} onTrigger={onReach} />
+      <ProximityTrigger playerPos={playerPos} x={x} z={z} radius={radius} paused={paused} onTrigger={onReach} />
     </group>
   )
 }

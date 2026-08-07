@@ -30,12 +30,6 @@ const ORBIT_HIGH_HEIGHT = 6.5
 const ORBIT_LOOP_DURATION = (2 * Math.PI) / ORBIT_SPEED
 const ORBIT_RISE_DURATION = 4
 
-const ASCEND_RADIUS = 6
-const ASCEND_ANGULAR_SPEED = 0.55
-const ASCEND_BASE_HEIGHT = 3
-const ASCEND_HEIGHT_SPEED = 1.9
-const ASCEND_LOOK_HEIGHT_SPEED = 3.4
-
 const desiredCameraPos = new Vector3()
 const lookTarget = new Vector3()
 
@@ -48,7 +42,6 @@ interface CameraRigProps {
   dangerRef: React.MutableRefObject<{ level: number }>
   boostRef: React.MutableRefObject<{ activeUntil: number }>
   movingRef: React.MutableRefObject<{ isMoving: boolean }>
-  ascending: boolean
 }
 
 export function CameraRig({
@@ -60,7 +53,6 @@ export function CameraRig({
   dangerRef,
   boostRef,
   movingRef,
-  ascending,
 }: CameraRigProps) {
   const keys = useKeyboardControls()
   const cameraInitialized = useRef(false)
@@ -68,7 +60,6 @@ export function CameraRig({
   const jumpOffset = useRef(0)
   const groundY = useRef(0)
   const timeSinceSample = useRef(Infinity)
-  const ascendStart = useRef<number | null>(null)
 
   useFrame(({ camera, clock }, delta) => {
     dangerRef.current.level *= Math.pow(DANGER_DECAY_PER_SECOND, delta)
@@ -106,23 +97,7 @@ export function CameraRig({
       movingRef.current.isMoving = false
     }
 
-    if (ascending) {
-      if (ascendStart.current === null) ascendStart.current = clock.elapsedTime
-      const t = clock.elapsedTime - ascendStart.current
-      const angle = t * ASCEND_ANGULAR_SPEED
-      desiredCameraPos.set(
-        playerPos.current.x + Math.sin(angle) * ASCEND_RADIUS,
-        playerPos.current.y + ASCEND_BASE_HEIGHT + t * ASCEND_HEIGHT_SPEED,
-        playerPos.current.z + Math.cos(angle) * ASCEND_RADIUS,
-      )
-      camera.position.lerp(desiredCameraPos, Math.min(1, delta * 2))
-      lookTarget.set(
-        playerPos.current.x,
-        playerPos.current.y + 2 + t * ASCEND_LOOK_HEIGHT_SPEED,
-        playerPos.current.z,
-      )
-    } else if (orbiting) {
-      ascendStart.current = null
+    if (orbiting) {
       const angle = clock.elapsedTime * ORBIT_SPEED
       const riseProgress = Math.min(1, Math.max(0, (clock.elapsedTime - ORBIT_LOOP_DURATION) / ORBIT_RISE_DURATION))
       const height = ORBIT_LOW_HEIGHT + (ORBIT_HIGH_HEIGHT - ORBIT_LOW_HEIGHT) * riseProgress
@@ -135,7 +110,6 @@ export function CameraRig({
       cameraInitialized.current = true
       lookTarget.set(playerPos.current.x, playerPos.current.y + 1.1, playerPos.current.z)
     } else {
-      ascendStart.current = null
       desiredCameraPos.set(
         playerPos.current.x,
         playerPos.current.y + CAMERA_OFFSET.y,

@@ -39,11 +39,10 @@ interface MinimapProps {
   playerPos: React.MutableRefObject<Vector3>
   visionsSolved: Set<VisionDef['id']>
   guardianPositions: Vector3[]
-  wizardPosition: Vector3 | null
   tutorial?: boolean
 }
 
-export function Minimap({ playerPos, visionsSolved, guardianPositions, wizardPosition, tutorial }: MinimapProps) {
+export function Minimap({ playerPos, visionsSolved, guardianPositions, tutorial }: MinimapProps) {
   const dotRef = useRef<HTMLDivElement>(null)
   const threatRefs = useRef<(HTMLDivElement | null)[]>([])
 
@@ -54,8 +53,7 @@ export function Minimap({ playerPos, visionsSolved, guardianPositions, wizardPos
         const { left, top } = toMapPx(playerPos.current.x, playerPos.current.z, DOT_SIZE)
         dotRef.current.style.transform = `translate(${left}px, ${top}px)`
       }
-      const threats = wizardPosition ? [wizardPosition] : guardianPositions
-      threats.forEach((pos, i) => {
+      guardianPositions.forEach((pos, i) => {
         const el = threatRefs.current[i]
         if (!el) return
         const { left, top } = toMapPx(pos.x, pos.z, THREAT_SIZE)
@@ -65,9 +63,9 @@ export function Minimap({ playerPos, visionsSolved, guardianPositions, wizardPos
     }
     tick()
     return () => cancelAnimationFrame(frame)
-  }, [playerPos, guardianPositions, wizardPosition])
+  }, [playerPos, guardianPositions])
 
-  const threatCount = wizardPosition ? 1 : guardianPositions.length
+  const threatCount = guardianPositions.length
 
   return (
     <div className="r4-minimap-wrap">
@@ -78,11 +76,12 @@ export function Minimap({ playerPos, visionsSolved, guardianPositions, wizardPos
         {VISIONS.map((vision) => {
           const solved = visionsSolved.has(vision.id)
           const locked = Boolean(vision.finalGate) && visionsSolved.size < VISIONS.length - 1
+          if (locked) return null
           const { left, top } = toMapPx(vision.x, vision.z, MARK_SIZE)
           return (
             <div
               key={vision.id}
-              className={`r4-minimap-box${solved ? ' r4-minimap-box-solved' : ''}${locked ? ' r4-minimap-box-locked' : ''}`}
+              className={`r4-minimap-box${solved ? ' r4-minimap-box-solved' : ''}`}
               style={{ transform: `translate(${left}px, ${top}px)`, background: solved ? '#555' : vision.color }}
             />
           )
