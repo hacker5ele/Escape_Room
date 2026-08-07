@@ -1,4 +1,4 @@
-import type { LiveRoom, RoomId, RoomPublicData } from '@escape-room/shared'
+import type { AttemptResponse, LiveRoom, RoomId, RoomPublicData } from '@escape-room/shared'
 import { ROOM_IDS } from '@escape-room/shared'
 import type { SceneName } from '../stage/scenes'
 import type { Actor } from '../stage/Stage'
@@ -25,6 +25,10 @@ export interface RoomProps {
   onAnswer: (answer: unknown) => void
   /** True while an attempt is in flight; disable inputs on it. */
   busy: boolean
+  /** Leave the room. Most rooms never call this — RoomView already draws its
+   *  own "Leave the room" chrome — but a `customScene` room draws its own, so
+   *  it needs the callback itself. */
+  onLeave: () => void
   /**
    * The room's own state, arriving on the heartbeat twice a second.
    *
@@ -50,6 +54,18 @@ export interface RoomProps {
   holding: string | null
 }
 
+/**
+ * What a `customScene` room's `render` actually receives — see `RoomDefinition`.
+ * `onAnswer` resolves with the real result rather than firing and forgetting,
+ * so a room that needs to react to *why* an attempt failed, or wants to run
+ * its own animation on success, can. Every `customScene` room gets this one
+ * shape, whether or not it uses the resolved value, rather than one
+ * signature per room.
+ */
+export interface CustomSceneProps extends Omit<RoomProps, 'onAnswer'> {
+  onAnswer: (answer: unknown) => Promise<AttemptResponse>
+}
+
 export interface RoomDefinition {
   id: RoomId
   /** The name on the door. Shown by the lobby's room picker and the room header. */
@@ -60,12 +76,23 @@ export interface RoomDefinition {
   scene: SceneName
   /**
    * This room draws its own backdrop instead of standing on the shared
-   * walkable Stage — `render` gets the whole scene, not just the chrome on
-   * top of it. The trade is real: no co-op walking or emotes in this room.
-   * The Reading Hall is the one room that makes it, because its puzzle *is*
-   * a place to be scattered through — see the note on `RoomOne`.
+   * walkable Stage — `render` gets `CustomSceneProps`, not just the chrome on
+   * top of a scene. The trade is real: no co-op walking or emotes in this
+   * room. See ADR-0046 (Room 1's earlier draft) for the shape of that trade —
+   * the Reading Hall took the other one instead, `renderWorld` below, because
+   * its puzzle *is* a place to be scattered through rather than a screen to
+   * take over.
    */
   customScene?: boolean
+  /**
+   * Only meaningful alongside `customScene`. This room shows its own ending
+   * on a correct answer, so `RoomView` never swaps it out for the generic
+   * "Solved" pane the way it does for every other room. Global progress —
+   * `solvedRooms`, the next door unlocking — still updates the moment the
+   * server says correct; only the *display* of having solved it is the
+   * room's own to draw.
+   */
+  ownsEnding?: boolean
   /**
    * Drawn **inside** the stage's coordinate space and depth-sorted with the
    * players, so a room can put things in the world you walk behind rather than
@@ -95,10 +122,15 @@ const DEFINITIONS: Record<RoomId, RoomDefinition> = {
   },
   'room-02': {
     id: 'room-02',
-    title: 'Room Two',
-    tagline: 'Locked until the first is solved.',
+    title: 'Genesis Protocol',
+    tagline: 'Something got out when the power failed.',
     scene: 'vault',
-    render: (props) => <RoomTwo {...props} />,
+    customScene: true,
+    ownsEnding: true,
+    // `RoomTwo` (./room-02.tsx) expects `CustomSceneProps` — safe because
+    // `RoomView` only ever calls `render` with that wider shape when
+    // `customScene` is set, which it is, right above.
+    render: (props) => <RoomTwo {...(props as CustomSceneProps)} />,
   },
   // room-03 ("The Sphinx's Reckoning") never renders through here — it opts
   // out of the shared Stage/RoomView shell entirely and is rendered
