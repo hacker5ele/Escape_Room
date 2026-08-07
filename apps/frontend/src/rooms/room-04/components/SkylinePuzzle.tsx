@@ -5,64 +5,56 @@ interface SkylinePuzzleProps {
   onWrong: () => void
 }
 
-const BUILDING_COUNT = 8
-const BUILDING_WIDTH = 38
-const BUILDING_GAP = 12
-const WINDOW_ROWS = 6
-const WINDOW_COLS = 2
+const ZONE_COLS = 4
+const ZONE_ROWS = 2
+const CORRECT_ZONE = 5
 
-function randomIndex(count: number): number {
-  return Math.floor(Math.random() * count)
-}
+const MARKER_LEFT = 37.5
+const MARKER_TOP = 74
 
 export function SkylinePuzzle({ onCorrect, onWrong }: SkylinePuzzleProps) {
-  const [oddBuilding] = useState(() => randomIndex(BUILDING_COUNT))
-  const [oddRow] = useState(() => randomIndex(WINDOW_ROWS))
-  const [oddCol] = useState(() => randomIndex(WINDOW_COLS))
-  const [wrongId, setWrongId] = useState<number | null>(null)
+  const [wrongZone, setWrongZone] = useState<number | null>(null)
 
-  function pick(i: number) {
-    if (i === oddBuilding) {
-      setWrongId(null)
+  function pick(zone: number) {
+    if (zone === CORRECT_ZONE) {
+      setWrongZone(null)
       onCorrect()
     } else {
-      setWrongId(i)
+      setWrongZone(zone)
       onWrong()
     }
   }
 
   return (
-    <svg viewBox="0 0 400 220" className="r4-skyline-svg" role="img" aria-label="A city skyline at dusk">
-      <rect x="0" y="0" width="400" height="220" fill="#1b1f27" />
-      {Array.from({ length: BUILDING_COUNT }, (_, i) => {
-        const x = 6 + i * (BUILDING_WIDTH + BUILDING_GAP)
+    <div className="r4-skyline-photo-frame">
+      <img
+        src="/rooms/room-04/skyline/window-front.jpg"
+        alt="A real photograph of an apartment building at night, rows of lit and unlit windows"
+        className="r4-skyline-photo"
+      />
+      <div
+        className="r4-skyline-marker"
+        style={{ left: `${MARKER_LEFT}%`, top: `${MARKER_TOP}%` }}
+      />
+      {Array.from({ length: ZONE_COLS * ZONE_ROWS }, (_, i) => {
+        const col = i % ZONE_COLS
+        const row = Math.floor(i / ZONE_COLS)
         return (
-          <g
+          <button
             key={i}
-            className={`r4-battlefield-target${wrongId === i ? ' r4-battlefield-wrong' : ''}`}
+            type="button"
+            aria-label={`Section ${i + 1}`}
+            className={`r4-skyline-zone${wrongZone === i ? ' r4-battlefield-wrong' : ''}`}
+            style={{
+              left: `${(col / ZONE_COLS) * 100}%`,
+              top: `${(row / ZONE_ROWS) * 100}%`,
+              width: `${100 / ZONE_COLS}%`,
+              height: `${100 / ZONE_ROWS}%`,
+            }}
             onClick={() => pick(i)}
-            role="button"
-            aria-label={`Building ${i + 1}`}
-          >
-            <rect x={x} y="50" width={BUILDING_WIDTH} height="160" fill="#3a4152" stroke="#5a6478" strokeWidth="2" />
-            {Array.from({ length: WINDOW_ROWS }, (_, row) =>
-              Array.from({ length: WINDOW_COLS }, (_, col) => {
-                const dark = i === oddBuilding && row === oddRow && col === oddCol
-                return (
-                  <rect
-                    key={`${row}-${col}`}
-                    x={x + 6 + col * 16}
-                    y={62 + row * 24}
-                    width="10"
-                    height="14"
-                    fill={dark ? '#1b1f27' : '#ffcf7a'}
-                  />
-                )
-              }),
-            )}
-          </g>
+          />
         )
       })}
-    </svg>
+    </div>
   )
 }

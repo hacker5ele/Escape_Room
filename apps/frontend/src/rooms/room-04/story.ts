@@ -56,7 +56,7 @@ export const VISIONS: readonly VisionDef[] = [
   {
     id: 'urban',
     title: 'The Urban Vision',
-    question: 'One building in this skyline was never finished. Find it.',
+    question: 'Someone in this building is still awake. Find the window with the warm red light.',
     answer: 'the odd one',
     reward: 'hint',
     onSolved: 'The skyline flickers and folds into smoke. Something you needed to know surfaces.',
@@ -121,7 +121,7 @@ export const STORY = {
     'Do not look back. Run.',
   ],
   wizardConfrontation: 'The wizard steps out of the smoke and blocks the path, staff raised, runes burning red.',
-  wizardBanished: 'The wand answers. A pulse of arcane light drives him back into a side street — the path is clear.',
+  wizardBanished: 'The wand answers. A pulse of arcane light drives him back into a side street. The path is clear.',
   wizardNeedsWand: 'You have no wand. Whatever the battlefield vision asked of you, answer it now.',
   doorIntro: 'The last door. Six rune-stones are set above the lock, but the lock does not answer to all of them.',
 } as const

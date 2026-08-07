@@ -14,6 +14,7 @@ import { DoorPanel } from './components/DoorPanel'
 import { Toast } from './components/Toast'
 import { Minimap } from './components/Minimap'
 import { PrizeReveal } from './components/PrizeReveal'
+import { LossReveal } from './components/LossReveal'
 import { RoomTimer } from './components/RoomTimer'
 import { TensionOverlay } from './components/TensionOverlay'
 import { RunnerScene, type RespawnRequest } from './three/RunnerScene'
@@ -62,6 +63,7 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
   const graceActive = useRef(true)
   const [ascending, setAscending] = useState(false)
   const hasAscendedRef = useRef(false)
+  const [lost, setLost] = useState(false)
 
   const paused = useRef(true)
   const stateRef = useRef(state)
@@ -212,10 +214,9 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
   }
 
   function handleTimeExpired() {
-    triggerCaptureFlash()
-    respawnNonce.current += 1
-    setRespawnRequest({ x: 0, z: checkpointZ.current, nonce: respawnNonce.current })
-    showToast("Time's up — sent back to your last checkpoint.", 2600)
+    if (state.visionsSolved.size >= VISIONS.length) return
+    paused.current = true
+    setLost(true)
   }
   const handleTimeExpiredStable = useEvent(handleTimeExpired)
 
@@ -296,7 +297,9 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
     <div className={`room-04${captureFlash ? ' r4-shaking' : ''}`}>
       <Hud hasWand={state.hasWand} boosted={boosted} visionsFound={foundVisionIds.size} visionsTotal={VISIONS.length} />
 
-      {introPhase === 'done' && <RoomTimer running paused={paused} onExpire={handleTimeExpiredStable} />}
+      {introPhase === 'done' && state.visionsSolved.size < VISIONS.length && (
+        <RoomTimer running paused={paused} onExpire={handleTimeExpiredStable} />
+      )}
 
       <div className="r4-canvas-wrap">
         <RunnerScene
@@ -332,12 +335,13 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
 
       {ascending && <div className="r4-ascension-flash" />}
 
-      {introPhase === 'done' && !prizeShown && (
+      {!prizeShown && (
         <Minimap
           playerPos={playerPos}
           visionsSolved={state.visionsSolved}
           guardianPositions={finaleActive ? [] : guardianPositions}
           wizardPosition={finaleActive ? wizardPosition : null}
+          tutorial={introPhase !== 'done'}
         />
       )}
 
@@ -365,6 +369,8 @@ export function Room04({ room, onAnswer, busy }: RoomProps) {
       )}
 
       <PrizeReveal open={prizeShown} />
+
+      <LossReveal open={lost} />
 
       <Toast message={toastMessage} />
     </div>

@@ -40,9 +40,10 @@ interface MinimapProps {
   visionsSolved: Set<VisionDef['id']>
   guardianPositions: Vector3[]
   wizardPosition: Vector3 | null
+  tutorial?: boolean
 }
 
-export function Minimap({ playerPos, visionsSolved, guardianPositions, wizardPosition }: MinimapProps) {
+export function Minimap({ playerPos, visionsSolved, guardianPositions, wizardPosition, tutorial }: MinimapProps) {
   const dotRef = useRef<HTMLDivElement>(null)
   const threatRefs = useRef<(HTMLDivElement | null)[]>([])
 
@@ -69,31 +70,41 @@ export function Minimap({ playerPos, visionsSolved, guardianPositions, wizardPos
   const threatCount = wizardPosition ? 1 : guardianPositions.length
 
   return (
-    <div className="r4-minimap" style={{ width: MAP_SIZE, height: MAP_SIZE }}>
-      {VISIONS.map((vision) => {
-        const solved = visionsSolved.has(vision.id)
-        const locked = Boolean(vision.finalGate) && visionsSolved.size < VISIONS.length - 1
-        const { left, top } = toMapPx(vision.x, vision.z, MARK_SIZE)
-        return (
+    <div className="r4-minimap-wrap">
+      <div
+        className={`r4-minimap${tutorial ? ' r4-minimap-highlight' : ''}`}
+        style={{ width: MAP_SIZE, height: MAP_SIZE }}
+      >
+        {VISIONS.map((vision) => {
+          const solved = visionsSolved.has(vision.id)
+          const locked = Boolean(vision.finalGate) && visionsSolved.size < VISIONS.length - 1
+          const { left, top } = toMapPx(vision.x, vision.z, MARK_SIZE)
+          return (
+            <div
+              key={vision.id}
+              className={`r4-minimap-box${solved ? ' r4-minimap-box-solved' : ''}${locked ? ' r4-minimap-box-locked' : ''}`}
+              style={{ transform: `translate(${left}px, ${top}px)`, background: solved ? '#555' : vision.color }}
+            />
+          )
+        })}
+        {Array.from({ length: threatCount }, (_, i) => (
           <div
-            key={vision.id}
-            className={`r4-minimap-box${solved ? ' r4-minimap-box-solved' : ''}${locked ? ' r4-minimap-box-locked' : ''}`}
-            style={{ transform: `translate(${left}px, ${top}px)`, background: solved ? '#555' : vision.color }}
-          />
-        )
-      })}
-      {Array.from({ length: threatCount }, (_, i) => (
-        <div
-          key={i}
-          ref={(el) => {
-            threatRefs.current[i] = el
-          }}
-          className="r4-minimap-threat"
-        >
-          <GuardianGlyph />
+            key={i}
+            ref={(el) => {
+              threatRefs.current[i] = el
+            }}
+            className="r4-minimap-threat"
+          >
+            <GuardianGlyph />
+          </div>
+        ))}
+        <div ref={dotRef} className="r4-minimap-player" />
+      </div>
+      {tutorial && (
+        <div className="r4-minimap-callout">
+          <p>This is your map. Colored dots are boxes to find. Glowing shapes are danger. The red dot is you.</p>
         </div>
-      ))}
-      <div ref={dotRef} className="r4-minimap-player" />
+      )}
     </div>
   )
 }

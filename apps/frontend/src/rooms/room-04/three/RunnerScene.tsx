@@ -98,9 +98,9 @@ export function RunnerScene({
     <Canvas camera={{ fov: 60, near: 0.1, far: 600, position: [0, orbiting ? 1.5 : 2.6, WORLD.startZ + 3] }}>
       <color attach="background" args={['#232b30']} />
       <TensionFog visionsSolvedCount={visionsSolved.size} finaleActive={finaleActive} />
-      <ambientLight intensity={0.36} color="#a9c0cc" />
-      <directionalLight position={[20, 30, 10]} intensity={1.1} color="#ffd9a0" />
-      <directionalLight position={[-15, 10, -20]} intensity={0.22} color="#5a72a0" />
+      <ambientLight intensity={0.58} color="#a9c0cc" />
+      <directionalLight position={[20, 30, 10]} intensity={1.3} color="#ffd9a0" />
+      <directionalLight position={[-15, 10, -20]} intensity={0.32} color="#5a72a0" />
 
       <Landscape ref={landscapeRef} hidden={introPhase === 'gate'} />
       {introPhase !== 'gate' && (

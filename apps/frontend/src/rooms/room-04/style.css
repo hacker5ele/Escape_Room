@@ -1,3 +1,15 @@
+.fixed.top-4.right-4.z-50 .btn-ghost {
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.fixed.top-4.right-4.z-50 .btn-ghost:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+}
+
 .room-04 {
   --panel: #000;
   --border: #333;
@@ -108,7 +120,7 @@
   height: 9px;
   border-radius: 50%;
   border: 1px solid var(--border-bright);
-  background: transparent;
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .room-04 .r4-hud-pip-filled {
@@ -383,12 +395,43 @@
   75% { transform: translateX(4px); }
 }
 
-.room-04 .r4-skyline-svg {
+.room-04 .r4-skyline-photo-frame {
+  position: relative;
   width: 100%;
   max-width: 400px;
-  border-radius: 6px;
+  aspect-ratio: 900 / 498;
   margin: 0 auto;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.room-04 .r4-skyline-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
+}
+
+.room-04 .r4-skyline-marker {
+  position: absolute;
+  width: 1.6%;
+  height: 2.6%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(255, 110, 110, 0.95) 0%, rgba(255, 80, 80, 0.5) 70%, rgba(255, 80, 80, 0) 100%);
+  box-shadow: 0 0 6px rgba(255, 90, 90, 0.85);
+  pointer-events: none;
+}
+
+.room-04 .r4-skyline-zone {
+  position: absolute;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.room-04 .r4-skyline-zone:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .room-04 .r4-bell-puzzle {
@@ -548,16 +591,61 @@
   font-weight: 600;
 }
 
-.room-04 .r4-minimap {
+.room-04 .r4-minimap-wrap {
   position: absolute;
   top: 128px;
   right: 18px;
   z-index: 4;
+}
+
+.room-04 .r4-minimap {
+  position: relative;
   border: 1px solid var(--border-bright);
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(4px);
   overflow: hidden;
+  transition: box-shadow 0.3s;
+}
+
+.room-04 .r4-minimap-highlight {
+  box-shadow: 0 0 0 3px #000, 0 0 22px rgba(0, 0, 0, 0.7);
+}
+
+.room-04 .r4-minimap-callout {
+  position: absolute;
+  top: 130px;
+  right: 0;
+  z-index: 6;
+  width: 170px;
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid #000;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+  animation: r4-callout-pulse 1.8s ease-in-out infinite;
+}
+
+.room-04 .r4-minimap-callout::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  right: 20px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid #000;
+}
+
+@keyframes r4-callout-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(0, 0, 0, 0.75);
+  }
 }
 
 .room-04 .r4-minimap-box {
@@ -694,6 +782,31 @@
 
 .room-04 .r4-intro-text-hidden {
   opacity: 0;
+}
+
+.room-04 .r4-intro-guardian {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: r4-intro-reveal 0.6s ease;
+}
+
+.room-04 .r4-intro-guardian-model {
+  width: 160px;
+  height: 160px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+}
+
+.room-04 .r4-intro-guardian-warning {
+  color: #7a1f1f;
+  font-size: 18px;
+  font-weight: 700;
+  max-width: 420px;
+  line-height: 1.4;
+  margin: 0;
 }
 
 .room-04 .r4-intro-question-block {

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { AnswerInput } from './AnswerInput'
+import { GuardianPreview } from './GuardianPreview'
 
 const ANSWER = 'yes'
 const INTRO_TEXT = 'You wake in a bare white cell. You have to find the last living plants to save your planet.'
-const OBJECTIVE_TEXT = 'Answer the questions correctly.'
+const OBJECTIVE_TEXT = 'Find the boxes. The map can help you. Answer every quiz correctly along the way.'
+const GUARDIAN_WARNING = 'This is a Forest Guardian. It guards the boxes. Stay away from it, or it will catch you.'
 const TEXT_SWAP_DELAY = 4500
 const TEXT_FADE_DURATION = 400
 const QUESTION_REVEAL_DELAY = 900
@@ -58,6 +60,14 @@ export function IntroBox({ fading, onAnswered }: IntroBoxProps) {
             {OBJECTIVE_TEXT}
           </p>
         </div>
+        {showObjective && !textFading && (
+          <div className="r4-intro-guardian">
+            <div className="r4-intro-guardian-model">
+              <GuardianPreview />
+            </div>
+            <p className="r4-intro-guardian-warning">{GUARDIAN_WARNING}</p>
+          </div>
+        )}
         <div className={`r4-intro-question-block${showQuestion ? '' : ' r4-intro-question-reserved'}`}>
           {showQuestion && (
             <>
