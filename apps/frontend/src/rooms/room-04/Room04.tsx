@@ -238,6 +238,7 @@ export function Room04({ room, onAnswer, onLeave }: CustomSceneProps) {
     boostFadeTimeout.current = setTimeout(() => play('slide'), (BOOST_DURATION - 1) * 1000)
     showToast('Hastened: you move faster, and guardians are far less likely to notice you, for a few seconds.', 3200)
     play('chime')
+    play('whoosh')
   }
 
   const characterState: CharacterState = caughtReacting

@@ -10,7 +10,7 @@ const GROUND_SAMPLE_INTERVAL = 1 / 12
 const MOVE_SPEED = 5
 const STRAFE_SPEED = 4
 const X_BOUNDS: [number, number] = [-200, 200]
-const CAMERA_OFFSET = new Vector3(0, 2.7, 4.2)
+const CAMERA_OFFSET = new Vector3(0.65, 2.5, 4.0)
 
 const DANGER_DECAY_PER_SECOND = 0.04
 const BASE_FOV = 60
@@ -111,7 +111,7 @@ export function CameraRig({
       lookTarget.set(playerPos.current.x, playerPos.current.y + 1.1, playerPos.current.z)
     } else {
       desiredCameraPos.set(
-        playerPos.current.x,
+        playerPos.current.x + CAMERA_OFFSET.x,
         playerPos.current.y + CAMERA_OFFSET.y,
         playerPos.current.z + CAMERA_OFFSET.z,
       )
@@ -144,7 +144,7 @@ export function CameraRig({
         }
       }
 
-      lookTarget.set(playerPos.current.x, playerPos.current.y + 1.1, playerPos.current.z - 1)
+      lookTarget.set(playerPos.current.x - 0.4, playerPos.current.y + 1.1, playerPos.current.z - 2)
     }
 
     camera.lookAt(lookTarget)

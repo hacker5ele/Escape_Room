@@ -710,29 +710,41 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  width: 150px;
+  gap: 6px;
+  width: 260px;
   animation: r4-intro-reveal 0.6s ease;
 }
 
 .room-04 .r4-intro-guardian-model {
-  width: 150px;
-  height: 150px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.85);
-  border: 1px solid var(--border-bright);
-  overflow: hidden;
+  width: 260px;
+  height: 260px;
 }
 
 .room-04 .r4-intro-guardian-warning {
-  color: #7a1f1f;
-  font-size: 13px;
+  position: relative;
+  width: 260px;
+  max-width: 260px;
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid #000;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #fff;
+  font-size: 12px;
   font-weight: 700;
-  max-width: 150px;
-  line-height: 1.35;
+  line-height: 1.4;
   margin: 0;
   text-align: center;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+}
+
+.room-04 .r4-intro-guardian-warning::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid #000;
 }
 
 .room-04 .r4-intro-question-block {
